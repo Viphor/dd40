@@ -1,0 +1,15 @@
+[package]
+name = "dd40_client"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "dd40_client"
+path = "src/main.rs"
+
+[dependencies]
+# Client uses the full Bevy feature set (window, rendering, audio, etc.).
+bevy = { workspace = true, default-features = true }
+dd40_core = { workspace = true }
+dd40_world = { workspace = true }
+dd40_player = { workspace = true }

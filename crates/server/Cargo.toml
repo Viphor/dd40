@@ -1,0 +1,15 @@
+[package]
+name = "dd40_server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "dd40_server"
+path = "src/main.rs"
+
+[dependencies]
+# Server runs headless – no window, no rendering, no audio.
+bevy = { version = "0.15", default-features = false, features = ["multi_threaded"] }
+dd40_core = { workspace = true }
+dd40_world = { workspace = true }
+dd40_player = { workspace = true }

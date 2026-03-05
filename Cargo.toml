@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "crates/core",
+    "crates/world",
+    "crates/player",
+    "crates/client",
+    "crates/server",
+]
+resolver = "2"
+
+[workspace.dependencies]
+bevy = { version = "0.15", default-features = false }
+dd40_core = { path = "crates/core" }
+dd40_world = { path = "crates/world" }
+dd40_player = { path = "crates/player" }
