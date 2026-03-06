@@ -13,3 +13,4 @@ bevy = { workspace = true, default-features = true }
 dd40_core = { workspace = true }
 dd40_world = { workspace = true }
 dd40_player = { workspace = true }
+dd40_debug_ui = { workspace = true }

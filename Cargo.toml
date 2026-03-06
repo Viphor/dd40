@@ -5,6 +5,7 @@ members = [
     "crates/player",
     "crates/client",
     "crates/server",
+    "crates/debug_ui",
 ]
 resolver = "2"
 
@@ -13,3 +14,23 @@ bevy = { version = "0.15", default-features = false }
 dd40_core = { path = "crates/core" }
 dd40_world = { path = "crates/world" }
 dd40_player = { path = "crates/player" }
+dd40_debug_ui = { path = "crates/debug_ui" }
+
+[package]
+name = "dd40"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { workspace = true, features = ["default"] }
+dd40_core = { workspace = true }
+dd40_world = { workspace = true }
+dd40_debug_ui = { workspace = true }
+
+[[example]]
+name = "custom_blocks_ordering"
+path = "examples/custom_blocks_ordering.rs"
+
+[[example]]
+name = "debug_ui_demo"
+path = "examples/debug_ui_demo.rs"
