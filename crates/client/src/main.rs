@@ -8,7 +8,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "dd40".into(),
+                title: "dirt displacer 40".into(),
                 ..default()
             }),
             ..default()

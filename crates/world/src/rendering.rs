@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use dd40_core::{Block, BlockId, BlockPos, BlockRegistry};
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Marker component for entities that represent rendered blocks.
 #[derive(Component)]
@@ -13,6 +14,63 @@ pub struct BlockRenderingAssets {
     pub cube_mesh: Handle<Mesh>,
     /// Materials for each block type, keyed by BlockId.
     pub materials: HashMap<BlockId, Handle<StandardMaterial>>,
+}
+
+/// Resource that stores the positions of all blocks for quick neighbor lookups.
+/// This is used to determine if a block has any air-adjacent faces and should be rendered.
+#[derive(Resource, Default)]
+pub struct BlockSpatialIndex {
+    /// Set of all block positions that currently exist in the world.
+    /// Air blocks are not included in this set.
+    positions: HashSet<(i32, i32, i32)>,
+}
+
+impl BlockSpatialIndex {
+    /// Checks if a block position is occupied by a non-air block.
+    pub fn has_block_at(&self, x: i32, y: i32, z: i32) -> bool {
+        self.positions.contains(&(x, y, z))
+    }
+
+    /// Adds a block position to the index.
+    pub fn insert(&mut self, x: i32, y: i32, z: i32) {
+        self.positions.insert((x, y, z));
+    }
+
+    /// Removes a block position from the index.
+    pub fn remove(&mut self, x: i32, y: i32, z: i32) {
+        self.positions.remove(&(x, y, z));
+    }
+
+    /// Checks if a block at the given position has at least one air-adjacent face.
+    /// Returns true if any of the 6 neighboring positions (up, down, north, south, east, west)
+    /// is either air or outside the indexed area.
+    pub fn has_air_neighbor(&self, pos: &BlockPos) -> bool {
+        let neighbors = [
+            (pos.x + 1, pos.y, pos.z), // East
+            (pos.x - 1, pos.y, pos.z), // West
+            (pos.x, pos.y + 1, pos.z), // Up
+            (pos.x, pos.y - 1, pos.z), // Down
+            (pos.x, pos.y, pos.z + 1), // North
+            (pos.x, pos.y, pos.z - 1), // South
+        ];
+
+        // If any neighbor is not in the index (i.e., is air), this block should be rendered
+        neighbors
+            .iter()
+            .any(|(x, y, z)| !self.has_block_at(*x, *y, *z))
+    }
+
+    /// Gets all neighboring positions that might be affected by a block change.
+    pub fn get_neighbor_positions(&self, pos: &BlockPos) -> Vec<(i32, i32, i32)> {
+        vec![
+            (pos.x + 1, pos.y, pos.z), // East
+            (pos.x - 1, pos.y, pos.z), // West
+            (pos.x, pos.y + 1, pos.z), // Up
+            (pos.x, pos.y - 1, pos.z), // Down
+            (pos.x, pos.y, pos.z + 1), // North
+            (pos.x, pos.y, pos.z - 1), // South
+        ]
+    }
 }
 
 /// Creates a unit cube mesh centered at the origin.
@@ -28,6 +86,8 @@ pub fn setup_block_rendering(
     mut materials: ResMut<Assets<StandardMaterial>>,
     registry: Res<BlockRegistry>,
 ) {
+    // Initialize the spatial index resource
+    commands.insert_resource(BlockSpatialIndex::default());
     let cube_mesh = meshes.add(create_cube_mesh());
     let mut block_materials = HashMap::new();
 
@@ -50,10 +110,12 @@ pub fn setup_block_rendering(
 
 /// System that spawns rendering components for blocks that don't have them yet.
 /// This runs whenever a Block component is added to an entity.
+/// Only renders blocks that have at least one air-adjacent face (occlusion culling).
 pub fn spawn_block_rendering(
     mut commands: Commands,
     rendering_assets: Option<Res<BlockRenderingAssets>>,
     registry: Res<BlockRegistry>,
+    mut spatial_index: ResMut<BlockSpatialIndex>,
     // Query for blocks that have a Block and BlockPos but no BlockEntity marker
     blocks_query: Query<(Entity, &Block, &BlockPos), (Without<BlockEntity>, Changed<Block>)>,
 ) {
@@ -74,6 +136,16 @@ pub fn spawn_block_rendering(
 
         // Skip non-renderable blocks (like Air)
         if !block_def.is_renderable {
+            // Make sure air blocks are not in the spatial index
+            spatial_index.remove(block_pos.x, block_pos.y, block_pos.z);
+            continue;
+        }
+
+        // Add this block to the spatial index
+        spatial_index.insert(block_pos.x, block_pos.y, block_pos.z);
+
+        // Skip blocks that are completely surrounded by other solid blocks (occlusion culling)
+        if !spatial_index.has_air_neighbor(block_pos) {
             continue;
         }
 
@@ -100,12 +172,19 @@ pub fn spawn_block_rendering(
 }
 
 /// System that updates block rendering when the block type changes.
+/// Also handles re-evaluation of neighboring blocks when a block is added or removed.
 pub fn update_block_rendering(
     rendering_assets: Option<Res<BlockRenderingAssets>>,
     registry: Res<BlockRegistry>,
+    spatial_index: Res<BlockSpatialIndex>,
     mut blocks_query: Query<
-        (Entity, &Block, &mut MeshMaterial3d<StandardMaterial>),
-        (With<BlockEntity>, Changed<Block>),
+        (
+            Entity,
+            &Block,
+            &BlockPos,
+            Option<&mut MeshMaterial3d<StandardMaterial>>,
+        ),
+        (Changed<Block>,),
     >,
     mut commands: Commands,
 ) {
@@ -113,7 +192,7 @@ pub fn update_block_rendering(
         return;
     };
 
-    for (entity, block, mut material) in blocks_query.iter_mut() {
+    for (entity, block, block_pos, material) in blocks_query.iter_mut() {
         // Get block definition from registry
         let Some(block_def) = registry.get(block.block_id) else {
             // Unknown block - remove rendering
@@ -125,19 +204,113 @@ pub fn update_block_rendering(
             continue;
         };
 
-        // If block is no longer renderable, remove rendering components
-        if !block_def.is_renderable {
-            commands
-                .entity(entity)
-                .remove::<BlockEntity>()
-                .remove::<Mesh3d>()
-                .remove::<MeshMaterial3d<StandardMaterial>>();
+        // Check if block should be rendered based on air neighbors
+        let should_render = block_def.is_renderable && spatial_index.has_air_neighbor(block_pos);
+        let has_rendering = material.is_some();
+
+        match (should_render, has_rendering) {
+            (true, true) => {
+                // Block should be rendered and has rendering - update material if needed
+                if let Some(new_material) = assets.materials.get(&block.block_id) {
+                    if let Some(mut mat) = material {
+                        *mat = MeshMaterial3d(new_material.clone());
+                    }
+                }
+            }
+            (true, false) => {
+                // Block should be rendered but doesn't have rendering - add it
+                if let Some(material) = assets.materials.get(&block.block_id) {
+                    commands.entity(entity).insert((
+                        BlockEntity,
+                        Mesh3d(assets.cube_mesh.clone()),
+                        MeshMaterial3d(material.clone()),
+                        Transform::from_xyz(
+                            block_pos.x as f32 + 0.5,
+                            block_pos.y as f32 + 0.5,
+                            block_pos.z as f32 + 0.5,
+                        ),
+                    ));
+                }
+            }
+            (false, true) => {
+                // Block should not be rendered but has rendering - remove it
+                commands
+                    .entity(entity)
+                    .remove::<BlockEntity>()
+                    .remove::<Mesh3d>()
+                    .remove::<MeshMaterial3d<StandardMaterial>>();
+            }
+            (false, false) => {
+                // Block should not be rendered and doesn't have rendering - nothing to do
+            }
+        }
+    }
+}
+
+/// System that re-evaluates neighboring blocks when a block changes.
+/// This ensures that blocks that were hidden become visible when neighbors are removed,
+/// and blocks that become hidden are culled when neighbors are added.
+pub fn update_neighbor_rendering(
+    changed_blocks: Query<(&Block, &BlockPos), Changed<Block>>,
+    registry: Res<BlockRegistry>,
+    spatial_index: Res<BlockSpatialIndex>,
+    mut all_blocks: Query<(Entity, &Block, &BlockPos, Has<BlockEntity>)>,
+    mut commands: Commands,
+    rendering_assets: Option<Res<BlockRenderingAssets>>,
+) {
+    let Some(assets) = rendering_assets else {
+        return;
+    };
+
+    // Collect all positions that need re-evaluation
+    let mut positions_to_check = HashSet::new();
+    for (_block, block_pos) in changed_blocks.iter() {
+        // Add neighbors of changed blocks
+        for neighbor_pos in spatial_index.get_neighbor_positions(block_pos) {
+            positions_to_check.insert(neighbor_pos);
+        }
+    }
+
+    // Re-evaluate each affected position
+    for (entity, block, block_pos, has_rendering) in all_blocks.iter_mut() {
+        let pos_tuple = (block_pos.x, block_pos.y, block_pos.z);
+        if !positions_to_check.contains(&pos_tuple) {
             continue;
         }
 
-        // Update material if block type changed
-        if let Some(new_material) = assets.materials.get(&block.block_id) {
-            *material = MeshMaterial3d(new_material.clone());
+        let Some(block_def) = registry.get(block.block_id) else {
+            continue;
+        };
+
+        let should_render = block_def.is_renderable && spatial_index.has_air_neighbor(block_pos);
+
+        match (should_render, has_rendering) {
+            (true, false) => {
+                // Should render but doesn't - add rendering
+                if let Some(material) = assets.materials.get(&block.block_id) {
+                    commands.entity(entity).insert((
+                        BlockEntity,
+                        Mesh3d(assets.cube_mesh.clone()),
+                        MeshMaterial3d(material.clone()),
+                        Transform::from_xyz(
+                            block_pos.x as f32 + 0.5,
+                            block_pos.y as f32 + 0.5,
+                            block_pos.z as f32 + 0.5,
+                        ),
+                    ));
+                }
+            }
+            (false, true) => {
+                // Should not render but does - remove rendering
+                commands
+                    .entity(entity)
+                    .remove::<BlockEntity>()
+                    .remove::<Mesh3d>()
+                    .remove::<MeshMaterial3d<StandardMaterial>>();
+            }
+            _ => {
+                // Already in correct state
+            }
         }
     }
 }
@@ -180,8 +353,220 @@ impl Plugin for BlockRenderingPlugin {
                 update_block_materials,
                 spawn_block_rendering,
                 update_block_rendering,
+                update_neighbor_rendering,
             )
                 .chain(),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spatial_index_has_block_at() {
+        let mut index = BlockSpatialIndex::default();
+        assert!(!index.has_block_at(0, 0, 0));
+
+        index.insert(0, 0, 0);
+        assert!(index.has_block_at(0, 0, 0));
+
+        index.remove(0, 0, 0);
+        assert!(!index.has_block_at(0, 0, 0));
+    }
+
+    #[test]
+    fn spatial_index_air_neighbor_isolated_block() {
+        let mut index = BlockSpatialIndex::default();
+        let pos = BlockPos::new(0, 0, 0);
+
+        // Single isolated block should have air neighbors
+        index.insert(pos.x, pos.y, pos.z);
+        assert!(index.has_air_neighbor(&pos));
+    }
+
+    #[test]
+    fn spatial_index_air_neighbor_fully_enclosed() {
+        let mut index = BlockSpatialIndex::default();
+        let pos = BlockPos::new(0, 0, 0);
+
+        // Add center block
+        index.insert(pos.x, pos.y, pos.z);
+
+        // Add all 6 neighbors
+        index.insert(pos.x + 1, pos.y, pos.z); // East
+        index.insert(pos.x - 1, pos.y, pos.z); // West
+        index.insert(pos.x, pos.y + 1, pos.z); // Up
+        index.insert(pos.x, pos.y - 1, pos.z); // Down
+        index.insert(pos.x, pos.y, pos.z + 1); // North
+        index.insert(pos.x, pos.y, pos.z - 1); // South
+
+        // Fully enclosed block should NOT have air neighbors
+        assert!(!index.has_air_neighbor(&pos));
+    }
+
+    #[test]
+    fn spatial_index_air_neighbor_partial_enclosure() {
+        let mut index = BlockSpatialIndex::default();
+        let pos = BlockPos::new(0, 0, 0);
+
+        // Add center block
+        index.insert(pos.x, pos.y, pos.z);
+
+        // Add only 5 out of 6 neighbors (missing Up)
+        index.insert(pos.x + 1, pos.y, pos.z); // East
+        index.insert(pos.x - 1, pos.y, pos.z); // West
+        index.insert(pos.x, pos.y - 1, pos.z); // Down
+        index.insert(pos.x, pos.y, pos.z + 1); // North
+        index.insert(pos.x, pos.y, pos.z - 1); // South
+
+        // Block with one air neighbor should be rendered
+        assert!(index.has_air_neighbor(&pos));
+    }
+
+    #[test]
+    fn spatial_index_get_neighbor_positions() {
+        let index = BlockSpatialIndex::default();
+        let pos = BlockPos::new(5, 10, 15);
+
+        let neighbors = index.get_neighbor_positions(&pos);
+        assert_eq!(neighbors.len(), 6);
+
+        // Check all 6 neighbors are present
+        assert!(neighbors.contains(&(6, 10, 15))); // East
+        assert!(neighbors.contains(&(4, 10, 15))); // West
+        assert!(neighbors.contains(&(5, 11, 15))); // Up
+        assert!(neighbors.contains(&(5, 9, 15))); // Down
+        assert!(neighbors.contains(&(5, 10, 16))); // North
+        assert!(neighbors.contains(&(5, 10, 14))); // South
+    }
+
+    #[test]
+    fn spatial_index_negative_coordinates() {
+        let mut index = BlockSpatialIndex::default();
+        let pos = BlockPos::new(-10, -5, -3);
+
+        index.insert(pos.x, pos.y, pos.z);
+        assert!(index.has_block_at(-10, -5, -3));
+        assert!(index.has_air_neighbor(&pos));
+
+        // Add all neighbors
+        for neighbor in index.get_neighbor_positions(&pos) {
+            index.insert(neighbor.0, neighbor.1, neighbor.2);
+        }
+
+        assert!(!index.has_air_neighbor(&pos));
+    }
+
+    #[test]
+    fn spatial_index_edge_case_large_coordinates() {
+        let mut index = BlockSpatialIndex::default();
+        let pos = BlockPos::new(1000000, 500000, -1000000);
+
+        index.insert(pos.x, pos.y, pos.z);
+        assert!(index.has_air_neighbor(&pos));
+    }
+
+    #[test]
+    fn occlusion_culling_reduces_rendered_blocks() {
+        // This test verifies that blocks surrounded by other blocks are not rendered
+        // Simulate a 3x3x3 cube where only the outer shell should be rendered
+
+        let mut index = BlockSpatialIndex::default();
+        let mut should_render_count = 0;
+        let mut total_blocks = 0;
+
+        // Create a 3x3x3 cube
+        for x in 0..3 {
+            for y in 0..3 {
+                for z in 0..3 {
+                    index.insert(x, y, z);
+                    total_blocks += 1;
+                }
+            }
+        }
+
+        // Check which blocks have air neighbors (should be rendered)
+        for x in 0..3 {
+            for y in 0..3 {
+                for z in 0..3 {
+                    let pos = BlockPos::new(x, y, z);
+                    if index.has_air_neighbor(&pos) {
+                        should_render_count += 1;
+                    }
+                }
+            }
+        }
+
+        // In a 3x3x3 cube, only the outer shell (26 blocks) should be rendered
+        // The center block (1,1,1) is completely surrounded
+        assert_eq!(total_blocks, 27);
+        assert_eq!(should_render_count, 26);
+
+        // Verify the center block is not rendered
+        let center = BlockPos::new(1, 1, 1);
+        assert!(!index.has_air_neighbor(&center));
+    }
+
+    #[test]
+    fn occlusion_culling_surface_blocks_always_rendered() {
+        let mut index = BlockSpatialIndex::default();
+
+        // Create a flat surface at y=0
+        for x in 0..10 {
+            for z in 0..10 {
+                index.insert(x, 0, z);
+            }
+        }
+
+        // All blocks at y=0 should have air neighbors (above them)
+        for x in 0..10 {
+            for z in 0..10 {
+                let pos = BlockPos::new(x, 0, z);
+                assert!(
+                    index.has_air_neighbor(&pos),
+                    "Block at ({}, 0, {}) should have air neighbor",
+                    x,
+                    z
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn occlusion_culling_hollow_structure() {
+        let mut index = BlockSpatialIndex::default();
+
+        // Create a hollow 5x5x5 cube (walls only)
+        for x in 0..5 {
+            for y in 0..5 {
+                for z in 0..5 {
+                    // Only place blocks on the outer shell
+                    if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                        index.insert(x, y, z);
+                    }
+                }
+            }
+        }
+
+        // All placed blocks should have at least one air neighbor
+        // (either facing outward or inward)
+        for x in 0..5 {
+            for y in 0..5 {
+                for z in 0..5 {
+                    if x == 0 || x == 4 || y == 0 || y == 4 || z == 0 || z == 4 {
+                        let pos = BlockPos::new(x, y, z);
+                        assert!(
+                            index.has_air_neighbor(&pos),
+                            "Wall block at ({}, {}, {}) should have air neighbor",
+                            x,
+                            y,
+                            z
+                        );
+                    }
+                }
+            }
+        }
     }
 }
