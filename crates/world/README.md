@@ -1,6 +1,6 @@
 # World Crate
 
-This crate manages the voxel world, including chunk generation and block rendering.
+This crate manages the voxel world, including chunk generation, block rendering, and occlusion culling.
 
 ## Block System Overview
 
@@ -26,6 +26,7 @@ When you add a block to the world, the rendering system automatically spawns all
    - `Mesh3d` (shared cube mesh)
    - `MeshMaterial3d` (material with appropriate color)
    - `Transform` (positioned at block coordinates)
+4. **Occlusion Culling**: Only blocks with at least one air-adjacent face are rendered
 
 ### Basic Usage
 
@@ -191,18 +192,61 @@ VanillaBlocks::WOOD    // ID 5 - Brown wooden block
 VanillaBlocks::LEAVES  // ID 6 - Dark green foliage
 ```
 
+## Occlusion Culling
+
+The rendering system includes **automatic occlusion culling** to significantly improve performance by only rendering blocks that have at least one air-adjacent face.
+
+### How It Works
+
+1. **Spatial Index**: A `BlockSpatialIndex` resource tracks all non-air block positions using a `HashSet`
+2. **Neighbor Detection**: Before rendering a block, the system checks all 6 face-adjacent neighbors (up, down, north, south, east, west)
+3. **Visibility Check**: A block is only rendered if at least one neighbor is air or unoccupied
+4. **Dynamic Updates**: When blocks are added or removed, neighboring blocks are automatically re-evaluated
+
+### Performance Impact
+
+Example results for a 3×3×3 cube (27 blocks):
+- **Without culling**: 27 blocks rendered
+- **With culling**: 26 blocks rendered (center block is completely surrounded and culled)
+
+In realistic terrain with underground caves:
+- Blocks completely surrounded by stone are **not rendered**
+- Only surface-facing blocks use GPU resources
+- Significant performance improvement in large worlds
+
+### Block Statistics
+
+The `BlockStatistics` resource tracks block counts in real-time:
+
+```rust
+use dd40_world::BlockStatistics;
+
+fn display_stats(stats: Res<BlockStatistics>) {
+    println!("Loaded blocks: {}", stats.loaded_blocks);
+    println!("Rendered blocks: {}", stats.rendered_blocks);
+    let culled = stats.loaded_blocks - stats.rendered_blocks;
+    println!("Culled blocks: {}", culled);
+}
+```
+
+This resource is automatically updated by the rendering system and can be accessed by other crates (such as the debug UI).
+
 ## Architecture
 
 ### Resources
 - **BlockRegistry**: Stores all registered block definitions
 - **BlockRenderingAssets**: Stores shared meshes and materials
+- **BlockSpatialIndex**: Tracks all non-air block positions for occlusion culling
+- **BlockStatistics**: Tracks loaded and rendered block counts
 
 ### Systems
 - **setup_vanilla_blocks**: Registers default blocks (runs in Startup)
 - **setup_block_rendering**: Creates shared cube mesh and materials for all registered blocks
-- **spawn_block_rendering**: Adds rendering components to new blocks
+- **spawn_block_rendering**: Adds rendering components to new blocks (with occlusion culling)
 - **update_block_rendering**: Updates rendering when blocks change
+- **update_neighbor_rendering**: Re-evaluates neighbors when blocks change
 - **update_block_materials**: Creates materials for newly registered blocks
+- **update_block_statistics**: Updates the BlockStatistics resource
 
 ### Components
 - **Block**: The block type (just stores BlockId)
@@ -211,19 +255,26 @@ VanillaBlocks::LEAVES  // ID 6 - Dark green foliage
 
 ## Performance Notes
 
+- **Occlusion culling**: Blocks completely surrounded by other blocks are not rendered
 - All blocks share a single cube mesh to reduce memory usage
 - Materials are created once per block type and reused
 - Only renderable blocks have rendering components spawned
 - The system uses Bevy's change detection to only update modified blocks
 - Registry lookups are O(1) using direct array indexing
+- Spatial index uses O(1) HashSet lookups for neighbor checks
 - Supports up to 65,536 different block types (u16)
+- Block statistics are efficiently updated via query counting
 
 ## Future Extensions
 
-The registry pattern makes it easy to add:
+The registry pattern and rendering system make it easy to add:
 - Custom textures (extend BlockDefinition with texture handles)
 - Custom meshes (stairs, slabs, etc.)
 - Block states (rotation, waterlogged, etc.)
 - Custom rendering logic per block type
 - Network synchronization metadata
 - Custom block behaviors and interactions
+- **Greedy meshing**: Combine adjacent identical blocks into larger meshes
+- **Face-level culling**: Cull individual faces instead of entire blocks
+- **Frustum culling**: Don't render chunks outside camera view
+- **Level of Detail (LOD)**: Simpler meshes for distant chunks

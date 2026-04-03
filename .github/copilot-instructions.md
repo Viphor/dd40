@@ -160,7 +160,6 @@ Guidelines:
   - Panics, errors, or edge cases
 - Prefer `cargo doc` as the primary documentation source
 - READMEs should only contain:
-  - Quick start / getting started
   - Build instructions
   - High-level architecture overview (pointing to code docs for details)
 
@@ -218,10 +217,109 @@ counter = counter.saturating_add(1);
 
 ## Technology Stack
 
-- **Language:** Rust (edition 2021)
-- **Game Engine:** Bevy 0.15
+- **Language:** Rust (edition 2024)
+- **Game Engine:** Bevy 0.18
 - **Architecture Pattern:** ECS (Entity Component System)
 - **Build System:** Cargo workspace
+
+### Bevy 0.18 Specific Notes
+
+- **Observer Pattern:** Bevy 0.18 uses the `On<EventType>` type (from `bevy::prelude`) for observer functions, not `Trigger<EventType>`.
+  - Observer functions should have signature: `fn my_observer(trigger: On<MyEvent>)`
+  - Access event data directly from the `On` type: `trigger.pos`, `trigger.field_name`
+  - Register observers with `app.add_observer(my_observer)`
+- **Events and Messages are two distinct concepts in Bevy 0.18** — see the "Bevy 0.18 API Notes" section below for the full breakdown.
+
+## Bevy 0.18 API Notes
+
+### Events vs Messages — Two Distinct Concepts
+
+These are **not interchangeable**. Choose the right one based on how the data needs to be consumed.
+
+---
+
+#### Events — observed, immediate, targeted
+
+Events are **observed directly** using Bevy's observer system. When an event is triggered, all registered observers run immediately, before the next system tick. They are not queued for later; there is no reader that polls them each frame.
+
+- Define with `#[derive(Event)]`
+- Trigger with `commands.trigger(MyEvent { .. })` or `commands.trigger_targets(MyEvent { .. }, entity)`
+- Observe with `app.add_observer(my_observer_fn)`
+- Observer function signature: `fn my_observer(trigger: On<MyEvent>)` — access event data directly via `trigger.field`
+- **Do not** use `MessageReader` or `MessageWriter` with events
+- **Use events for:** things that happen to a specific entity or that need an immediate response — e.g. block placed, player died, collision detected
+
+**Example:**
+```rust
+#[derive(Event)]
+pub struct BlockPlaced {
+    pub pos: BlockPos,
+    pub block_id: BlockId,
+}
+
+fn on_block_placed(trigger: On<BlockPlaced>) {
+    info!("Block placed at {:?}", trigger.pos);
+}
+
+// In plugin:
+app.add_observer(on_block_placed);
+
+// Triggering:
+commands.trigger(BlockPlaced { pos, block_id });
+```
+
+---
+
+#### Messages — queued, polled by systems
+
+Messages are **written into a queue** and **read by systems** on subsequent frames (or the same frame, depending on system ordering). They are not dispatched immediately; a system must actively drain the queue with `MessageReader`.
+
+- Define with `#[derive(Message, Clone)]` from `bevy::ecs::message` (re-exported via `bevy::prelude::*`)
+- Register with `app.add_message::<MyMessage>()`
+- Write with `MessageWriter<T>` — use `writer.write(msg)` (**not** `.send()`)
+- Read with `MessageReader<T>` — `reader.read()` returns an iterator of `&T`
+- **Do not** use `add_observer` with messages
+- **Use messages for:** data that flows between systems asynchronously — e.g. chunk load requests, network responses, background task results
+
+**Example:**
+```rust
+#[derive(Message, Clone)]
+pub struct ChunkReady {
+    pub chunk: StorageChunk,
+}
+
+fn produce(mut writer: MessageWriter<ChunkReady>) {
+    writer.write(ChunkReady { chunk });
+}
+
+fn consume(mut reader: MessageReader<ChunkReady>) {
+    for msg in reader.read() {
+        // handle msg
+    }
+}
+
+// In plugin:
+app.add_message::<ChunkReady>()
+   .add_systems(Update, (produce, consume));
+```
+
+---
+
+#### Quick-reference comparison
+
+| | **Event** | **Message** |
+|---|---|---|
+| Derive | `#[derive(Event)]` | `#[derive(Message, Clone)]` |
+| Register | _(not needed)_ | `app.add_message::<T>()` |
+| Send / write | `commands.trigger(e)` | `writer.write(msg)` |
+| Consume | `app.add_observer(fn)` | `MessageReader<T>` in a system |
+| Timing | Immediate, before next tick | Queued, drained by systems |
+| Targeting | Can target a specific entity | Broadcast to all readers |
+
+---
+
+- **`EventReader` / `EventWriter` / `add_event`**: These older Bevy APIs are **not available** in Bevy 0.18. Use the event observer pattern or the message system depending on your use case.
+- **lightyear messages**: lightyear has its own separate message/replication system (registered via `app.register_message::<T>()`). These are entirely distinct from Bevy's `Message` system and use lightyear-specific channel/reader APIs.
 
 ## Testing Practices
 
@@ -240,6 +338,70 @@ counter = counter.saturating_add(1);
 2. Add it to a plugin's `build` method
 3. Use appropriate `SystemSet`s for ordering if needed
 4. Document what the system does and when it runs
+
+### Adding an Observer for an Event (Bevy 0.18)
+
+Use this pattern when something **happens** and you want an immediate reaction — e.g. a block being placed, an entity dying.
+
+1. Define the event type with `#[derive(Event)]`
+2. Create an observer function with `On<EventType>` as its parameter
+3. Access event fields directly from the `On` parameter (e.g. `trigger.pos`)
+4. Register with `app.add_observer(observer_function)`
+5. Trigger the event with `commands.trigger(MyEvent { .. })`
+
+**Example:**
+```rust
+#[derive(Event)]
+pub struct BlockPlaced {
+    pub pos: BlockPos,
+    pub block_id: BlockId,
+}
+
+fn on_block_placed(trigger: On<BlockPlaced>) {
+    info!("Block placed at ({}, {}, {})",
+          trigger.pos.x, trigger.pos.y, trigger.pos.z);
+}
+
+// In plugin:
+app.add_observer(on_block_placed);
+
+// Elsewhere:
+commands.trigger(BlockPlaced { pos, block_id });
+```
+
+### Sending a Message Between Systems (Bevy 0.18)
+
+Use this pattern when data needs to be **queued** and **consumed by a system** — e.g. a background thread finishing a chunk load.
+
+1. Define the message type with `#[derive(Message, Clone)]`
+2. Register with `app.add_message::<MyMessage>()`
+3. Write with `MessageWriter<T>` using `writer.write(msg)`
+4. Read with `MessageReader<T>` using `reader.read()`
+
+**Example:**
+```rust
+#[derive(Message, Clone)]
+pub struct ChunkReady {
+    pub chunk: StorageChunk,
+}
+
+fn on_chunk_loaded(mut writer: MessageWriter<ChunkReady>, /* ... */) {
+    writer.write(ChunkReady { chunk });
+}
+
+fn apply_loaded_chunks(
+    mut reader: MessageReader<ChunkReady>,
+    mut storage: ResMut<BlockStorage>,
+) {
+    for msg in reader.read() {
+        storage.set_chunk(msg.chunk.clone());
+    }
+}
+
+// In plugin:
+app.add_message::<ChunkReady>()
+   .add_systems(Update, (on_chunk_loaded, apply_loaded_chunks));
+```
 
 ### Creating a New Plugin
 

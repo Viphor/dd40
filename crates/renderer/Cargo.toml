@@ -1,0 +1,9 @@
+[package]
+name = "dd40_renderer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true, default-features = false }
+dd40_core = { workspace = true }
+dd40_player = { workspace = true }

@@ -1,6 +1,10 @@
-use bevy::input::mouse::MouseMotion;
+use bevy::color::palettes::basic::YELLOW;
+use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use bevy::window::CursorGrabMode;
+use bevy::window::{CursorGrabMode, CursorOptions};
+use dd40_core::chunk::cache::ChunkCache;
+use dd40_core::debug::DebugInfo;
+use dd40_core::prelude::*;
 
 /// Marker component that identifies the player entity.
 #[derive(Debug, Default, Component, Reflect)]
@@ -48,8 +52,13 @@ impl Default for CameraRotation {
 
 fn spawn_player(mut commands: Commands) {
     commands.spawn((
+        Name::new("Player"),
         Player,
         MovementSpeed::default(),
+        DebugInfo::new("Player Info")
+            .with_color(YELLOW.into())
+            .add("position", "Player position")
+            .add("chunk", "Player chunk"),
         Transform::from_xyz(0.0, 64.0, 0.0),
         GlobalTransform::default(),
     ));
@@ -64,21 +73,50 @@ fn setup_camera(mut commands: Commands) {
     ));
 }
 
+fn update_debug_info(mut player_query: Single<(&Transform, &mut DebugInfo), With<Player>>) {
+    let pos = player_query.0.translation;
+    player_query.1.set(
+        "position",
+        format!("({:.1}, {:.1}, {:.1})", pos.x, pos.y, pos.z),
+    );
+    let chunk = BlockPos::from(player_query.0).chunk_pos();
+    player_query.1.set("chunk", chunk.to_string());
+}
+
 fn grab_cursor(
-    mut windows: Query<&mut Window>,
+    mut cursor_options: Query<&mut CursorOptions>,
     mouse: Res<ButtonInput<MouseButton>>,
     key: Res<ButtonInput<KeyCode>>,
 ) {
-    let mut window = windows.single_mut();
+    let Ok(mut cursor_option) = cursor_options.single_mut() else {
+        return;
+    };
 
     if mouse.just_pressed(MouseButton::Left) {
-        window.cursor_options.visible = false;
-        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+        cursor_option.visible = false;
+        cursor_option.grab_mode = CursorGrabMode::Locked;
     }
 
     if key.just_pressed(KeyCode::Escape) {
-        window.cursor_options.visible = true;
-        window.cursor_options.grab_mode = CursorGrabMode::None;
+        cursor_option.visible = true;
+        cursor_option.grab_mode = CursorGrabMode::None;
+    }
+}
+
+fn pause_on_escape(
+    game_state: Res<State<GameState>>,
+    mut next_state: ResMut<NextState<GameState>>,
+    key: Res<ButtonInput<KeyCode>>,
+) {
+    if key.just_pressed(KeyCode::Escape) {
+        match game_state.get() {
+            GameState::Running => {
+                next_state.set(GameState::Paused);
+            }
+            GameState::Paused => {
+                next_state.set(GameState::Running);
+            }
+        }
     }
 }
 
@@ -89,11 +127,11 @@ fn player_movement(
     mut player_query: Query<(&mut Transform, &MovementSpeed), With<Player>>,
     camera_query: Query<&Transform, (With<Camera3d>, Without<Player>)>,
 ) {
-    let Ok((mut transform, speed)) = player_query.get_single_mut() else {
+    let Ok((mut transform, speed)) = player_query.single_mut() else {
         return;
     };
 
-    let Ok(camera_transform) = camera_query.get_single() else {
+    let Ok(camera_transform) = camera_query.single() else {
         return;
     };
 
@@ -133,37 +171,39 @@ fn player_movement(
 
 /// Handles mouse movement to rotate the camera.
 fn mouse_look(
-    mut mouse_motion: EventReader<MouseMotion>,
+    accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
     mut camera_query: Query<
         (&mut Transform, &mut CameraRotation, &MouseSensitivity),
         With<Camera3d>,
     >,
-    windows: Query<&Window>,
+    cursor_options: Query<&CursorOptions>,
 ) {
-    let window = windows.single();
-
-    // Only process mouse movement if cursor is grabbed
-    if window.cursor_options.grab_mode != CursorGrabMode::Locked {
-        return;
-    }
-
-    let Ok((mut transform, mut rotation, sensitivity)) = camera_query.get_single_mut() else {
+    //let window = windows.single();
+    let Ok(cursor_option) = cursor_options.single() else {
         return;
     };
 
-    for ev in mouse_motion.read() {
-        rotation.yaw -= ev.delta.x * sensitivity.0;
-        rotation.pitch -= ev.delta.y * sensitivity.0;
-
-        // Clamp pitch to prevent camera flipping
-        rotation.pitch = rotation.pitch.clamp(
-            -std::f32::consts::FRAC_PI_2 + 0.01,
-            std::f32::consts::FRAC_PI_2 - 0.01,
-        );
-
-        // Apply rotation to transform
-        transform.rotation = Quat::from_euler(EulerRot::YXZ, rotation.yaw, rotation.pitch, 0.0);
+    // Only process mouse movement if cursor is grabbed
+    if cursor_option.grab_mode != CursorGrabMode::Locked {
+        return;
     }
+
+    let Ok((mut transform, mut rotation, sensitivity)) = camera_query.single_mut() else {
+        return;
+    };
+
+    let ev = accumulated_mouse_motion;
+    rotation.yaw -= ev.delta.x * sensitivity.0;
+    rotation.pitch -= ev.delta.y * sensitivity.0;
+
+    // Clamp pitch to prevent camera flipping
+    rotation.pitch = rotation.pitch.clamp(
+        -std::f32::consts::FRAC_PI_2 + 0.01,
+        std::f32::consts::FRAC_PI_2 - 0.01,
+    );
+
+    // Apply rotation to transform
+    transform.rotation = Quat::from_euler(EulerRot::YXZ, rotation.yaw, rotation.pitch, 0.0);
 }
 
 /// Syncs the camera position with the player position.
@@ -171,15 +211,40 @@ fn sync_camera_to_player(
     player_query: Query<&Transform, (With<Player>, Without<Camera3d>)>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
 ) {
-    let Ok(player_transform) = player_query.get_single() else {
+    let Ok(player_transform) = player_query.single() else {
         return;
     };
 
-    let Ok(mut camera_transform) = camera_query.get_single_mut() else {
+    let Ok(mut camera_transform) = camera_query.single_mut() else {
         return;
     };
 
     camera_transform.translation = player_transform.translation;
+}
+
+fn load_nearby_chunks(
+    mut chunk_cache: ResMut<ChunkCache>,
+    player_query: Query<&Transform, (With<Player>, Without<Camera3d>)>,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+
+    let player_pos = BlockPos::from(player_transform);
+    let player_chunk_pos = player_pos.chunk_pos();
+
+    // Load chunks in a 3x3 area around the player
+    for dz in -1..=1 {
+        for dx in -1..=1 {
+            let chunk_pos = ChunkPos {
+                x: player_chunk_pos.x + dx,
+                z: player_chunk_pos.z + dz,
+            };
+            if !chunk_cache.contains(&chunk_pos) {
+                chunk_cache.request(chunk_pos);
+            }
+        }
+    }
 }
 
 /// Bevy plugin that registers player types and spawns the player on startup.
@@ -193,14 +258,21 @@ impl Plugin for PlayerPlugin {
             .register_type::<CameraRotation>()
             .add_systems(Startup, (spawn_player, setup_camera))
             .add_systems(
+                PreUpdate,
+                load_nearby_chunks
+                    .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
+            )
+            .add_systems(
                 Update,
                 (
                     grab_cursor,
                     mouse_look,
                     player_movement,
                     sync_camera_to_player,
+                    update_debug_info,
                 )
-                    .chain(),
-            );
+                    .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
+            )
+            .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)));
     }
 }

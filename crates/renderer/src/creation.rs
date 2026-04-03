@@ -1,7 +1,5 @@
 use bevy::prelude::*;
-use dd40_core::{Block, BlockId, BlockPos, BlockRegistry};
-use std::collections::HashMap;
-use std::collections::HashSet;
+use dd40_core::prelude::*;
 
 /// Marker component for entities that represent rendered blocks.
 #[derive(Component)]
@@ -14,63 +12,6 @@ pub struct BlockRenderingAssets {
     pub cube_mesh: Handle<Mesh>,
     /// Materials for each block type, keyed by BlockId.
     pub materials: HashMap<BlockId, Handle<StandardMaterial>>,
-}
-
-/// Resource that stores the positions of all blocks for quick neighbor lookups.
-/// This is used to determine if a block has any air-adjacent faces and should be rendered.
-#[derive(Resource, Default)]
-pub struct BlockSpatialIndex {
-    /// Set of all block positions that currently exist in the world.
-    /// Air blocks are not included in this set.
-    positions: HashSet<(i32, i32, i32)>,
-}
-
-impl BlockSpatialIndex {
-    /// Checks if a block position is occupied by a non-air block.
-    pub fn has_block_at(&self, x: i32, y: i32, z: i32) -> bool {
-        self.positions.contains(&(x, y, z))
-    }
-
-    /// Adds a block position to the index.
-    pub fn insert(&mut self, x: i32, y: i32, z: i32) {
-        self.positions.insert((x, y, z));
-    }
-
-    /// Removes a block position from the index.
-    pub fn remove(&mut self, x: i32, y: i32, z: i32) {
-        self.positions.remove(&(x, y, z));
-    }
-
-    /// Checks if a block at the given position has at least one air-adjacent face.
-    /// Returns true if any of the 6 neighboring positions (up, down, north, south, east, west)
-    /// is either air or outside the indexed area.
-    pub fn has_air_neighbor(&self, pos: &BlockPos) -> bool {
-        let neighbors = [
-            (pos.x + 1, pos.y, pos.z), // East
-            (pos.x - 1, pos.y, pos.z), // West
-            (pos.x, pos.y + 1, pos.z), // Up
-            (pos.x, pos.y - 1, pos.z), // Down
-            (pos.x, pos.y, pos.z + 1), // North
-            (pos.x, pos.y, pos.z - 1), // South
-        ];
-
-        // If any neighbor is not in the index (i.e., is air), this block should be rendered
-        neighbors
-            .iter()
-            .any(|(x, y, z)| !self.has_block_at(*x, *y, *z))
-    }
-
-    /// Gets all neighboring positions that might be affected by a block change.
-    pub fn get_neighbor_positions(&self, pos: &BlockPos) -> Vec<(i32, i32, i32)> {
-        vec![
-            (pos.x + 1, pos.y, pos.z), // East
-            (pos.x - 1, pos.y, pos.z), // West
-            (pos.x, pos.y + 1, pos.z), // Up
-            (pos.x, pos.y - 1, pos.z), // Down
-            (pos.x, pos.y, pos.z + 1), // North
-            (pos.x, pos.y, pos.z - 1), // South
-        ]
-    }
 }
 
 /// Creates a unit cube mesh centered at the origin.
@@ -88,6 +29,8 @@ pub fn setup_block_rendering(
 ) {
     // Initialize the spatial index resource
     commands.insert_resource(BlockSpatialIndex::default());
+    // Initialize the block statistics resource
+    commands.insert_resource(BlockStatistics::default());
     let cube_mesh = meshes.add(create_cube_mesh());
     let mut block_materials = HashMap::new();
 
@@ -318,6 +261,7 @@ pub fn update_neighbor_rendering(
 /// Registers new block materials when new blocks are added to the registry.
 /// This allows dynamic registration of blocks after startup.
 pub fn update_block_materials(
+    event: On<BlockRegistryUpdate>,
     mut rendering_assets: Option<ResMut<BlockRenderingAssets>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     registry: Res<BlockRegistry>,
@@ -326,37 +270,18 @@ pub fn update_block_materials(
         return;
     };
 
-    // Check if there are any new blocks that don't have materials yet
-    for block_def in registry.iter() {
-        if block_def.is_renderable && !assets.materials.contains_key(&block_def.id) {
+    let id = event.block_id;
+
+    if let Some(definition) = registry.get(id) {
+        if !definition.is_renderable && assets.materials.contains_key(&id) {
+            assets.materials.remove(&id);
+        } else if definition.is_renderable {
             let material = materials.add(StandardMaterial {
-                base_color: block_def.color,
+                base_color: definition.color,
                 ..default()
             });
-            assets.materials.insert(block_def.id, material);
+            assets.materials.insert(id, material);
         }
-    }
-}
-
-/// Plugin that handles block rendering.
-pub struct BlockRenderingPlugin;
-
-impl Plugin for BlockRenderingPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(
-            Startup,
-            setup_block_rendering.after(dd40_core::setup_vanilla_blocks),
-        )
-        .add_systems(
-            Update,
-            (
-                update_block_materials,
-                spawn_block_rendering,
-                update_block_rendering,
-                update_neighbor_rendering,
-            )
-                .chain(),
-        );
     }
 }
 

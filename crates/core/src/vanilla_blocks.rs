@@ -1,4 +1,4 @@
-use crate::{BlockDefinition, BlockId, BlockRegistry};
+use crate::block::{BlockDefinition, BlockId, BlockRegistry};
 use bevy::prelude::*;
 
 /// Block IDs for vanilla (built-in) blocks.
@@ -25,7 +25,10 @@ impl VanillaBlocks {
 
 /// Registers all vanilla (default) block types into the registry.
 /// This should be called during app startup.
-pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
+pub fn register_vanilla_blocks(
+    registry: &mut BlockRegistry,
+    commands: &mut Commands,
+) -> VanillaBlocks {
     // Air is already registered by default in BlockRegistry::new()
     info!("Registering vanilla blocks");
 
@@ -34,6 +37,7 @@ pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
             .with_color(Color::srgb(0.5, 0.5, 0.5))
             .with_solid(true)
             .with_renderable(true),
+        commands,
     );
 
     registry.register(
@@ -41,6 +45,7 @@ pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
             .with_color(Color::srgb(0.6, 0.4, 0.2))
             .with_solid(true)
             .with_renderable(true),
+        commands,
     );
 
     registry.register(
@@ -48,6 +53,7 @@ pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
             .with_color(Color::srgb(0.2, 0.8, 0.2))
             .with_solid(true)
             .with_renderable(true),
+        commands,
     );
 
     registry.register(
@@ -55,6 +61,7 @@ pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
             .with_color(Color::srgb(0.9, 0.85, 0.6))
             .with_solid(true)
             .with_renderable(true),
+        commands,
     );
 
     registry.register(
@@ -62,6 +69,7 @@ pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
             .with_color(Color::srgb(0.55, 0.35, 0.2))
             .with_solid(true)
             .with_renderable(true),
+        commands,
     );
 
     registry.register(
@@ -69,6 +77,7 @@ pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
             .with_color(Color::srgb(0.1, 0.6, 0.1))
             .with_solid(true)
             .with_renderable(true),
+        commands,
     );
 
     VanillaBlocks {
@@ -83,8 +92,8 @@ pub fn register_vanilla_blocks(registry: &mut BlockRegistry) -> VanillaBlocks {
 }
 
 /// Bevy startup system that registers vanilla blocks.
-pub fn setup_vanilla_blocks(mut registry: ResMut<BlockRegistry>) {
-    register_vanilla_blocks(&mut registry);
+pub fn setup_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Commands) {
+    register_vanilla_blocks(&mut registry, &mut commands);
 }
 
 #[cfg(test)]
@@ -93,8 +102,32 @@ mod tests {
 
     #[test]
     fn vanilla_blocks_registered() {
-        let mut registry = BlockRegistry::new();
-        let vanilla = register_vanilla_blocks(&mut registry);
+        // Setup app
+        let mut app = App::new();
+
+        // Add BlockRegistry resource
+        app.insert_resource(BlockRegistry::new());
+
+        // Add BlockRegistryUpdate message
+        //app.add_message::<BlockRegistryUpdate>();
+
+        // Add setup system
+        app.add_systems(Update, setup_vanilla_blocks);
+
+        // Run systems
+        app.update();
+
+        // Check resulting changes
+        let registry = app.world().resource::<BlockRegistry>();
+        let vanilla = VanillaBlocks {
+            air: VanillaBlocks::AIR,
+            stone: VanillaBlocks::STONE,
+            dirt: VanillaBlocks::DIRT,
+            grass: VanillaBlocks::GRASS,
+            sand: VanillaBlocks::SAND,
+            wood: VanillaBlocks::WOOD,
+            leaves: VanillaBlocks::LEAVES,
+        };
 
         assert_eq!(vanilla.stone, VanillaBlocks::STONE);
 
@@ -110,8 +143,32 @@ mod tests {
 
     #[test]
     fn all_vanilla_blocks_exist() {
-        let mut registry = BlockRegistry::new();
-        let vanilla = register_vanilla_blocks(&mut registry);
+        // Setup app
+        let mut app = App::new();
+
+        // Add BlockRegistry resource
+        app.insert_resource(BlockRegistry::new());
+
+        // Add BlockRegistryUpdate message
+        //app.add_message::<BlockRegistryUpdate>();
+
+        // Add setup system
+        app.add_systems(Update, setup_vanilla_blocks);
+
+        // Run systems
+        app.update();
+
+        // Check resulting changes
+        let registry = app.world().resource::<BlockRegistry>();
+        let vanilla = VanillaBlocks {
+            air: VanillaBlocks::AIR,
+            stone: VanillaBlocks::STONE,
+            dirt: VanillaBlocks::DIRT,
+            grass: VanillaBlocks::GRASS,
+            sand: VanillaBlocks::SAND,
+            wood: VanillaBlocks::WOOD,
+            leaves: VanillaBlocks::LEAVES,
+        };
 
         assert!(registry.get(vanilla.air).is_some());
         assert!(registry.get(vanilla.stone).is_some());

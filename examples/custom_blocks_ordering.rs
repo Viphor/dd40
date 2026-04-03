@@ -28,7 +28,8 @@ fn main() {
         }))
         .add_plugins((
             dd40_core::CorePlugin,
-            dd40_world::WorldPlugin,
+            dd40_world::ClientWorldPlugin,
+            dd40_world::ServerWorldPlugin,
             CustomBlocksPlugin,
         ))
         .add_systems(Startup, setup)
@@ -50,7 +51,7 @@ impl Plugin for CustomBlocksPlugin {
 
 /// Registers custom ore blocks into the BlockRegistry.
 /// This system runs in BlockRegistrySet, ensuring it completes before world generation.
-fn register_custom_blocks(mut registry: ResMut<BlockRegistry>) {
+fn register_custom_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Commands) {
     info!("Registering custom ore blocks...");
 
     registry.register(
@@ -58,6 +59,7 @@ fn register_custom_blocks(mut registry: ResMut<BlockRegistry>) {
             .with_color(Color::srgb(0.8, 0.5, 0.3))
             .with_solid(true)
             .with_renderable(true),
+        &mut commands,
     );
 
     registry.register(
@@ -65,6 +67,7 @@ fn register_custom_blocks(mut registry: ResMut<BlockRegistry>) {
             .with_color(Color::srgb(0.2, 0.9, 0.4))
             .with_solid(true)
             .with_renderable(true),
+        &mut commands,
     );
 
     registry.register(
@@ -72,6 +75,7 @@ fn register_custom_blocks(mut registry: ResMut<BlockRegistry>) {
             .with_color(Color::srgb(0.9, 0.1, 0.2))
             .with_solid(true)
             .with_renderable(true),
+        &mut commands,
     );
 
     info!("Custom ore blocks registered successfully!");
@@ -106,7 +110,7 @@ fn spawn_custom_ore_line(mut commands: Commands, registry: Res<BlockRegistry>) {
 }
 
 /// Sets up the camera and lighting.
-fn setup(mut commands: Commands, mut ambient: ResMut<AmbientLight>) {
+fn setup(mut commands: Commands, mut ambient: ResMut<GlobalAmbientLight>) {
     // Spawn camera
     commands.spawn((
         Camera3d::default(),

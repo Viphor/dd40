@@ -1,0 +1,9 @@
+[package]
+name = "dd40_chunk_storage"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy            = { workspace = true, default-features = false, features = ["bevy_log", "bevy_state", "bevy_color"] }
+dd40_core       = { workspace = true }
+crossbeam-channel = "0.5"

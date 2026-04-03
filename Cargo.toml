@@ -6,26 +6,32 @@ members = [
     "crates/client",
     "crates/server",
     "crates/debug_ui",
+    "crates/network",
+    "crates/chunk_storage",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-bevy = { version = "0.15", default-features = false }
+bevy = { version = "0.18", default-features = false }
 dd40_core = { path = "crates/core" }
 dd40_world = { path = "crates/world" }
 dd40_player = { path = "crates/player" }
+dd40_renderer = { path = "crates/renderer" }
 dd40_debug_ui = { path = "crates/debug_ui" }
+dd40_network = { path = "crates/network" }
+dd40_chunk_storage = { path = "crates/chunk_storage" }
 
 [package]
 name = "dd40"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 bevy = { workspace = true, features = ["default"] }
 dd40_core = { workspace = true }
 dd40_world = { workspace = true }
 dd40_debug_ui = { workspace = true }
+dd40_network = { workspace = true }
 
 [[example]]
 name = "custom_blocks_ordering"
@@ -34,3 +40,7 @@ path = "examples/custom_blocks_ordering.rs"
 [[example]]
 name = "debug_ui_demo"
 path = "examples/debug_ui_demo.rs"
+
+[[example]]
+name = "block_events"
+path = "examples/block_events.rs"

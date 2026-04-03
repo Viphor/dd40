@@ -1,7 +1,7 @@
 [package]
 name = "dd40_client"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "dd40_client"
@@ -14,3 +14,5 @@ dd40_core = { workspace = true }
 dd40_world = { workspace = true }
 dd40_player = { workspace = true }
 dd40_debug_ui = { workspace = true }
+dd40_network = { workspace = true }
+bevy-inspector-egui = "0.36.0"
