@@ -3,6 +3,10 @@ name = "dd40_core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+## Enables DEBUG-level logging in `log_plugin()` instead of the default INFO level.
+debug_logging = []
+
 [dependencies]
 bevy = { workspace = true, default-features = false }
 serde = { version = "1.0", features = ["derive"] }

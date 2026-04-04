@@ -2,6 +2,7 @@ pub mod block;
 pub mod chunk;
 pub mod common;
 pub mod debug;
+pub mod loading;
 pub mod plugin;
 pub mod state;
 pub mod vanilla_blocks;
@@ -14,6 +15,7 @@ pub mod prelude {
             registry::BlockRegistrySet,
         },
         chunk::{CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos, events::*},
+        loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
         world::WorldGenerationSet,
     };

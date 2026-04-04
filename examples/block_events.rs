@@ -9,7 +9,9 @@
 //! by the network layer.
 
 use bevy::prelude::*;
-use dd40_core::{BlockChanged, BlockPlaced, BlockPos, BlockRemoved, CorePlugin, VanillaBlocks};
+use dd40_core::plugin::CorePlugin;
+use dd40_core::prelude::{BlockChanged, BlockPlaced, BlockPos, BlockRemoved};
+use dd40_core::vanilla_blocks::VanillaBlocks;
 
 fn main() {
     App::new()

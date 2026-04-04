@@ -8,7 +8,7 @@
 //!
 //! ```no_run
 //! use bevy::prelude::*;
-//! use dd40_chunk_storage::DiskStoragePlugin;
+//! use dd40_chunk_storage::plugin::DiskStoragePlugin;
 //!
 //! App::new()
 //!     .add_plugins(DiskStoragePlugin::new("saves/chunks"))

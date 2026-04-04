@@ -7,10 +7,7 @@
 //! - The automatic ordering ensures blocks are registered before world gen runs
 
 use bevy::prelude::*;
-use dd40_core::{
-    BlockDefinition, BlockId, BlockPos, BlockRegistry, BlockRegistrySet, WorldGenerationSet,
-};
-use dd40_world::spawn_block;
+use dd40_core::prelude::{BlockDefinition, BlockId, BlockRegistry, BlockRegistrySet};
 
 // Define custom block IDs (use IDs >= 1000 to avoid conflicts with vanilla blocks)
 pub const COPPER_ORE: BlockId = BlockId(1000);
@@ -26,12 +23,7 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins((
-            dd40_core::CorePlugin,
-            dd40_world::ClientWorldPlugin,
-            dd40_world::ServerWorldPlugin,
-            CustomBlocksPlugin,
-        ))
+        .add_plugins((dd40_core::plugin::CorePlugin, CustomBlocksPlugin))
         .add_systems(Startup, setup)
         .run();
 }
@@ -43,9 +35,6 @@ impl Plugin for CustomBlocksPlugin {
     fn build(&self, app: &mut App) {
         // Register custom blocks in BlockRegistrySet
         app.add_systems(Startup, register_custom_blocks.in_set(BlockRegistrySet));
-
-        // Spawn custom blocks in WorldGenerationSet (runs after BlockRegistrySet)
-        app.add_systems(Startup, spawn_custom_ore_line.in_set(WorldGenerationSet));
     }
 }
 
@@ -79,34 +68,6 @@ fn register_custom_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Com
     );
 
     info!("Custom ore blocks registered successfully!");
-}
-
-/// Spawns a line of custom ore blocks in the world.
-/// This system runs in WorldGenerationSet, guaranteeing that all block
-/// registrations (including from other plugins) have completed.
-fn spawn_custom_ore_line(mut commands: Commands, registry: Res<BlockRegistry>) {
-    info!("Spawning custom ore line...");
-
-    // Verify blocks are registered before spawning
-    if registry.get(COPPER_ORE).is_none() {
-        error!("COPPER_ORE not registered! This shouldn't happen with proper ordering.");
-        return;
-    }
-
-    // Spawn a line of different ores at y=70 for visibility
-    let y = 70;
-    for x in -5..=5 {
-        let block_id = match x {
-            -5..=-2 => COPPER_ORE,
-            -1..=1 => EMERALD_ORE,
-            2..=5 => RUBY_ORE,
-            _ => continue,
-        };
-
-        spawn_block(&mut commands, block_id, BlockPos::new(x, y, 0));
-    }
-
-    info!("Custom ore line spawned at y={}", y);
 }
 
 /// Sets up the camera and lighting.

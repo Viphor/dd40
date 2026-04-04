@@ -12,7 +12,7 @@ use crate::{
 /// # Example
 /// ```no_run
 /// use bevy::prelude::*;
-/// use dd40_chunk_storage::DiskStoragePlugin;
+/// use dd40_chunk_storage::plugin::DiskStoragePlugin;
 ///
 /// fn main() {
 ///     App::new()

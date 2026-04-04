@@ -12,7 +12,7 @@ pub enum AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        AppState::Playing
+        AppState::Loading
     }
 }
 

@@ -6,7 +6,7 @@
 //!
 //! ```text
 //! ┌────────────────────────────────────────────────────┐
-//! │  Header (10 bytes)                                 │
+//! │  Header (14 bytes)                                 │
 //! │    magic:   [u8; 4]  = 0x44 0x44 0x34 0x30         │
 //! │    version: u16                                    │
 //! │    chunk_x: i32                                    │
@@ -148,8 +148,7 @@ impl From<io::Error> for ChunkSerializeError {
 /// ```no_run
 /// use std::fs::File;
 /// use std::io::BufWriter;
-/// use dd40_core::chunk::Chunk;
-/// use dd40_core::ChunkPos;
+/// use dd40_core::prelude::*;
 /// use dd40_chunk_storage::serialization::serialize_chunk;
 ///
 /// let chunk = Chunk::new(ChunkPos::new(0, 0));
@@ -175,8 +174,7 @@ pub fn serialize_chunk<W: Write>(chunk: &Chunk, writer: W) -> Result<(), ChunkSe
 /// ```no_run
 /// use std::fs::File;
 /// use std::io::BufWriter;
-/// use dd40_core::chunk::Chunk;
-/// use dd40_core::ChunkPos;
+/// use dd40_core::prelude::*;
 /// use dd40_chunk_storage::serialization::{ChunkVersion, serialize_chunk_versioned};
 ///
 /// let chunk = Chunk::new(ChunkPos::new(0, 0));
@@ -540,8 +538,8 @@ mod tests {
     // Encoding size
     // -----------------------------------------------------------------------
 
-    /// An all-air chunk should encode to exactly 18 bytes:
-    ///   10-byte header + 2 RLE runs × 4 bytes each.
+    /// An all-air chunk should encode to exactly 22 bytes:
+    ///   14-byte header + 2 RLE runs × 4 bytes each.
     ///
     /// CHUNK_SIZE = 65536, MAX_RUN = 65535 → 2 runs needed.
     #[test]
@@ -550,13 +548,13 @@ mod tests {
         serialize_chunk(&Chunk::new(ChunkPos::new(0, 0)), &mut buf).unwrap();
         assert_eq!(
             buf.len(),
-            18,
-            "expected 18-byte encoding for all-air chunk, got {} bytes",
+            22,
+            "expected 22-byte encoding for all-air chunk, got {} bytes",
             buf.len()
         );
     }
 
-    /// A fully uniform non-air chunk also encodes to 18 bytes.
+    /// A fully uniform non-air chunk also encodes to 22 bytes.
     #[test]
     fn compact_encoding_uniform_non_air() {
         let mut chunk = Chunk::new(ChunkPos::new(0, 0));
@@ -572,8 +570,8 @@ mod tests {
         serialize_chunk(&chunk, &mut buf).unwrap();
         assert_eq!(
             buf.len(),
-            18,
-            "expected 18-byte encoding for uniform chunk, got {} bytes",
+            22,
+            "expected 22-byte encoding for uniform chunk, got {} bytes",
             buf.len()
         );
     }

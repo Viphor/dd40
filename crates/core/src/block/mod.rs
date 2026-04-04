@@ -119,7 +119,7 @@ mod tests {
     fn block_pos_chunk_local() {
         let pos = BlockPos::new(17, 64, -1);
         let local = pos.chunk_local();
-        assert_eq!(local, BlockPos::new(1, 64, -1));
+        assert_eq!(local, BlockPos::new(1, 64, 15));
     }
 
     #[test]

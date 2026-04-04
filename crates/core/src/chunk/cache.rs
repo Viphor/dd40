@@ -16,6 +16,8 @@ pub struct ChunkCache {
     chunks: HashMap<ChunkPos, Chunk>,
     /// Requested chunks that have not yet been fulfilled by the provider.
     requested: HashSet<ChunkPos>,
+    /// Chunks that have been requested but not yet fulfilled by the provider.
+    waiting: HashSet<ChunkPos>,
 }
 
 impl ChunkCache {
@@ -23,6 +25,7 @@ impl ChunkCache {
         Self {
             chunks: HashMap::new(),
             requested: HashSet::new(),
+            waiting: HashSet::new(),
         }
     }
 
@@ -42,7 +45,7 @@ impl ChunkCache {
     /// and returns a reference to the cached chunk if it is present.
     pub fn request(&mut self, pos: ChunkPos) -> Option<&Chunk> {
         let res = self.chunks.get(&pos);
-        if res.is_none() {
+        if res.is_none() && !self.waiting.contains(&pos) {
             self.requested.insert(pos);
         }
         res
@@ -71,9 +74,11 @@ pub fn chunk_ready_listener(mut cache: ResMut<ChunkCache>, mut events: MessageRe
 
 pub fn request_chunk_system(mut cache: ResMut<ChunkCache>, mut mq: MessageWriter<RequestChunk>) {
     cache.requested.iter().for_each(|&pos| {
+        debug!("Requesting chunk {:?} from provider", pos);
         mq.write(RequestChunk { pos });
     });
-    cache.requested.clear();
+    let requested = cache.requested.drain().collect::<Vec<_>>();
+    cache.waiting.extend(requested);
 }
 
 pub struct ChunkCachePlugin;

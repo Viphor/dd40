@@ -1,6 +1,9 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
 
-use crate::{chunk::cache::ChunkCachePlugin, prelude::*, vanilla_blocks::setup_vanilla_blocks};
+use crate::{
+    chunk::cache::ChunkCachePlugin, loading::LoadingPlugin, prelude::*,
+    vanilla_blocks::setup_vanilla_blocks,
+};
 
 /// Bevy plugin that registers core types with the reflection system.
 pub struct CorePlugin;
@@ -11,7 +14,8 @@ impl Plugin for CorePlugin {
             app.add_plugins(StatesPlugin);
         }
 
-        app.init_state::<AppState>()
+        app.add_plugins(LoadingPlugin)
+            .init_state::<AppState>()
             .init_state::<GameState>()
             .insert_resource(BlockRegistry::new())
             .register_type::<BlockId>()
