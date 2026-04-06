@@ -1,6 +1,9 @@
 use bevy::prelude::*;
-use dd40_core::prelude::{LoadingSet, LoadingTracker};
-use lightyear::prelude::client::{ClientPlugins, Connected};
+use dd40_core::prelude::{ChunkReady, LoadingSet, LoadingTracker, RequestChunk};
+use lightyear::prelude::{
+    MessageReceiver, MessageSender,
+    client::{ClientPlugins, Connected},
+};
 
 pub mod chunk_provider;
 
@@ -90,7 +93,17 @@ fn register_connection_loading_item(mut tracker: ResMut<LoadingTracker>) {
 /// This clears the `"network:server_connection"` key from [`LoadingTracker`],
 /// allowing the app to proceed to [`AppState::Playing`] once all other loading
 /// items are also resolved.
-fn on_server_connected(_trigger: On<Add, Connected>, mut tracker: ResMut<LoadingTracker>) {
+fn on_server_connected(
+    trigger: On<Add, Connected>,
+    mut commands: Commands,
+    mut tracker: ResMut<LoadingTracker>,
+) {
+    commands.entity(trigger.entity).insert((
+        MessageSender::<RequestChunk>::default(),
+        MessageReceiver::<ChunkReady>::default(),
+        Name::new("ServerConnection"),
+    ));
+
     if tracker.remove(LOADING_KEY_SERVER_CONNECTION) {
         info!(
             "ClientNetworkPlugin: server connection established — cleared \"{}\"",

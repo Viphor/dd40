@@ -2764,7 +2764,6 @@ dependencies = [
  "bincode 1.3.3",
  "crossbeam-channel",
  "serde",
- "serde-big-array",
  "tempfile",
 ]
 
@@ -4455,6 +4454,7 @@ dependencies = [
  "lightyear_replication",
  "lightyear_sync",
  "lightyear_transport",
+ "metrics",
  "serde",
  "tracing",
 ]
@@ -4539,6 +4539,7 @@ dependencies = [
  "lightyear_serde",
  "lightyear_sync",
  "lightyear_utils",
+ "metrics",
  "serde",
  "tracing",
 ]
@@ -4577,6 +4578,7 @@ dependencies = [
  "lightyear_serde",
  "lightyear_transport",
  "lightyear_utils",
+ "metrics",
  "serde",
  "thiserror 2.0.18",
  "tracing",
@@ -4651,6 +4653,7 @@ dependencies = [
  "lightyear_replication",
  "lightyear_sync",
  "lightyear_utils",
+ "metrics",
  "parking_lot",
  "seahash",
  "serde",
@@ -4702,6 +4705,7 @@ dependencies = [
  "lightyear_sync",
  "lightyear_transport",
  "lightyear_utils",
+ "metrics",
  "seahash",
  "serde",
  "smallvec",
@@ -4794,6 +4798,7 @@ dependencies = [
  "lightyear_link",
  "lightyear_serde",
  "lightyear_utils",
+ "metrics",
  "nonzero_ext",
  "ringbuffer",
  "serde",
@@ -4814,6 +4819,7 @@ dependencies = [
  "bytes",
  "lightyear_core",
  "lightyear_link",
+ "metrics",
  "thiserror 2.0.18",
  "tracing",
 ]
@@ -4850,6 +4856,7 @@ dependencies = [
  "bevy_reflect",
  "bevy_utils",
  "hashbrown 0.16.1",
+ "metrics",
  "paste",
  "seahash",
  "tracing",
@@ -6638,15 +6645,6 @@ checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
-]
-
-[[package]]
-name = "serde-big-array"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
-dependencies = [
- "serde",
 ]
 
 [[package]]

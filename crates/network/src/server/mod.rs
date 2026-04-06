@@ -43,9 +43,9 @@ impl Plugin for ServerNetworkPlugin {
 
         // Add communication systems
         app.register_type::<ChunkRequests>()
-            .add_systems(PreUpdate, receive_chunk_requests)
-            .add_systems(PostUpdate, send_chunk_data)
-            .add_systems(Update, add_chunk_requests_cache);
+            .add_observer(add_chunk_requests_cache)
+            .add_systems(Update, receive_chunk_requests)
+            .add_systems(PostUpdate, send_chunk_data);
 
         // Add server systems
         app.add_systems(Update, placeholder_server_tick);

@@ -65,6 +65,10 @@ pub fn log_plugin() -> LogPlugin {
                 level: Level::WARN,
             },
             Filter {
+                module: "lightyear_messages",
+                level: Level::INFO,
+            },
+            Filter {
                 module: "dd40_core",
                 level: Level::DEBUG,
             },
@@ -78,7 +82,7 @@ pub fn log_plugin() -> LogPlugin {
             },
             Filter {
                 module: "dd40_network",
-                level: Level::DEBUG,
+                level: Level::TRACE,
             },
             Filter {
                 module: "dd40_chunk_storage",

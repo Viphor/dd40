@@ -1,8 +1,11 @@
 use std::fmt::Display;
 
-use bevy::{ecs::component::Component, reflect::Reflect};
-use serde::{Deserialize, Serialize};
-use serde_big_array::BigArray;
+use bevy::{
+    ecs::component::Component,
+    prelude::{Deref, DerefMut},
+    reflect::Reflect,
+};
+use serde::{Deserialize, Serialize, ser::SerializeTuple};
 
 use crate::block::{Block, BlockCoord, BlockPos};
 
@@ -37,6 +40,58 @@ impl Display for ChunkPos {
     }
 }
 
+#[derive(Clone, DerefMut, Deref)]
+struct ChunkData([Block; CHUNK_SIZE]);
+
+impl Serialize for ChunkData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_tuple(CHUNK_SIZE)?;
+        for block in &self.0 {
+            seq.serialize_element(block)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ChunkData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ChunkDataVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ChunkDataVisitor {
+            type Value = ChunkData;
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut blocks = [Block::default(); CHUNK_SIZE];
+                for i in 0..CHUNK_SIZE {
+                    blocks[i] = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
+                }
+                Ok(ChunkData(blocks))
+            }
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(
+                    formatter,
+                    "expecting to find {} number of blocks",
+                    CHUNK_SIZE
+                )
+            }
+        }
+
+        deserializer.deserialize_tuple(CHUNK_SIZE, ChunkDataVisitor)
+    }
+}
+
 /// A chunk-sized slab of block data, optionally populated.
 ///
 /// The flat array is indexed as:
@@ -44,8 +99,7 @@ impl Display for ChunkPos {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Chunk {
     position: ChunkPos,
-    #[serde(with = "BigArray")]
-    data: [Block; CHUNK_SIZE],
+    data: Box<ChunkData>,
 }
 
 impl Chunk {
@@ -53,7 +107,7 @@ impl Chunk {
     pub fn new(position: ChunkPos) -> Self {
         Self {
             position,
-            data: [Block::default(); CHUNK_SIZE],
+            data: Box::new(ChunkData([Block::default(); CHUNK_SIZE])),
         }
     }
 

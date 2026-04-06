@@ -9,7 +9,11 @@ pub(crate) fn receive_chunk_requests(
     mut receivers: Query<(&mut MessageReceiver<RequestChunk>, &mut ChunkRequests)>,
 ) {
     for (mut receiver, mut cache) in receivers.iter_mut() {
+        if receiver.has_messages() {
+            trace!("Receiving chunk requests from client");
+        }
         for request in receiver.receive() {
+            trace!("Received chunk request at {}", request.pos);
             cache.insert(request.pos);
             requests.write(request);
         }
@@ -23,6 +27,7 @@ pub(crate) fn send_chunk_data(
     for ready in reader.read() {
         for (mut sender, mut cache) in senders.iter_mut() {
             if cache.contains(&ready.chunk.position()) {
+                trace!("Sending chunk data at {}", ready.chunk.position());
                 sender.send::<ChunkChannel>(ready.clone());
                 cache.remove(&ready.chunk.position());
             }

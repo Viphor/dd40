@@ -83,25 +83,39 @@ fn update_debug_info(mut player_query: Single<(&Transform, &mut DebugInfo), With
     player_query.1.set("chunk", chunk.to_string());
 }
 
-fn grab_cursor(
-    mut cursor_options: Query<&mut CursorOptions>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    key: Res<ButtonInput<KeyCode>>,
-) {
-    let Ok(mut cursor_option) = cursor_options.single_mut() else {
-        return;
-    };
-
-    if mouse.just_pressed(MouseButton::Left) {
-        cursor_option.visible = false;
-        cursor_option.grab_mode = CursorGrabMode::Locked;
-    }
-
-    if key.just_pressed(KeyCode::Escape) {
+fn on_pause(mut cursor_options: Query<&mut CursorOptions>) {
+    if let Ok(mut cursor_option) = cursor_options.single_mut() {
         cursor_option.visible = true;
         cursor_option.grab_mode = CursorGrabMode::None;
     }
 }
+
+fn on_resume(mut cursor_options: Query<&mut CursorOptions>) {
+    if let Ok(mut cursor_option) = cursor_options.single_mut() {
+        cursor_option.visible = false;
+        cursor_option.grab_mode = CursorGrabMode::Locked;
+    }
+}
+
+// fn grab_cursor(
+//     mut cursor_options: Query<&mut CursorOptions>,
+//     mouse: Res<ButtonInput<MouseButton>>,
+//     key: Res<ButtonInput<KeyCode>>,
+// ) {
+//     let Ok(mut cursor_option) = cursor_options.single_mut() else {
+//         return;
+//     };
+//
+//     if mouse.just_pressed(MouseButton::Left) {
+//         cursor_option.visible = false;
+//         cursor_option.grab_mode = CursorGrabMode::Locked;
+//     }
+//
+//     if key.just_pressed(KeyCode::Escape) {
+//         cursor_option.visible = true;
+//         cursor_option.grab_mode = CursorGrabMode::None;
+//     }
+// }
 
 fn pause_on_escape(
     game_state: Res<State<GameState>>,
@@ -257,6 +271,8 @@ impl Plugin for PlayerPlugin {
             .register_type::<MouseSensitivity>()
             .register_type::<CameraRotation>()
             .add_systems(Startup, (spawn_player, setup_camera))
+            .add_systems(OnEnter(GameState::Paused), on_pause)
+            .add_systems(OnEnter(GameState::Running), on_resume)
             .add_systems(
                 PreUpdate,
                 load_nearby_chunks
@@ -265,7 +281,7 @@ impl Plugin for PlayerPlugin {
             .add_systems(
                 Update,
                 (
-                    grab_cursor,
+                    //grab_cursor,
                     mouse_look,
                     player_movement,
                     sync_camera_to_player,
