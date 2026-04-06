@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { workspace = true, default-features = false }
+bevy = { workspace = true, default-features = false, features = [
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_asset",
+    "bevy_color",
+    "bevy_state",
+    "bevy_log",
+    "bevy_mesh",
+] }
 dd40_core = { workspace = true }
 dd40_player = { workspace = true }

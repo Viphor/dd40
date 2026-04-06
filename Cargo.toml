@@ -8,6 +8,7 @@ members = [
     "crates/debug_ui",
     "crates/network",
     "crates/chunk_storage",
+    "crates/renderer",
 ]
 resolver = "2"
 

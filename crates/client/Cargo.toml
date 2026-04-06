@@ -15,4 +15,5 @@ dd40_world = { workspace = true }
 dd40_player = { workspace = true }
 dd40_debug_ui = { workspace = true }
 dd40_network = { workspace = true }
+dd40_renderer = { workspace = true }
 bevy-inspector-egui = "0.36.0"

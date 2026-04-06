@@ -2,16 +2,25 @@ use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 
 use crate::custom::{DebugUiElementRoot, spawn_custom_debug_ui, update_custom_debug_ui};
+use crate::orientation_gizmo::OrientationGizmoPlugin;
 
 pub mod custom;
+pub mod orientation_gizmo;
 
 /// Plugin that provides debug UI elements.
-/// Currently displays an FPS counter in the top-left corner.
+///
+/// Includes:
+/// - FPS counter (top-left)
+/// - Custom [`DebugInfo`] element support
+/// - Orientation gizmo (bottom-right corner) via [`OrientationGizmoPlugin`]
+///
+/// [`DebugInfo`]: dd40_core::debug::DebugInfo
 pub struct DebugUiPlugin;
 
 impl Plugin for DebugUiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(FrameTimeDiagnosticsPlugin::default())
+            .add_plugins(OrientationGizmoPlugin)
             .add_systems(Startup, setup_debug_ui)
             .add_systems(Update, (spawn_custom_debug_ui, update_custom_debug_ui))
             .add_systems(Update, update_fps_text);

@@ -55,6 +55,15 @@ impl ChunkCache {
         self.chunks.contains_key(pos) || self.requested.contains(pos)
     }
 
+    /// Returns an iterator over all chunk positions currently loaded in the cache.
+    ///
+    /// Only returns positions for chunks whose data is fully loaded (i.e. present
+    /// in the cache map). Chunks that are requested but not yet loaded are not
+    /// included.
+    pub fn iter_positions(&self) -> impl Iterator<Item = &ChunkPos> {
+        self.chunks.keys()
+    }
+
     /// Inserts a chunk into the cache, replacing any existing entry.
     fn insert(&mut self, chunk: Chunk) {
         self.chunks.insert(chunk.position, chunk);

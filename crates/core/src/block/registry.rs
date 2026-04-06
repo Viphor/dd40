@@ -106,6 +106,20 @@ impl BlockRegistry {
         id
     }
 
+    /// Registers a new block type without triggering a [`BlockRegistryUpdate`]
+    /// event.
+    ///
+    /// This is intended for contexts where [`Commands`] is unavailable, such
+    /// as inside async compute tasks that need a lightweight copy of the
+    /// registry for solidity / renderability checks.  Callers are responsible
+    /// for ensuring that any systems which observe [`BlockRegistryUpdate`] are
+    /// not affected by the missing event.
+    ///
+    /// Returns the assigned [`BlockId`].
+    pub fn register_without_event(&mut self, definition: BlockDefinition) -> BlockId {
+        self.insert_definition(definition)
+    }
+
     /// Registers a new block type with auto-assigned ID.
     pub fn register_auto(
         &mut self,

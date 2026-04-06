@@ -2753,6 +2753,7 @@ dependencies = [
  "dd40_debug_ui",
  "dd40_network",
  "dd40_player",
+ "dd40_renderer",
  "dd40_world",
 ]
 
@@ -2794,6 +2795,15 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "dd40_core",
+]
+
+[[package]]
+name = "dd40_renderer"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "dd40_player",
 ]
 
 [[package]]
