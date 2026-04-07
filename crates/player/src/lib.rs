@@ -2,25 +2,10 @@ use bevy::color::palettes::basic::YELLOW;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
+use dd40_core::character::{CharacterBuilder, MovementSpeed, Player};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
-
-/// Marker component that identifies the player entity.
-#[derive(Debug, Default, Component, Reflect)]
-#[reflect(Component)]
-pub struct Player;
-
-/// Walking / flying speed of the player in units per second.
-#[derive(Debug, Component, Reflect)]
-#[reflect(Component)]
-pub struct MovementSpeed(pub f32);
-
-impl Default for MovementSpeed {
-    fn default() -> Self {
-        Self(5.0)
-    }
-}
 
 /// Mouse sensitivity for looking around.
 #[derive(Debug, Component, Reflect)]
@@ -52,15 +37,14 @@ impl Default for CameraRotation {
 
 fn spawn_player(mut commands: Commands) {
     commands.spawn((
-        Name::new("Player"),
         Player,
-        MovementSpeed::default(),
+        CharacterBuilder::new("Player")
+            .transform(Transform::from_xyz(0.0, 64.0, 0.0))
+            .build(),
         DebugInfo::new("Player Info")
             .with_color(YELLOW.into())
             .add("position", "Player position")
             .add("chunk", "Player chunk"),
-        Transform::from_xyz(0.0, 64.0, 0.0),
-        GlobalTransform::default(),
     ));
 }
 
@@ -266,8 +250,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Player>()
-            .register_type::<MovementSpeed>()
+        app.register_type::<MovementSpeed>()
             .register_type::<MouseSensitivity>()
             .register_type::<CameraRotation>()
             .add_systems(Startup, (spawn_player, setup_camera))

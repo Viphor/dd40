@@ -44,10 +44,10 @@ use bevy::{
 };
 use dd40_core::{
     block::{BlockId, BlockRegistry},
+    character::Player,
     chunk::events::ChunkReady,
     chunk::{ChunkPos, cache::ChunkCache},
 };
-use dd40_player::Player;
 
 use crate::{
     chunk_mesh::build_chunk_quads,
