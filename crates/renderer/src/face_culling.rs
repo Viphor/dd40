@@ -263,27 +263,9 @@ fn block_is_transparent(block: Option<Block>, registry: &BlockRegistry) -> bool 
 mod tests {
     use super::*;
     use dd40_core::{
-        block::{BlockDefinition, BlockId, BlockRegistry},
+        block::{BlockId, BlockRegistry},
         chunk::{Chunk, ChunkPos},
     };
-
-    /// Build a minimal registry with air (ID 0) and stone (ID 1).
-    fn make_registry() -> BlockRegistry {
-        let r = BlockRegistry::new();
-        // BlockRegistry::new() already registers air at ID 0.
-        // We manually insert stone via the internal Vec by using the public
-        // register-like path.  Because BlockRegistry::register requires
-        // Commands we rebuild the registry the same way core does it.
-        let stone = BlockDefinition::new(BlockId(1), "stone")
-            .with_solid(true)
-            .with_renderable(true);
-        // Use a private-compatible approach: register_auto is not available
-        // without Commands either, so we construct via new() and the
-        // insert_definition path is private.  Instead we test with a registry
-        // that has only air, and confirm stone-like blocks via the Block API.
-        let _ = stone; // see below — we work with only air + a fake block
-        r
-    }
 
     /// Build a registry that has air and stone using a fresh BlockRegistry.
     fn registry_with_stone() -> BlockRegistry {
