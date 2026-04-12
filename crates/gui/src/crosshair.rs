@@ -22,7 +22,12 @@ const BAR_THICKNESS: f32 = 2.0;
 /// Extra pixels added on each side of a bar for the dark outline.
 const OUTLINE_PADDING: f32 = 1.0;
 /// Colour of the crosshair bars.
-const BAR_COLOR: Color = Color::WHITE;
+const BAR_COLOR: Color = Color::Srgba(Srgba {
+    red: 0.7,
+    green: 0.7,
+    blue: 0.7,
+    alpha: 1.0,
+});
 /// Colour of the dark outline behind each bar.
 const OUTLINE_COLOR: Color = Color::srgba(0.0, 0.0, 0.0, 0.6);
 
