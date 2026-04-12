@@ -7,6 +7,11 @@
 //! within a configurable reach distance.  The targeted block is highlighted
 //! with a wireframe cuboid drawn via Bevy's [`Gizmos`] API.
 //!
+//! The [`TargetedBlock`] resource also records which [`BlockFace`] the ray
+//! entered from.  This tells placement logic which side of the targeted block
+//! to attach the new block to — e.g. looking at the top face of a block means
+//! the new block should be placed one voxel above it.
+//!
 //! # Registration
 //!
 //! Add [`BlockInteractionPlugin`] to your [`App`]:
@@ -36,8 +41,10 @@
 //!     .run();
 //! ```
 
+use bevy::color::palettes::basic::OLIVE;
 use bevy::prelude::*;
 use dd40_core::chunk::cache::ChunkCache;
+use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
 
 // ── Configuration ─────────────────────────────────────────────────────────────
@@ -66,6 +73,66 @@ impl Default for BlockInteractionConfig {
     }
 }
 
+// ── Block face ────────────────────────────────────────────────────────────────
+
+/// The face of a block that the player's crosshair ray entered from.
+///
+/// Each variant corresponds to one of the six axis-aligned faces of a unit
+/// cube.  The name describes **which face of the hit block** was struck —
+/// e.g. [`BlockFace::Top`] means the ray came from above and hit the +Y face.
+///
+/// # Placement offset
+///
+/// To find the [`BlockPos`] where a new block should be placed, add
+/// [`BlockFace::normal`] to the hit block's position:
+///
+/// ```
+/// use dd40_player::block_interaction::BlockFace;
+/// use dd40_core::prelude::BlockPos;
+///
+/// let hit_pos = BlockPos::new(3, 64, 5);
+/// let face    = BlockFace::Top;
+/// let place_pos = BlockPos::new(
+///     hit_pos.x + face.normal().x,
+///     hit_pos.y + face.normal().y,
+///     hit_pos.z + face.normal().z,
+/// );
+/// assert_eq!(place_pos, BlockPos::new(3, 65, 5));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum BlockFace {
+    /// The +Y face (ray came from above).
+    Top,
+    /// The -Y face (ray came from below).
+    Bottom,
+    /// The +X face (ray came from the positive-X side).
+    East,
+    /// The -X face (ray came from the negative-X side).
+    West,
+    /// The +Z face (ray came from the positive-Z side).
+    South,
+    /// The -Z face (ray came from the negative-Z side).
+    North,
+}
+
+impl BlockFace {
+    /// Returns the unit offset that should be added to the hit block's
+    /// [`BlockPos`] to obtain the position of the face-adjacent voxel.
+    ///
+    /// This is the position where a new block would be placed when the player
+    /// interacts with this face.
+    pub fn normal(self) -> BlockPos {
+        match self {
+            BlockFace::Top => BlockPos::new(0, 1, 0),
+            BlockFace::Bottom => BlockPos::new(0, -1, 0),
+            BlockFace::East => BlockPos::new(1, 0, 0),
+            BlockFace::West => BlockPos::new(-1, 0, 0),
+            BlockFace::South => BlockPos::new(0, 0, 1),
+            BlockFace::North => BlockPos::new(0, 0, -1),
+        }
+    }
+}
+
 // ── Targeted-block state ───────────────────────────────────────────────────────
 
 /// The block that the player is currently looking at, if any.
@@ -73,20 +140,33 @@ impl Default for BlockInteractionConfig {
 /// This resource is updated every frame by [`update_targeted_block`].  Other
 /// systems (e.g. block placement / breaking) should read from here rather than
 /// running their own raycast.
+///
+/// When `pos` is `Some`, `face` is always `Some` too — they are set together
+/// and cleared together.
 #[derive(Resource, Debug, Default, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct TargetedBlock {
     /// World-space integer position of the looked-at block, or `None` if no
     /// solid block is within reach.
     pub pos: Option<BlockPos>,
+
+    /// The face of the targeted block that the ray entered from, or `None`
+    /// when no block is targeted.
+    ///
+    /// Add [`BlockFace::normal`]`()` to [`pos`][TargetedBlock::pos] to get the
+    /// position where a newly placed block should go.
+    pub face: Option<BlockFace>,
 }
 
 // ── DDA raycast ───────────────────────────────────────────────────────────────
 
 /// Walks a ray from `origin` in `direction` through the voxel grid using the
 /// [DDA algorithm](https://en.wikipedia.org/wiki/Digital_differential_analyzer_(graphics_algorithm))
-/// and returns the [`BlockPos`] of the first solid block found within
-/// `max_distance` world units, or `None` if none is found.
+/// and returns the [`BlockPos`] and [`BlockFace`] of the first solid block
+/// found within `max_distance` world units, or `None` if none is found.
+///
+/// The [`BlockFace`] describes which face of the hit block the ray entered
+/// from, which determines where an adjacent block would be placed.
 ///
 /// # Parameters
 ///
@@ -102,13 +182,16 @@ pub struct TargetedBlock {
 ///   infinite).
 /// - Blocks outside of loaded chunks are treated as non-solid and skipped.
 /// - Y values below 0 or ≥ `CHUNK_SIZE_Y` are skipped.
+/// - When the ray origin is already inside a solid block the returned face is
+///   [`BlockFace::Top`] as a safe fallback (there is no meaningful entry face
+///   when the ray has not crossed any boundary yet).
 fn dda_raycast(
     origin: Vec3,
     direction: Vec3,
     max_distance: f32,
     cache: &ChunkCache,
     registry: &BlockRegistry,
-) -> Option<BlockPos> {
+) -> Option<(BlockPos, BlockFace)> {
     // Current voxel coordinates (the cell the ray tip is currently inside).
     let mut voxel = IVec3::new(
         origin.x.floor() as i32,
@@ -122,6 +205,18 @@ fn dda_raycast(
         if direction.y >= 0.0 { 1 } else { -1 },
         if direction.z >= 0.0 { 1 } else { -1 },
     );
+
+    // Tracks which axis boundary the ray crossed most recently.  This tells
+    // us which face of the hit block the ray entered from.  Initialised to Y
+    // as a safe fallback for the case where the ray origin is already inside a
+    // solid block (no boundary has been crossed yet).
+    #[derive(Clone, Copy)]
+    enum LastAxis {
+        X,
+        Y,
+        Z,
+    }
+    let mut last_axis = LastAxis::Y;
 
     // How far along the ray (in units of |direction|) we must travel to cross
     // one full voxel boundary on each axis.  `f32::INFINITY` when the
@@ -190,22 +285,51 @@ fn dda_raycast(
                 if let Some(block) = chunk.get(local.x as usize, local.y as usize, local.z as usize)
                 {
                     if block.block_id != BlockId::AIR && block.is_solid(registry) {
-                        return Some(pos);
+                        // Derive the entry face from the last axis crossed and
+                        // the direction of travel on that axis.
+                        let face = match last_axis {
+                            LastAxis::X => {
+                                if step.x > 0 {
+                                    BlockFace::West
+                                } else {
+                                    BlockFace::East
+                                }
+                            }
+                            LastAxis::Y => {
+                                if step.y > 0 {
+                                    BlockFace::Bottom
+                                } else {
+                                    BlockFace::Top
+                                }
+                            }
+                            LastAxis::Z => {
+                                if step.z > 0 {
+                                    BlockFace::North
+                                } else {
+                                    BlockFace::South
+                                }
+                            }
+                        };
+                        return Some((pos, face));
                     }
                 }
             }
         }
 
-        // Advance to the next voxel boundary on the shortest axis.
+        // Advance to the next voxel boundary on the shortest axis and record
+        // which axis we crossed so we know the entry face of the next voxel.
         if t_max.x < t_max.y && t_max.x < t_max.z {
             voxel.x += step.x;
             t_max.x += delta.x;
+            last_axis = LastAxis::X;
         } else if t_max.y < t_max.z {
             voxel.y += step.y;
             t_max.y += delta.y;
+            last_axis = LastAxis::Y;
         } else {
             voxel.z += step.z;
             t_max.z += delta.z;
+            last_axis = LastAxis::Z;
         }
     }
 }
@@ -227,6 +351,7 @@ fn update_targeted_block(
 ) {
     let Ok(camera_transform) = camera_query.single() else {
         targeted.pos = None;
+        targeted.face = None;
         return;
     };
 
@@ -235,7 +360,16 @@ fn update_targeted_block(
     let origin = camera_transform.translation;
     let direction = *camera_transform.forward();
 
-    targeted.pos = dda_raycast(origin, direction, config.max_distance, &cache, &registry);
+    match dda_raycast(origin, direction, config.max_distance, &cache, &registry) {
+        Some((pos, face)) => {
+            targeted.pos = Some(pos);
+            targeted.face = Some(face);
+        }
+        None => {
+            targeted.pos = None;
+            targeted.face = None;
+        }
+    }
 }
 
 /// Draws a wireframe cuboid gizmo around the currently targeted block.
@@ -264,6 +398,37 @@ fn draw_targeted_block_highlight(
         Transform::from_translation(center).with_scale(size),
         config.highlight_color,
     );
+}
+
+#[derive(Component)]
+struct TargetedBlockDebugInfo;
+
+fn spawn_debug_entity(mut commands: Commands) {
+    commands.spawn((
+        Name::new("Block Interaction Debug"),
+        DebugInfo::new("Block Interaction Debug Info")
+            .with_color(OLIVE.into())
+            .add("targeted_block", "Targeted block"),
+        TargetedBlockDebugInfo,
+    ));
+}
+
+fn update_debug_info(
+    targeted: Res<TargetedBlock>,
+    mut query: Query<&mut DebugInfo, With<TargetedBlockDebugInfo>>,
+) {
+    let Ok(mut debug_info) = query.single_mut() else {
+        return;
+    };
+
+    if let Some(pos) = targeted.pos {
+        debug_info.set(
+            "targeted_block",
+            format!("{:?} at {pos}", targeted.face.unwrap()),
+        );
+    } else {
+        debug_info.set("targeted_block", "None".to_string());
+    }
 }
 
 // ── Plugin ────────────────────────────────────────────────────────────────────
@@ -315,9 +480,14 @@ impl Plugin for BlockInteractionPlugin {
         .insert_resource(TargetedBlock::default())
         .register_type::<BlockInteractionConfig>()
         .register_type::<TargetedBlock>()
+        .add_systems(Startup, spawn_debug_entity)
         .add_systems(
             Update,
-            (update_targeted_block, draw_targeted_block_highlight)
+            (
+                update_targeted_block,
+                draw_targeted_block_highlight,
+                update_debug_info,
+            )
                 .chain()
                 .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
         );
@@ -333,6 +503,31 @@ mod tests {
         block::{Block, BlockDefinition, BlockId},
         chunk::Chunk,
     };
+
+    /// Convenience wrapper: calls `dda_raycast` and returns only the
+    /// [`BlockPos`], discarding the face.  Used by tests that only care about
+    /// whether the correct block was hit.
+    fn raycast_pos(
+        origin: Vec3,
+        direction: Vec3,
+        max_distance: f32,
+        cache: &ChunkCache,
+        registry: &BlockRegistry,
+    ) -> Option<BlockPos> {
+        dda_raycast(origin, direction, max_distance, cache, registry).map(|(pos, _)| pos)
+    }
+
+    /// Convenience wrapper: calls `dda_raycast` and returns only the
+    /// [`BlockFace`], discarding the position.  Used by face-detection tests.
+    fn raycast_face(
+        origin: Vec3,
+        direction: Vec3,
+        max_distance: f32,
+        cache: &ChunkCache,
+        registry: &BlockRegistry,
+    ) -> Option<BlockFace> {
+        dda_raycast(origin, direction, max_distance, cache, registry).map(|(_, face)| face)
+    }
 
     /// Build a minimal [`BlockRegistry`] containing Air (id 0) and Stone (id 1).
     fn make_registry() -> BlockRegistry {
@@ -371,7 +566,7 @@ mod tests {
         let cache = cache_with_block(0, 60, 0, block);
 
         // Ray starts at (0.5, 62.0, 0.5), pointing straight down.
-        let hit = dda_raycast(
+        let hit = raycast_pos(
             Vec3::new(0.5, 62.0, 0.5),
             Vec3::NEG_Y,
             5.0,
@@ -393,7 +588,7 @@ mod tests {
         let cache = cache_with_block(0, 55, 0, block);
 
         // Ray starts at (0.5, 60.0, 0.5), max distance only 3.0 — can't reach.
-        let hit = dda_raycast(
+        let hit = raycast_pos(
             Vec3::new(0.5, 60.0, 0.5),
             Vec3::NEG_Y,
             3.0,
@@ -412,7 +607,7 @@ mod tests {
         // Leave the chunk fully air (default).
         let cache = cache_with_block(0, 60, 0, Block::new(BlockId::AIR));
 
-        let hit = dda_raycast(
+        let hit = raycast_pos(
             Vec3::new(0.5, 62.0, 0.5),
             Vec3::NEG_Y,
             5.0,
@@ -434,7 +629,7 @@ mod tests {
         let cache = cache_with_block(5, 64, 0, block);
 
         // Ray starts at (0.5, 64.5, 0.5), pointing in +X.
-        let hit = dda_raycast(Vec3::new(0.5, 64.5, 0.5), Vec3::X, 10.0, &cache, &registry);
+        let hit = raycast_pos(Vec3::new(0.5, 64.5, 0.5), Vec3::X, 10.0, &cache, &registry);
 
         assert_eq!(hit, Some(BlockPos::new(5, 64, 0)));
     }
@@ -445,7 +640,7 @@ mod tests {
         let registry = make_registry();
         let cache = cache_with_block(0, 60, 0, Block::new(BlockId(1)));
 
-        let hit = dda_raycast(
+        let hit = raycast_pos(
             Vec3::new(0.5, 62.0, 0.5),
             Vec3::ZERO,
             5.0,
@@ -483,7 +678,7 @@ mod tests {
         // Normalised diagonal direction in the XZ plane.
         let direction = Vec3::new(1.0, 0.0, 1.0).normalize();
 
-        let hit = dda_raycast(Vec3::new(0.5, 64.5, 0.5), direction, 6.0, &cache, &registry);
+        let hit = raycast_pos(Vec3::new(0.5, 64.5, 0.5), direction, 6.0, &cache, &registry);
 
         assert_eq!(hit, Some(BlockPos::new(3, 64, 3)));
     }
@@ -497,7 +692,7 @@ mod tests {
         // Empty cache — no chunks loaded at all.
         let cache = ChunkCache::new();
 
-        let hit = dda_raycast(
+        let hit = raycast_pos(
             Vec3::new(0.5, 62.0, 0.5),
             Vec3::NEG_Y,
             5.0,
@@ -524,7 +719,7 @@ mod tests {
         let cache = cache_with_block(2, 64, 2, Block::new(BlockId(1)));
 
         // Ray starts inside the stone block.
-        let hit = dda_raycast(Vec3::new(2.5, 64.5, 2.5), Vec3::X, 5.0, &cache, &registry);
+        let hit = raycast_pos(Vec3::new(2.5, 64.5, 2.5), Vec3::X, 5.0, &cache, &registry);
 
         assert_eq!(hit, Some(BlockPos::new(2, 64, 2)));
     }
@@ -550,7 +745,7 @@ mod tests {
         let cache = cache_with_block(1, 64, 0, Block::new(BlockId(1)));
 
         // Origin is in voxel (0, 64, 0) — air.  Stone is in (1, 64, 0).
-        let hit = dda_raycast(Vec3::new(0.5, 64.5, 0.5), Vec3::X, 0.0, &cache, &registry);
+        let hit = raycast_pos(Vec3::new(0.5, 64.5, 0.5), Vec3::X, 0.0, &cache, &registry);
 
         assert!(hit.is_none());
     }
@@ -570,7 +765,7 @@ mod tests {
         // Stone at local (2, 64, 0) → world (2, 64, 0).
         let cache = cache_with_block(2, 64, 0, Block::new(BlockId(1)));
 
-        let hit = dda_raycast(
+        let hit = raycast_pos(
             Vec3::new(5.5, 64.5, 0.5),
             Vec3::NEG_X,
             5.0,
@@ -606,8 +801,113 @@ mod tests {
         cache.insert(chunk_b);
 
         // Start just inside chunk (0,0), pointing in +X toward chunk (1,0).
-        let hit = dda_raycast(Vec3::new(14.5, 64.5, 0.5), Vec3::X, 10.0, &cache, &registry);
+        let hit = raycast_pos(Vec3::new(14.5, 64.5, 0.5), Vec3::X, 10.0, &cache, &registry);
 
         assert_eq!(hit, Some(BlockPos::new(18, 64, 0)));
+    }
+
+    // ── BlockFace detection tests ─────────────────────────────────────────
+
+    /// A ray from above hitting the top face of a block should report
+    /// [`BlockFace::Top`].  The placement position is one block above the hit.
+    #[test]
+    fn face_top_when_ray_comes_from_above() {
+        let registry = make_registry();
+        let cache = cache_with_block(0, 60, 0, Block::new(BlockId(1)));
+
+        let face = raycast_face(
+            Vec3::new(0.5, 62.0, 0.5),
+            Vec3::NEG_Y,
+            5.0,
+            &cache,
+            &registry,
+        );
+
+        assert_eq!(face, Some(BlockFace::Top));
+    }
+
+    /// A ray from below hitting the bottom face of a block should report
+    /// [`BlockFace::Bottom`].
+    #[test]
+    fn face_bottom_when_ray_comes_from_below() {
+        let registry = make_registry();
+        let cache = cache_with_block(0, 64, 0, Block::new(BlockId(1)));
+
+        let face = raycast_face(Vec3::new(0.5, 62.0, 0.5), Vec3::Y, 5.0, &cache, &registry);
+
+        assert_eq!(face, Some(BlockFace::Bottom));
+    }
+
+    /// A ray travelling in +X that hits a block should report [`BlockFace::West`]
+    /// — the ray entered from the -X (west) side of the block.
+    #[test]
+    fn face_west_when_ray_travels_positive_x() {
+        let registry = make_registry();
+        let cache = cache_with_block(5, 64, 0, Block::new(BlockId(1)));
+
+        let face = raycast_face(Vec3::new(0.5, 64.5, 0.5), Vec3::X, 10.0, &cache, &registry);
+
+        assert_eq!(face, Some(BlockFace::West));
+    }
+
+    /// A ray travelling in -X that hits a block should report [`BlockFace::East`]
+    /// — the ray entered from the +X (east) side of the block.
+    #[test]
+    fn face_east_when_ray_travels_negative_x() {
+        let registry = make_registry();
+        let cache = cache_with_block(2, 64, 0, Block::new(BlockId(1)));
+
+        let face = raycast_face(
+            Vec3::new(5.5, 64.5, 0.5),
+            Vec3::NEG_X,
+            5.0,
+            &cache,
+            &registry,
+        );
+
+        assert_eq!(face, Some(BlockFace::East));
+    }
+
+    /// A ray travelling in +Z that hits a block should report [`BlockFace::North`]
+    /// — the ray entered from the -Z (north) side of the block.
+    #[test]
+    fn face_north_when_ray_travels_positive_z() {
+        let registry = make_registry();
+        let cache = cache_with_block(0, 64, 5, Block::new(BlockId(1)));
+
+        let face = raycast_face(Vec3::new(0.5, 64.5, 0.5), Vec3::Z, 10.0, &cache, &registry);
+
+        assert_eq!(face, Some(BlockFace::North));
+    }
+
+    /// A ray travelling in -Z that hits a block should report [`BlockFace::South`]
+    /// — the ray entered from the +Z (south) side of the block.
+    #[test]
+    fn face_south_when_ray_travels_negative_z() {
+        let registry = make_registry();
+        let cache = cache_with_block(0, 64, 2, Block::new(BlockId(1)));
+
+        let face = raycast_face(
+            Vec3::new(0.5, 64.5, 5.5),
+            Vec3::NEG_Z,
+            5.0,
+            &cache,
+            &registry,
+        );
+
+        assert_eq!(face, Some(BlockFace::South));
+    }
+
+    /// [`BlockFace::normal`] must point to the correct adjacent voxel for
+    /// every face, so that placement logic can add it directly to the hit
+    /// block's position.
+    #[test]
+    fn block_face_normals_are_correct() {
+        assert_eq!(BlockFace::Top.normal(), BlockPos::new(0, 1, 0));
+        assert_eq!(BlockFace::Bottom.normal(), BlockPos::new(0, -1, 0));
+        assert_eq!(BlockFace::East.normal(), BlockPos::new(1, 0, 0));
+        assert_eq!(BlockFace::West.normal(), BlockPos::new(-1, 0, 0));
+        assert_eq!(BlockFace::South.normal(), BlockPos::new(0, 0, 1));
+        assert_eq!(BlockFace::North.normal(), BlockPos::new(0, 0, -1));
     }
 }
