@@ -4,6 +4,7 @@ use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
 use dd40_network::ClientNetworkPlugin;
 use dd40_player::PlayerPlugin;
+use dd40_gui::plugin::GuiPlugin;
 use dd40_renderer::RendererPlugin;
 
 fn main() {
@@ -25,6 +26,7 @@ fn main() {
             DebugUiPlugin,
             ClientNetworkPlugin,
             RendererPlugin,
+            GuiPlugin,
         ))
         .add_plugins(EguiPlugin::default())
         //.add_plugins(WorldInspectorPlugin::new())

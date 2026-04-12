@@ -2751,6 +2751,7 @@ dependencies = [
  "bevy-inspector-egui",
  "dd40_core",
  "dd40_debug_ui",
+ "dd40_gui",
  "dd40_network",
  "dd40_player",
  "dd40_renderer",
@@ -2770,6 +2771,14 @@ dependencies = [
 
 [[package]]
 name = "dd40_debug_ui"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+]
+
+[[package]]
+name = "dd40_gui"
 version = "0.1.0"
 dependencies = [
  "bevy",
