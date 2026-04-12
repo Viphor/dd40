@@ -68,6 +68,10 @@ impl ChunkCache {
     fn insert(&mut self, chunk: Chunk) {
         self.chunks.insert(chunk.position, chunk);
     }
+
+    pub fn chunk_count(&self) -> usize {
+        self.chunks.len()
+    }
 }
 
 /// System that listens for `ChunkReady` events and inserts the ready chunks into the cache.

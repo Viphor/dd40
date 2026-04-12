@@ -1,5 +1,6 @@
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
+use dd40_core::chunk;
 
 use crate::custom::{DebugUiElementRoot, spawn_custom_debug_ui, update_custom_debug_ui};
 use crate::orientation_gizmo::OrientationGizmoPlugin;
@@ -22,7 +23,14 @@ impl Plugin for DebugUiPlugin {
         app.add_plugins(FrameTimeDiagnosticsPlugin::default())
             .add_plugins(OrientationGizmoPlugin)
             .add_systems(Startup, setup_debug_ui)
-            .add_systems(Update, (spawn_custom_debug_ui, update_custom_debug_ui))
+            .add_systems(
+                Update,
+                (
+                    spawn_custom_debug_ui,
+                    update_custom_debug_ui,
+                    update_block_stats_text,
+                ),
+            )
             .add_systems(Update, update_fps_text);
     }
 }
@@ -82,7 +90,7 @@ fn setup_debug_ui(mut commands: Commands) {
 
                     // Loaded blocks counter text
                     parent.spawn((
-                        Text::new("Loaded Blocks: --"),
+                        Text::new("Loaded Chunks: --"),
                         TextFont {
                             font_size: 20.0,
                             ..default()
@@ -162,8 +170,8 @@ fn update_fps_text(
 }
 
 /// Updates the block statistics text every frame.
-#[allow(dead_code)]
 fn update_block_stats_text(
+    chunk_cache: Res<chunk::cache::ChunkCache>,
     mut loaded_query: Query<
         &mut Text,
         (
@@ -191,7 +199,7 @@ fn update_block_stats_text(
 ) {
     // Update loaded blocks text
     for mut text in &mut loaded_query {
-        **text = format!("Loaded Blocks: --");
+        **text = format!("Loaded Chunks: {}", chunk_cache.chunk_count());
     }
 
     // Update rendered blocks text
