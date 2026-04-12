@@ -65,7 +65,14 @@ impl ChunkCache {
     }
 
     /// Inserts a chunk into the cache, replacing any existing entry.
-    fn insert(&mut self, chunk: Chunk) {
+    ///
+    /// NOTE: You should not call this method directly.
+    /// Instead, send the message `ChunkReady` with the chunk to be inserted,
+    /// and the `chunk_ready_listener` system will handle inserting it into the cache.
+    ///
+    /// Calling this method directly may lead to unexpected behavior.
+    /// No guarantees are made for updating the rest of the systems.
+    pub fn insert(&mut self, chunk: Chunk) {
         self.chunks.insert(chunk.position, chunk);
     }
 

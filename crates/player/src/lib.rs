@@ -7,6 +7,10 @@ use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
 
+pub mod block_interaction;
+
+pub use block_interaction::{BlockInteractionConfig, BlockInteractionPlugin, TargetedBlock};
+
 /// Mouse sensitivity for looking around.
 #[derive(Debug, Component, Reflect)]
 #[reflect(Component)]
@@ -250,7 +254,8 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<MovementSpeed>()
+        app.add_plugins(BlockInteractionPlugin::default())
+            .register_type::<MovementSpeed>()
             .register_type::<MouseSensitivity>()
             .register_type::<CameraRotation>()
             .add_systems(Startup, (spawn_player, setup_camera))
