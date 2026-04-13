@@ -9,7 +9,7 @@
 //! 1. Read [`TargetedBlock`] — if no block is targeted, do nothing.
 //! 2. Compute the placement position: `targeted.pos + targeted.face.normal()`.
 //! 3. Look up the block currently occupying that position in [`ChunkCache`].
-//! 4. Check [`Block::is_replaceable`] against the [`BlockRegistry`] — if the
+//! 4. Check [`BlockRegistry::is_replaceable`] against the [`BlockRegistry`] — if the
 //!    destination voxel is not replaceable (e.g. it already contains stone),
 //!    do nothing.
 //! 5. Write a [`PlaceBlockRequest`] message so the network layer forwards the
@@ -84,7 +84,7 @@ impl Default for HeldBlock {
 /// - Right mouse button is **just pressed** (single press, not held).
 /// - [`TargetedBlock::pos`] and [`TargetedBlock::face`] are both `Some`.
 /// - The voxel at the placement position (hit pos + face normal) is loaded and
-///   [`Block::is_replaceable`] returns `true`.
+///   [`BlockRegistry::is_replaceable`] returns `true`.
 /// - The [`HeldBlock`] is not [`BlockId::AIR`] — placing air is a no-op.
 ///
 /// # No local mutation
@@ -144,7 +144,7 @@ pub(super) fn try_place_block(
     };
 
     // Only replace voxels that are explicitly marked as replaceable (e.g. air).
-    if !existing.is_replaceable(&registry) {
+    if !registry.is_replaceable(&existing) {
         debug!(
             "Placement blocked: voxel at {} (block {:?}) is not replaceable",
             place_pos, existing.block_id

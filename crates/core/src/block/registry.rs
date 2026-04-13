@@ -156,6 +156,37 @@ impl BlockRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
         self.blocks.iter()
     }
+
+    /// Checks if the given block is solid by looking it up in the registry.
+    ///
+    /// Returns `false` if the block's ID is not registered.
+    pub fn is_solid(&self, block: &super::Block) -> bool {
+        self.get(block.block_id)
+            .map(|def| def.is_solid)
+            .unwrap_or(false)
+    }
+
+    /// Checks if the given block is renderable by looking it up in the registry.
+    ///
+    /// Returns `false` if the block's ID is not registered.
+    pub fn is_renderable(&self, block: &super::Block) -> bool {
+        self.get(block.block_id)
+            .map(|def| def.is_renderable)
+            .unwrap_or(false)
+    }
+
+    /// Checks if the given block can be replaced by a placement action (e.g. air, water)
+    /// by looking it up in the registry.
+    ///
+    /// Blocks where this returns `true` do not need to be broken before a new block
+    /// can be placed in their voxel.
+    ///
+    /// Returns `false` if the block's ID is not registered.
+    pub fn is_replaceable(&self, block: &super::Block) -> bool {
+        self.get(block.block_id)
+            .map(|def| def.is_replaceable)
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Event, Debug, Clone, Serialize, Deserialize)]
@@ -294,7 +325,7 @@ mod tests {
         let air_block = Block::new(BlockId::AIR);
         let stone_block = Block::new(stone_id);
 
-        assert!(!air_block.is_solid(registry));
-        assert!(stone_block.is_solid(registry));
+        assert!(!registry.is_solid(&air_block));
+        assert!(registry.is_solid(&stone_block));
     }
 }

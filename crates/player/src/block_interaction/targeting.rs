@@ -241,7 +241,7 @@ fn dda_raycast(
             if local.y >= 0 {
                 if let Some(block) = chunk.get(local.x as usize, local.y as usize, local.z as usize)
                 {
-                    if block.block_id != BlockId::AIR && block.is_solid(registry) {
+                    if block.block_id != BlockId::AIR && registry.is_solid(&block) {
                         // Derive the entry face from the last axis crossed and
                         // the direction of travel on that axis.
                         let face = match last_axis {

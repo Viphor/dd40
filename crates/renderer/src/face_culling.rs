@@ -164,7 +164,7 @@ pub fn visible_faces(
     let Some(block) = chunk.get(lx, ly, lz) else {
         return faces;
     };
-    if !block.is_renderable(registry) {
+    if !registry.is_renderable(&block) {
         return faces;
     }
 
@@ -253,7 +253,7 @@ fn neighbour_is_transparent(
 fn block_is_transparent(block: Option<Block>, registry: &BlockRegistry) -> bool {
     match block {
         None => true,
-        Some(b) => b.block_id == BlockId::AIR || !b.is_solid(registry),
+        Some(b) => b.block_id == BlockId::AIR || !registry.is_solid(&b),
     }
 }
 

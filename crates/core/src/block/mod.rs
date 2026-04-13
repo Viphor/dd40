@@ -86,34 +86,6 @@ impl Block {
     pub fn new(block_id: BlockId) -> Self {
         Self { block_id }
     }
-
-    /// Checks if this block is solid by looking it up in the registry.
-    pub fn is_solid(&self, registry: &BlockRegistry) -> bool {
-        registry
-            .get(self.block_id)
-            .map(|def| def.is_solid)
-            .unwrap_or(false)
-    }
-
-    /// Checks if this block is renderable by looking it up in the registry.
-    pub fn is_renderable(&self, registry: &BlockRegistry) -> bool {
-        registry
-            .get(self.block_id)
-            .map(|def| def.is_renderable)
-            .unwrap_or(false)
-    }
-
-    /// Checks if this block can be replaced by a placement action (e.g. air, water)
-    /// by looking it up in the registry.
-    ///
-    /// Blocks where this returns `true` do not need to be broken before a new block
-    /// can be placed in their voxel.
-    pub fn is_replaceable(&self, registry: &BlockRegistry) -> bool {
-        registry
-            .get(self.block_id)
-            .map(|def| def.is_replaceable)
-            .unwrap_or(false)
-    }
 }
 
 #[cfg(test)]
@@ -149,9 +121,9 @@ mod tests {
         let air = Block::new(BlockId::AIR);
         let stone = Block::new(BlockId(1));
 
-        assert!(air.is_replaceable(registry), "air should be replaceable");
+        assert!(registry.is_replaceable(&air), "air should be replaceable");
         assert!(
-            !stone.is_replaceable(registry),
+            !registry.is_replaceable(&stone),
             "stone should not be replaceable"
         );
     }
