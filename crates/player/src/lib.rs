@@ -168,8 +168,15 @@ fn player_movement(
         direction -= Vec3::Y;
     }
 
+    let sprint_multiplier = if keyboard.pressed(KeyCode::ControlLeft) {
+        2.0
+    } else {
+        1.0
+    };
+
     if direction != Vec3::ZERO {
-        transform.translation += direction.normalize() * speed.0 * time.delta_secs();
+        transform.translation +=
+            direction.normalize() * speed.0 * time.delta_secs() * sprint_multiplier;
     }
 }
 
