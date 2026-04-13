@@ -16,7 +16,7 @@ use crate::{
 /// For each request received from a connected client the system will:
 ///
 /// 1. Resolve the target block inside the [`ChunkCache`] using the request position.
-/// 2. Check [`Block::is_replaceable`] — requests targeting non-replaceable blocks are
+/// 2. Check [`BlockRegistry::is_replaceable`] — requests targeting non-replaceable blocks are
 ///    silently dropped (the server is authoritative; the client will not see its
 ///    optimistic placement confirmed).
 /// 3. Apply the placement directly to the cached [`Chunk`] so that subsequent reads
@@ -66,7 +66,7 @@ pub(crate) fn receive_place_requests(
             };
 
             // Server-authoritative replaceability check.
-            if !block.is_replaceable(&registry) {
+            if !registry.is_replaceable(&block) {
                 debug!(
                     "Server: ignoring PlaceBlockRequest at {} — block {:?} is not replaceable",
                     req.pos, block.block_id
