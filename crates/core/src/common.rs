@@ -88,6 +88,10 @@ pub fn log_plugin() -> LogPlugin {
                 module: "dd40_chunk_storage",
                 level: Level::DEBUG,
             },
+            Filter {
+                module: "dd40_renderer",
+                level: Level::TRACE,
+            },
         ],
     };
     #[cfg(not(feature = "debug_logging"))]

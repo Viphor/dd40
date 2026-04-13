@@ -24,6 +24,10 @@ pub struct BlockDefinition {
     pub is_renderable: bool,
     /// Color to use for rendering (placeholder until textures are added).
     pub color: Color,
+    /// Whether this block can be replaced by a placement action (e.g. air, water).
+    /// Blocks where `is_replaceable` is `true` do not need to be broken before a
+    /// new block can be placed in their voxel.
+    pub is_replaceable: bool,
 }
 
 impl BlockDefinition {
@@ -35,6 +39,7 @@ impl BlockDefinition {
             is_solid: true,
             is_renderable: true,
             color: Color::WHITE,
+            is_replaceable: false,
         }
     }
 
@@ -55,6 +60,14 @@ impl BlockDefinition {
         self.color = color;
         self
     }
+
+    /// Sets whether this block can be replaced by a placement action (e.g. air, water).
+    /// Blocks where `is_replaceable` is `true` do not need to be broken before a new block
+    /// can be placed in their voxel.
+    pub fn with_replaceable(mut self, is_replaceable: bool) -> Self {
+        self.is_replaceable = is_replaceable;
+        self
+    }
 }
 
 /// Registry that stores all registered block types.
@@ -73,7 +86,8 @@ impl BlockRegistry {
             BlockDefinition::new(BlockId::AIR, "air")
                 .with_solid(false)
                 .with_renderable(false)
-                .with_color(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+                .with_color(Color::srgba(0.0, 0.0, 0.0, 0.0))
+                .with_replaceable(true),
         );
 
         registry

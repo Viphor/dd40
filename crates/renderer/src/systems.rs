@@ -82,9 +82,23 @@ pub fn mark_dirty_on_chunk_ready(
     for msg in reader.read() {
         let pos = msg.chunk.position();
         render_state.mark_dirty(pos);
-        debug!(
+        trace!(
             "Renderer: marked chunk {:?} dirty (ChunkReady received)",
             pos
+        );
+    }
+}
+
+pub fn mark_dirty_on_block_change(
+    mut reader: MessageReader<dd40_core::block::events::BlockPlaced>,
+    mut render_state: ResMut<ChunkRenderState>,
+) {
+    for msg in reader.read() {
+        let pos = msg.pos.chunk_pos();
+        render_state.mark_dirty(pos);
+        trace!(
+            "Renderer: marked chunk {:?} dirty (BlockPlaced at {})",
+            pos, msg.pos
         );
     }
 }

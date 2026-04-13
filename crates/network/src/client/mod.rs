@@ -5,6 +5,7 @@ use lightyear::prelude::{
     client::{ClientPlugins, Connected},
 };
 
+pub mod block_placement;
 pub mod chunk_provider;
 
 use crate::{
@@ -66,6 +67,8 @@ impl Plugin for ClientNetworkPlugin {
         // Add communication systems
         app.add_systems(PreUpdate, chunk_provider::send_chunk_requests);
         app.add_systems(PostUpdate, chunk_provider::receive_chunk_data);
+        app.add_systems(PostUpdate, block_placement::receive_placed_blocks);
+        app.add_systems(PostUpdate, block_placement::send_place_requests);
 
         // Add client systems
         app.add_systems(Update, placeholder_client_tick);
@@ -100,7 +103,9 @@ fn on_server_connected(
 ) {
     commands.entity(trigger.entity).insert((
         MessageSender::<RequestChunk>::default(),
+        MessageSender::<PlaceBlockRequest>::default(),
         MessageReceiver::<ChunkReady>::default(),
+        MessageReceiver::<BlockPlacedMessage>::default(),
         Name::new("ServerConnection"),
     ));
 

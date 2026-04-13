@@ -8,11 +8,13 @@ use crate::{
     constants::tick_duration,
     protocol::*,
     server::{
+        block_placement::receive_place_requests,
         chunk_provider::{receive_chunk_requests, send_chunk_data},
-        chunk_requests::{ChunkRequests, add_chunk_requests_cache},
+        chunk_requests::{ChunkRequests, add_message_handlers},
     },
 };
 
+pub mod block_placement;
 pub mod chunk_provider;
 pub mod chunk_requests;
 
@@ -43,15 +45,17 @@ impl Plugin for ServerNetworkPlugin {
 
         // Add communication systems
         app.register_type::<ChunkRequests>()
-            .add_observer(add_chunk_requests_cache)
+            .add_observer(add_message_handlers)
             .add_systems(Update, receive_chunk_requests)
             .add_systems(PostUpdate, send_chunk_data);
 
         // Add server systems
         app.add_systems(Update, placeholder_server_tick);
 
-        // Add observers for block events (placeholder)
-        app.add_systems(PostUpdate, log_block_placed);
+        // Process incoming place-block requests from clients and broadcast results.
+        app.add_systems(PostUpdate, receive_place_requests);
+
+        // Add observers for block events
         app.add_systems(PostUpdate, log_block_removed);
         app.add_systems(PostUpdate, log_block_changed);
     }
@@ -62,18 +66,6 @@ impl Plugin for ServerNetworkPlugin {
 /// Replace this with actual server logic once lightyear is integrated.
 fn placeholder_server_tick(_time: Res<Time>) {
     // Placeholder - implement actual server logic here
-}
-
-/// Observer that logs when a block is placed.
-///
-/// In a full implementation, this would broadcast the event to all clients.
-fn log_block_placed(mut messages: MessageReader<BlockPlaced>) {
-    for message in messages.read() {
-        debug!(
-            "Block placed at ({}, {}, {}) - {:?} (not broadcasted - networking not implemented)",
-            message.pos.x, message.pos.y, message.pos.z, message.block_id
-        );
-    }
 }
 
 /// Observer that logs when a block is removed.

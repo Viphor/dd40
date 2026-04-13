@@ -81,8 +81,8 @@ pub mod server;
 // Re-export commonly used types
 pub use protocol::{
     BlockChangedMessage, BlockData, BlockPlacedMessage, BlockRemovedMessage, ChunkData,
-    PlayerInput, PlayerJoinedMessage, PlayerLeftMessage, PlayerPosition, PlayerRotation,
-    PlayerSpeed, ProtocolPlugin,
+    PlaceBlockRequest, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage, PlayerPosition,
+    PlayerRotation, PlayerSpeed, ProtocolPlugin,
 };
 
 #[cfg(feature = "client")]

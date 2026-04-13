@@ -90,7 +90,10 @@ use dd40_core::prelude::{AppState, GameState};
 use lod::LodConfig;
 use mesh_task::PendingMeshTasks;
 use render_state::ChunkRenderState;
-use systems::{apply_mesh_tasks, mark_dirty_on_chunk_ready, spawn_mesh_tasks, update_lod_levels};
+use systems::{
+    apply_mesh_tasks, mark_dirty_on_block_change, mark_dirty_on_chunk_ready, spawn_mesh_tasks,
+    update_lod_levels,
+};
 
 /// System set label for the LOD update pass.
 ///
@@ -157,7 +160,10 @@ impl Plugin for RendererPlugin {
         );
 
         // PreUpdate: react to new chunk data as early as possible.
-        app.add_systems(PreUpdate, mark_dirty_on_chunk_ready);
+        app.add_systems(
+            PreUpdate,
+            (mark_dirty_on_chunk_ready, mark_dirty_on_block_change),
+        );
 
         // Update: LOD recalculation then async mesh task dispatch and apply.
         app.add_systems(

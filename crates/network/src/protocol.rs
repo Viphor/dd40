@@ -6,6 +6,7 @@
 
 use bevy::math::Curve;
 use bevy::prelude::*;
+pub use dd40_core::prelude::PlaceBlockRequest;
 use dd40_core::prelude::*;
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -242,6 +243,9 @@ impl Plugin for ProtocolPlugin {
         // app.register_message::<RequestChunks>()
         //     .add_direction(NetworkDirection::ClientToServer);
         app.register_message::<RequestChunk>()
+            .add_direction(NetworkDirection::ClientToServer);
+
+        app.register_message::<PlaceBlockRequest>()
             .add_direction(NetworkDirection::ClientToServer);
 
         // Server -> Client

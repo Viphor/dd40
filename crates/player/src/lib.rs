@@ -9,7 +9,9 @@ use dd40_core::prelude::*;
 
 pub mod block_interaction;
 
-pub use block_interaction::{BlockInteractionConfig, BlockInteractionPlugin, TargetedBlock};
+pub use block_interaction::{
+    BlockFace, BlockInteractionConfig, BlockInteractionPlugin, HeldBlock, TargetedBlock,
+};
 
 /// Mouse sensitivity for looking around.
 #[derive(Debug, Component, Reflect)]
