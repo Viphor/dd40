@@ -328,6 +328,11 @@ pub(crate) struct TentativePosition(pub Vec3);
 /// Insert this alongside [`Aabb`], [`Velocity`], and (optionally)
 /// [`GravityScale`] to make an entity participate in physics simulation.
 ///
+/// **Important:** [`Aabb`] is NOT automatically inserted by `#[require]`
+/// because its dimensions are entity-specific.  You **must** add an [`Aabb`]
+/// component yourself, otherwise [`PhysicsSet::BlockCollision`] will silently
+/// skip the entity and it will fall through all geometry.
+///
 /// Characters that should generate collisions with other characters should
 /// also derive [`CharacterCollider`].
 ///

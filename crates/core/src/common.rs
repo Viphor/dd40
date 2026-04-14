@@ -73,6 +73,10 @@ pub fn log_plugin() -> LogPlugin {
                 level: Level::DEBUG,
             },
             Filter {
+                module: "dd40_core::character::physics",
+                level: Level::DEBUG,
+            },
+            Filter {
                 module: "dd40_world",
                 level: Level::DEBUG,
             },

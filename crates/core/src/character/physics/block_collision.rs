@@ -236,6 +236,18 @@ fn sweep_axis(
                     continue;
                 }
 
+                trace!(
+                    "block_collision: {:?} sweep — candidate block id={} at {:?} \
+                     (world aabb {:.3?}..{:.3?}), entity {:.3?}..{:.3?}",
+                    axis,
+                    block.block_id.0,
+                    block_pos,
+                    baabb.min,
+                    baabb.max,
+                    e_min,
+                    e_max,
+                );
+
                 // Compute the face of the block that the entity would hit.
                 let (block_face, entity_face) = if moving_positive {
                     // Entity moving in + direction: entity's + face hits block's − face.
@@ -268,6 +280,14 @@ fn sweep_axis(
                     // is touching (but not inside) the block face; we still
                     // want to record this as a stop so that e.g. an entity
                     // standing exactly on a block top is recognised as grounded.
+                    trace!(
+                        "block_collision: {:?} sweep — skipping block id={} at {:?} \
+                         (already penetrating, gap={:.4})",
+                        axis,
+                        block.block_id.0,
+                        block_pos,
+                        gap,
+                    );
                     continue;
                 }
 
@@ -307,6 +327,15 @@ fn sweep_axis(
                 if is_nearer {
                     resolved = stop_component;
                     hit = true;
+                    trace!(
+                        "block_collision: {:?} sweep — new nearest stop at {:.4} \
+                         (block id={} at {:?}, gap={:.4})",
+                        axis,
+                        resolved,
+                        block.block_id.0,
+                        block_pos,
+                        gap,
+                    );
                 }
 
                 // Early-out: if the nearest-so-far stop is already at or

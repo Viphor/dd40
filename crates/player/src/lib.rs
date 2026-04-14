@@ -59,6 +59,7 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
             .build(),
         PhysicsBody,
         CharacterCollider,
+        Aabb::player(),
         DebugInfo::new("Player Info")
             .with_color(YELLOW.into())
             .add("position", "Player position")
@@ -222,7 +223,7 @@ fn sync_camera_to_player(
         return;
     };
 
-    camera_transform.translation = player_transform.translation;
+    camera_transform.translation = player_transform.translation + Vec3::new(0.0, 1.6, 0.0);
 }
 
 fn load_nearby_chunks(
