@@ -19,7 +19,8 @@ pub(crate) fn receive_chunk_data(
     mut receiver: Single<&mut MessageReceiver<ChunkReady>>,
 ) {
     for chunk in receiver.receive() {
-        trace!("Received chunk at {}", chunk.chunk.position());
+        let pos = chunk.chunk.position();
+        trace!("Received chunk at {}", pos);
         ready.write(chunk);
     }
 }

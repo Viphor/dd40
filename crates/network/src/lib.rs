@@ -80,9 +80,8 @@ pub mod server;
 
 // Re-export commonly used types
 pub use protocol::{
-    BlockChangedMessage, BlockData, BlockPlacedMessage, BlockRemovedMessage, ChunkData,
     PlaceBlockRequest, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage, PlayerPosition,
-    PlayerRotation, PlayerSpeed, ProtocolPlugin,
+    PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
 };
 
 #[cfg(feature = "client")]
@@ -97,6 +96,8 @@ pub use connection::{
 };
 #[cfg(feature = "server")]
 pub use server::ServerNetworkPlugin;
+#[cfg(feature = "server")]
+pub use server::spawn::{PlayerLocations, WorldSpawnConfig};
 
 /// Helper functions for coordinate conversions
 pub use protocol::{chunk_local_to_global, global_to_chunk_local};

@@ -2,7 +2,7 @@ use bevy::color::palettes::basic::YELLOW;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
-use dd40_core::character::{CharacterBuilder, MovementSpeed, Player};
+use dd40_core::character::{CharacterBuilder, MovementSpeed, Player, SpawnPosition};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
@@ -41,12 +41,24 @@ impl Default for CameraRotation {
     }
 }
 
-fn spawn_player(mut commands: Commands) {
+/// Spawns the player entity when the game enters [`AppState::Playing`].
+///
+/// If a [`SpawnPosition`] resource is present (set by the network layer when the
+/// server sends a `SpawnResponse`), the player is placed at that position.
+/// Otherwise it falls back to the default spawn position `(0, 74, 0)`.
+fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition>>) {
+    let position = spawn_position
+        .map(|sp| sp.0)
+        .unwrap_or(Vec3::new(0.0, 84.0, 0.0));
+
+    debug!("Spawning player at position {:?}", position);
     commands.spawn((
         Player,
         CharacterBuilder::new("Player")
-            .transform(Transform::from_xyz(0.0, 64.0, 0.0))
+            .transform(Transform::from_translation(position))
             .build(),
+        PhysicsBody,
+        CharacterCollider,
         DebugInfo::new("Player Info")
             .with_color(YELLOW.into())
             .add("position", "Player position")
@@ -86,26 +98,6 @@ fn on_resume(mut cursor_options: Query<&mut CursorOptions>) {
         cursor_option.grab_mode = CursorGrabMode::Locked;
     }
 }
-
-// fn grab_cursor(
-//     mut cursor_options: Query<&mut CursorOptions>,
-//     mouse: Res<ButtonInput<MouseButton>>,
-//     key: Res<ButtonInput<KeyCode>>,
-// ) {
-//     let Ok(mut cursor_option) = cursor_options.single_mut() else {
-//         return;
-//     };
-//
-//     if mouse.just_pressed(MouseButton::Left) {
-//         cursor_option.visible = false;
-//         cursor_option.grab_mode = CursorGrabMode::Locked;
-//     }
-//
-//     if key.just_pressed(KeyCode::Escape) {
-//         cursor_option.visible = true;
-//         cursor_option.grab_mode = CursorGrabMode::None;
-//     }
-// }
 
 fn pause_on_escape(
     game_state: Res<State<GameState>>,
@@ -267,7 +259,7 @@ impl Plugin for PlayerPlugin {
             .register_type::<MovementSpeed>()
             .register_type::<MouseSensitivity>()
             .register_type::<CameraRotation>()
-            .add_systems(Startup, (spawn_player, setup_camera))
+            .add_systems(OnEnter(AppState::Playing), (spawn_player, setup_camera))
             .add_systems(OnEnter(GameState::Paused), on_pause)
             .add_systems(OnEnter(GameState::Running), on_resume)
             .add_systems(

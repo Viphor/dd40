@@ -6,7 +6,7 @@ use dd40_core::{
 };
 use lightyear::prelude::{MessageReceiver, MessageSender};
 
-use crate::protocol::{BlockChannel, BlockPlacedMessage};
+use crate::protocol::BlockChannel;
 
 /// Client-side system that drains incoming [`BlockPlacedMessage`]s from the
 /// server and applies each one to the local [`ChunkCache`].
@@ -29,7 +29,7 @@ use crate::protocol::{BlockChannel, BlockPlacedMessage};
 /// silently dropped. The server is authoritative; the correct block data will
 /// arrive when the chunk is eventually loaded.
 pub(crate) fn receive_placed_blocks(
-    mut receiver: Single<&mut MessageReceiver<BlockPlacedMessage>>,
+    mut receiver: Single<&mut MessageReceiver<BlockPlaced>>,
     mut cache: ResMut<ChunkCache>,
     mut placed: MessageWriter<BlockPlaced>,
 ) {

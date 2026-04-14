@@ -24,13 +24,14 @@ pub(crate) fn send_chunk_data(
     mut reader: MessageReader<ChunkReady>,
     mut senders: Query<(&mut MessageSender<ChunkReady>, &mut ChunkRequests)>,
 ) {
-    for ready in reader.read() {
-        for (mut sender, mut cache) in senders.iter_mut() {
+    let messages = reader.read().collect::<Vec<_>>();
+    senders.par_iter_mut().for_each(|(mut sender, mut cache)| {
+        for ready in messages.iter() {
             if cache.contains(&ready.chunk.position()) {
                 trace!("Sending chunk data at {}", ready.chunk.position());
-                sender.send::<ChunkChannel>(ready.clone());
+                sender.send::<ChunkChannel>((*ready).clone());
                 cache.remove(&ready.chunk.position());
             }
         }
-    }
+    });
 }

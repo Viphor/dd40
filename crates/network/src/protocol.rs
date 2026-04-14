@@ -72,44 +72,26 @@ impl Default for PlayerInput {
 //     pub radius: u32,
 // }
 
-/// Chunk data sent from server to client
+/// Request a spawn of the player with the given client id. The server responds with a [`PlayerSpawnLocation`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChunkData {
-    /// The chunk position this data belongs to
-    pub chunk_pos: ChunkPos,
-    /// List of visible blocks in this chunk (blocks with at least one air-adjacent face)
-    pub visible_blocks: Vec<BlockData>,
-}
+pub struct RequestSpawn(pub u64);
 
-/// Data for a single visible block
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockData {
-    /// Position of the block within the chunk (0-15 for x/z, 0-255 for y)
-    pub local_pos: (u8, u8, u8),
-    /// The block type ID
-    pub block_id: BlockId,
-}
-
-/// Message sent when a block is placed
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockPlacedMessage {
-    pub pos: BlockPos,
-    pub block_id: BlockId,
-}
-
-/// Message sent when a block is removed
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockRemovedMessage {
-    pub pos: BlockPos,
-    pub previous_block_id: BlockId,
-}
-
-/// Message sent when a block changes type
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlockChangedMessage {
-    pub pos: BlockPos,
-    pub old_block_id: BlockId,
-    pub new_block_id: BlockId,
+/// Sent by the server to a client immediately after it connects.
+///
+/// The server resolves the player's last known position (keyed by their
+/// lightyear peer id) or falls back to the world's configured default spawn,
+/// then streams this message followed by the 9 surrounding [`RequestChunk`]
+/// responses through the normal chunk pipeline.
+///
+/// The client uses this position to seed [`InitialChunksGate`] with the
+/// expected 3×3 chunk grid and to place the player entity once all chunks
+/// have arrived.
+///
+/// [`InitialChunksGate`]: crate::client::InitialChunksGate
+#[derive(Message, Clone, Serialize, Deserialize, Debug)]
+pub struct PlayerSpawnLocation {
+    /// World-space position the player should spawn at.
+    pub position: Vec3,
 }
 
 /// Message sent when a player joins
@@ -240,28 +222,23 @@ impl Plugin for ProtocolPlugin {
 
         // Register messages with directions
         // Client -> Server
-        // app.register_message::<RequestChunks>()
-        //     .add_direction(NetworkDirection::ClientToServer);
         app.register_message::<RequestChunk>()
             .add_direction(NetworkDirection::ClientToServer);
 
         app.register_message::<PlaceBlockRequest>()
             .add_direction(NetworkDirection::ClientToServer);
 
+        app.register_message::<RequestSpawn>()
+            .add_direction(NetworkDirection::ClientToServer);
+
         // Server -> Client
+        app.register_message::<PlayerSpawnLocation>()
+            .add_direction(NetworkDirection::ServerToClient);
+
         app.register_message::<ChunkReady>()
             .add_direction(NetworkDirection::ServerToClient);
 
-        app.register_message::<ChunkData>()
-            .add_direction(NetworkDirection::ServerToClient);
-
-        app.register_message::<BlockPlacedMessage>()
-            .add_direction(NetworkDirection::ServerToClient);
-
-        app.register_message::<BlockRemovedMessage>()
-            .add_direction(NetworkDirection::ServerToClient);
-
-        app.register_message::<BlockChangedMessage>()
+        app.register_message::<BlockPlaced>()
             .add_direction(NetworkDirection::ServerToClient);
 
         app.register_message::<PlayerJoinedMessage>()

@@ -2,8 +2,10 @@ use std::fmt::Display;
 
 use bevy::{
     ecs::component::Component,
+    math::Vec3,
     prelude::{Deref, DerefMut},
     reflect::Reflect,
+    transform::components::Transform,
 };
 use serde::{Deserialize, Serialize, ser::SerializeTuple};
 
@@ -37,6 +39,39 @@ impl ChunkPos {
 impl Display for ChunkPos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.x, self.z)
+    }
+}
+
+impl From<&BlockPos> for ChunkPos {
+    fn from(value: &BlockPos) -> Self {
+        Self {
+            x: value.x.div_euclid(CHUNK_SIZE_X as BlockCoord),
+            z: value.z.div_euclid(CHUNK_SIZE_Z as BlockCoord),
+        }
+    }
+}
+
+impl From<BlockPos> for ChunkPos {
+    fn from(value: BlockPos) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&Transform> for ChunkPos {
+    fn from(value: &Transform) -> Self {
+        Self {
+            x: value.translation.x.div_euclid(CHUNK_SIZE_X as f32) as BlockCoord,
+            z: value.translation.z.div_euclid(CHUNK_SIZE_Z as f32) as BlockCoord,
+        }
+    }
+}
+
+impl From<&Vec3> for ChunkPos {
+    fn from(value: &Vec3) -> Self {
+        Self {
+            x: value.x.div_euclid(CHUNK_SIZE_X as f32) as BlockCoord,
+            z: value.z.div_euclid(CHUNK_SIZE_Z as f32) as BlockCoord,
+        }
     }
 }
 

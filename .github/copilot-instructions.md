@@ -35,19 +35,38 @@ The block registry is a **core extensibility mechanism** that allows any crate t
 - Registration happens during `Startup` schedule in the `BlockRegistrySet` system set
 - World generation runs in `WorldGenerationSet`, which is ordered **after** `BlockRegistrySet`
 
+**`BlockDefinition` is the single source of truth for everything the engine needs to know about a block type.**  All properties — rendering, physics, gameplay — must live on `BlockDefinition` so that `BlockRegistry` is the only resource callers need to consult.  Never store block-related data in a separate resource or component that must be kept in sync with the registry.
+
 **Example of adding custom blocks via a new crate:**
 ```rust
 use bevy::prelude::*;
-use dd40_core::{BlockDefinition, BlockId, BlockRegistry, BlockRegistrySet};
+use dd40_core::prelude::*;
+use dd40_core::character::physics::CollisionShape;
 
 pub const MY_CUSTOM_BLOCK: BlockId = BlockId(1000);
+pub const MY_SLAB_BLOCK: BlockId = BlockId(1001);
 
-fn register_my_blocks(mut registry: ResMut<BlockRegistry>) {
+fn register_my_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Commands) {
     registry.register(
         BlockDefinition::new(MY_CUSTOM_BLOCK, "my_block")
             .with_color(Color::srgb(1.0, 0.5, 0.0))
             .with_solid(true)
+            .with_renderable(true),
+        // collision_shape defaults to CollisionShape::FullCube — no need to set it
+        // for standard solid blocks.
+        &mut commands,
+    );
+
+    registry.register(
+        BlockDefinition::new(MY_SLAB_BLOCK, "my_slab")
+            .with_color(Color::srgb(0.8, 0.6, 0.3))
+            .with_solid(true)
             .with_renderable(true)
+            .with_collision_shape(CollisionShape::Box {
+                min: bevy::math::Vec3::ZERO,
+                max: bevy::math::Vec3::new(1.0, 0.5, 1.0),
+            }),
+        &mut commands,
     );
 }
 
@@ -414,10 +433,13 @@ app.add_message::<ChunkReady>()
 ### Extending the Block System
 
 1. Define block ID constants starting at 1000+
-2. Create registration function that accesses `ResMut<BlockRegistry>`
-3. Add registration system to `BlockRegistrySet`
-4. Document block properties and intended use
-5. Create plugin to encapsulate the block type(s)
+2. Create registration function that accesses `ResMut<BlockRegistry>` and `Commands`
+3. Set **all** block properties on `BlockDefinition` — rendering, physics, gameplay. Never use a separate resource or side-channel to store block data; `BlockRegistry` is the single source of truth
+4. For irregular collision shapes (slabs, stairs, lecterns) set `.with_collision_shape(CollisionShape::Box { .. })` — the shape must fit within the 1×1×1 cell
+5. Non-solid blocks (air, flowers, torches) must use `.with_collision_shape(CollisionShape::None)` so the physics solver skips them
+6. Add registration system to `BlockRegistrySet`
+7. Document block properties and intended use
+8. Create plugin to encapsulate the block type(s)
 
 ### Extending World Generation
 

@@ -6,12 +6,19 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::character::physics::CollisionShape;
+
 /// System set for block registration systems.
 /// All block registrations should run in this set during Startup.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BlockRegistrySet;
 
 /// Definition of a block type, containing all its properties.
+///
+/// This is the single source of truth for everything the engine needs to know
+/// about a block type.  All properties — rendering, physics, gameplay — live
+/// here so that [`BlockRegistry`] is the only resource callers need to
+/// consult.
 #[derive(Debug, Clone, Reflect)]
 pub struct BlockDefinition {
     /// Unique identifier for this block type.
@@ -28,10 +35,28 @@ pub struct BlockDefinition {
     /// Blocks where `is_replaceable` is `true` do not need to be broken before a
     /// new block can be placed in their voxel.
     pub is_replaceable: bool,
+    /// The collision shape used by the physics solver for this block type.
+    ///
+    /// Defaults to [`CollisionShape::FullCube`] so that newly registered solid
+    /// blocks behave correctly without any extra setup.  Non-solid blocks (air,
+    /// torches, etc.) should use [`CollisionShape::None`].
+    ///
+    /// Use [`CollisionShape::Box`] for partial-cell shapes such as slabs,
+    /// stairs, and lecterns — all coordinates are in cell-local space
+    /// (`[0, 1]` range).
+    pub collision_shape: CollisionShape,
 }
 
 impl BlockDefinition {
-    /// Creates a new block definition.
+    /// Creates a new block definition with sensible defaults.
+    ///
+    /// | Field              | Default                        |
+    /// |--------------------|--------------------------------|
+    /// | `is_solid`         | `true`                         |
+    /// | `is_renderable`    | `true`                         |
+    /// | `color`            | [`Color::WHITE`]               |
+    /// | `is_replaceable`   | `false`                        |
+    /// | `collision_shape`  | [`CollisionShape::FullCube`]   |
     pub fn new(id: BlockId, name: impl Into<String>) -> Self {
         Self {
             id,
@@ -40,6 +65,7 @@ impl BlockDefinition {
             is_renderable: true,
             color: Color::WHITE,
             is_replaceable: false,
+            collision_shape: CollisionShape::FullCube,
         }
     }
 
@@ -68,6 +94,30 @@ impl BlockDefinition {
         self.is_replaceable = is_replaceable;
         self
     }
+
+    /// Sets the collision shape used by the physics solver for this block type.
+    ///
+    /// Use [`CollisionShape::None`] for non-solid blocks (air, flowers, etc.),
+    /// [`CollisionShape::FullCube`] for standard opaque blocks, and
+    /// [`CollisionShape::Box`] for partial-cell shapes like slabs or stairs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bevy::math::Vec3;
+    /// use dd40_core::prelude::*;
+    /// use dd40_core::character::physics::CollisionShape;
+    ///
+    /// let slab = BlockDefinition::new(BlockId(1000), "oak_slab")
+    ///     .with_collision_shape(CollisionShape::Box {
+    ///         min: Vec3::ZERO,
+    ///         max: Vec3::new(1.0, 0.5, 1.0),
+    ///     });
+    /// ```
+    pub fn with_collision_shape(mut self, shape: CollisionShape) -> Self {
+        self.collision_shape = shape;
+        self
+    }
 }
 
 /// Registry that stores all registered block types.
@@ -77,17 +127,19 @@ pub struct BlockRegistry {
 }
 
 impl BlockRegistry {
-    /// Creates a new block registry with the default Air block.
+    /// Creates a new block registry with the default Air block pre-registered.
     pub fn new() -> Self {
         let mut registry = Self { blocks: Vec::new() };
 
-        // Always register Air as the first block (ID 0)
+        // Always register Air as the first block (ID 0).
+        // Air has no collision, is not solid, and is not rendered.
         registry.insert_definition(
             BlockDefinition::new(BlockId::AIR, "air")
                 .with_solid(false)
                 .with_renderable(false)
                 .with_color(Color::srgba(0.0, 0.0, 0.0, 0.0))
-                .with_replaceable(true),
+                .with_replaceable(true)
+                .with_collision_shape(CollisionShape::None),
         );
 
         registry
@@ -186,6 +238,19 @@ impl BlockRegistry {
         self.get(block.block_id)
             .map(|def| def.is_replaceable)
             .unwrap_or(false)
+    }
+
+    /// Returns the [`CollisionShape`] for the given block.
+    ///
+    /// This is the authoritative lookup used by the physics solver — no
+    /// separate shape registry is needed.
+    ///
+    /// Returns [`CollisionShape::None`] when the block's ID is not registered,
+    /// which is safe: unknown blocks are treated as passable.
+    pub fn collision_shape(&self, block: &super::Block) -> CollisionShape {
+        self.get(block.block_id)
+            .map(|def| def.collision_shape.clone())
+            .unwrap_or(CollisionShape::None)
     }
 }
 

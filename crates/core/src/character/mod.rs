@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+pub mod physics;
 pub mod plugin;
 
 /// Marker component that identifies the player entity.
@@ -21,6 +22,9 @@ impl Default for MovementSpeed {
         Self(5.0)
     }
 }
+
+#[derive(Resource)]
+pub struct SpawnPosition(pub Vec3);
 
 #[derive(Bundle)]
 pub struct CharacterBundle {

@@ -7,7 +7,7 @@ use dd40_core::{
 use lightyear::prelude::{MessageReceiver, MessageSender};
 
 use crate::{
-    protocol::{BlockChannel, BlockPlacedMessage, PlaceBlockRequest},
+    protocol::{BlockChannel, PlaceBlockRequest},
     server::chunk_requests::ChunkRequests,
 };
 
@@ -31,7 +31,7 @@ pub(crate) fn receive_place_requests(
     mut cache: ResMut<ChunkCache>,
     mut placed_writer: MessageWriter<BlockPlaced>,
     mut receivers: Query<(&mut MessageReceiver<PlaceBlockRequest>, &ChunkRequests)>,
-    mut broadcasters: Query<(&mut MessageSender<BlockPlacedMessage>, &ChunkRequests)>,
+    mut broadcasters: Query<(&mut MessageSender<BlockPlaced>, &ChunkRequests)>,
 ) {
     // Collect valid, accepted requests first so we can borrow `cache` mutably
     // without conflicting with the immutable borrow needed for the replaceability
@@ -105,9 +105,10 @@ pub(crate) fn receive_place_requests(
             // Currently we don't have any method to track which clients have which chunks loaded, so we'll just broadcast to everyone.
             // Once we have the position of each player's camera we can compute which chunk(s) they are looking at and only broadcast to those clients.
             // if client_chunks.contains(&chunk_pos) {
-            sender.send::<BlockChannel>(BlockPlacedMessage {
+            sender.send::<BlockChannel>(BlockPlaced {
                 pos: req.pos,
                 block_id: req.block_id,
+                placer: None,
             });
             broadcast_count += 1;
             // }
