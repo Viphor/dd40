@@ -2,7 +2,7 @@ use bevy::color::palettes::basic::YELLOW;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
-use dd40_core::character::{CharacterBuilder, MovementSpeed, Player, SpawnPosition};
+use dd40_core::character::{CharacterBuilder, JumpImpulse, MovementSpeed, Player, SpawnPosition};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
@@ -91,6 +91,7 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
         CharacterCollider,
         Aabb::player(),
         CharacterController::default(),
+        JumpImpulse::default(),
         DebugInfo::new("Player Info")
             .with_color(YELLOW.into())
             .add("position", "Player position")

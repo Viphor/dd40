@@ -16,10 +16,11 @@ pub mod prelude {
             registry::BlockRegistrySet,
         },
         character::{
+            JumpImpulse,
             controller::CharacterController,
             physics::{
                 Aabb, CharacterCollider, CharacterSpatialCache, CollisionShape, GravityScale,
-                Grounded, PhysicsBody, PhysicsConfig, PhysicsPlugin, PhysicsSet, Velocity,
+                Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsPlugin, PhysicsSet, Velocity,
             },
         },
         chunk::{CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos, events::*},

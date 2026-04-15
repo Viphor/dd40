@@ -51,6 +51,7 @@ pub use crate::block_interaction::targeting::{BlockFace, BlockInteractionConfig,
 use crate::block_interaction::targeting::{
     draw_targeted_block_highlight, spawn_debug_entity, update_debug_info, update_targeted_block,
 };
+use crate::PlayerMode;
 
 pub mod placement;
 mod targeting;
@@ -131,7 +132,11 @@ impl Plugin for BlockInteractionPlugin {
         app.add_systems(Startup, spawn_debug_entity);
 
         // ── Per-frame gameplay systems ─────────────────────────────────────
-        let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
+        // All targeting/placement systems require Controller mode: the player
+        // should not be able to interact with the world while in FreeCam.
+        let playing_running_controller = in_state(AppState::Playing)
+            .and(in_state(GameState::Running))
+            .and(in_state(PlayerMode::Controller));
 
         app.add_systems(
             Update,
@@ -146,11 +151,22 @@ impl Plugin for BlockInteractionPlugin {
                 try_place_block,
             )
                 .chain()
-                .run_if(playing_and_running.clone()),
+                .run_if(playing_running_controller),
         );
 
-        // apply_placed_blocks runs in PostUpdate so it always sees messages
-        // written by the network layer during Update (receive_placed_blocks).
+        // Clear the targeted-block highlight immediately when entering FreeCam
+        // so the wireframe does not linger until the raycast would next update.
+        app.add_systems(
+            OnEnter(PlayerMode::FreeCam),
+            |mut targeted: ResMut<TargetedBlock>| {
+                *targeted = TargetedBlock::default();
+            },
+        );
+
+        // apply_placed_blocks runs in PostUpdate and is NOT gated on PlayerMode:
+        // it processes incoming network confirmations and must keep the chunk
+        // cache consistent regardless of the current camera mode.
+        let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
         app.add_systems(PostUpdate, apply_placed_blocks.run_if(playing_and_running));
     }
 }

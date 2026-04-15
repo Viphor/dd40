@@ -51,7 +51,7 @@ pub struct WorldSpawnConfig {
 impl Default for WorldSpawnConfig {
     fn default() -> Self {
         Self {
-            default_spawn: Vec3::new(0.0, 174.0, 0.0),
+            default_spawn: Vec3::new(0.0, 74.0, 0.0),
         }
     }
 }

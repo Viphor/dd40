@@ -24,6 +24,25 @@ impl Default for MovementSpeed {
     }
 }
 
+/// Upward velocity (in world units per second) applied when the character
+/// jumps.
+///
+/// Entities **without** this component cannot jump — [`CharacterController::jump`]
+/// is silently ignored when `JumpImpulse` is absent.  This makes jump
+/// capability opt-in: non-player physics bodies (crates, projectiles) don't
+/// accidentally gain jump ability.
+///
+/// [`CharacterController::jump`]: controller::CharacterController::jump
+#[derive(Debug, Clone, Copy, Component, Reflect)]
+#[reflect(Component)]
+pub struct JumpImpulse(pub f32);
+
+impl Default for JumpImpulse {
+    fn default() -> Self {
+        Self(8.0)
+    }
+}
+
 #[derive(Resource)]
 pub struct SpawnPosition(pub Vec3);
 

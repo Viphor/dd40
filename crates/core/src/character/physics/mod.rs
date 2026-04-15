@@ -322,6 +322,21 @@ pub(crate) struct TentativePosition(pub Vec3);
 
 // ---------------------------------------------------------------------------
 
+/// Accumulates instantaneous velocity changes (in world units per second) to
+/// be applied at the very start of the next [`PhysicsSet::Integrate`] tick.
+///
+/// Any system may add to this component — the character controller, explosion
+/// knockback, ability systems, etc.  The integration stage flushes it into
+/// [`Velocity`] and resets it to zero each tick so nothing leaks across frames.
+///
+/// Prefer writing here over mutating [`Velocity`] directly; this keeps all
+/// force sources composable and order-independent within a frame.
+#[derive(Debug, Default, Clone, Copy, Component, Reflect)]
+#[reflect(Component)]
+pub struct Impulse(pub Vec3);
+
+// ---------------------------------------------------------------------------
+
 /// A **required** marker component that opts an entity into the physics
 /// pipeline.
 ///
@@ -343,7 +358,7 @@ pub(crate) struct TentativePosition(pub Vec3);
 /// pipeline never panics on missing components.
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
-#[require(Velocity, GravityScale, Grounded, TentativePosition)]
+#[require(Velocity, GravityScale, Grounded, TentativePosition, Impulse)]
 pub struct PhysicsBody;
 
 // ---------------------------------------------------------------------------
@@ -404,6 +419,7 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Aabb>()
             .register_type::<Velocity>()
+            .register_type::<Impulse>()
             .register_type::<GravityScale>()
             .register_type::<Grounded>()
             .register_type::<PhysicsBody>()

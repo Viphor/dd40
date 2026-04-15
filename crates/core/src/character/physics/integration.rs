@@ -15,7 +15,7 @@
 
 use bevy::prelude::*;
 
-use super::{Grounded, PhysicsBody, PhysicsConfig, PhysicsSet, TentativePosition, Velocity};
+use super::{Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsSet, TentativePosition, Velocity};
 
 // ---------------------------------------------------------------------------
 // Systems
@@ -32,6 +32,7 @@ fn integrate(
         (
             &Transform,
             &mut Velocity,
+            &mut Impulse,
             &super::GravityScale,
             &mut Grounded,
             &mut TentativePosition,
@@ -41,7 +42,16 @@ fn integrate(
 ) {
     let dt = time.delta_secs();
 
-    for (transform, mut velocity, gravity_scale, mut grounded, mut tentative) in &mut query {
+    for (transform, mut velocity, mut impulse, gravity_scale, mut grounded, mut tentative) in
+        &mut query
+    {
+        // ── 0. Flush pending impulses ─────────────────────────────────────
+        // Any system (character controller, explosions, …) may have added to
+        // the Impulse accumulator this frame.  Apply and reset before doing
+        // anything else so impulses are not double-counted.
+        velocity.0 += impulse.0;
+        impulse.0 = Vec3::ZERO;
+
         // ── 1. Reset grounded flag ────────────────────────────────────────
         // The block-collision stage will set it again if the entity lands on
         // something this frame.

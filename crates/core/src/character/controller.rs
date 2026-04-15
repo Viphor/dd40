@@ -3,25 +3,45 @@
 //! Any system (player input, AI, network replication) that wants to move a
 //! character writes its intent into the [`CharacterController`] component.  A
 //! single physics-side system ([`apply_character_controller`]) then translates
-//! that intent into [`Velocity`] changes before [`PhysicsSet::Integrate`] runs,
+//! that intent into [`Impulse`] changes before [`PhysicsSet::Integrate`] runs,
 //! so gravity, block collision, and character-vs-character collision all act on
 //! the resulting velocity as normal.
 //!
+//! # Movement model
+//!
+//! Rather than setting [`Velocity`] directly, the controller adds a *correction
+//! impulse* each tick:
+//!
+//! ```text
+//! correction = target_horizontal_velocity − current_horizontal_velocity
+//! impulse   += correction × (grounded ? 1.0 : air_control)
+//! ```
+//!
+//! When grounded, the full correction is applied so movement feels snappy and
+//! responsive.  High ground friction then quickly zeroes residual velocity when
+//! the player releases a key.  In the air, only a fraction (`air_control`) of
+//! the correction is applied per tick, so direction changes are gradual and the
+//! player carries their existing momentum — consistent with typical platformer
+//! feel.
+//!
+//! # Jumping
+//!
+//! Jumping is **opt-in**: the entity must also have a [`JumpImpulse`] component.
+//! Without it, `controller.jump = true` is silently ignored.  This prevents
+//! non-player physics bodies from gaining jump capability.
+//!
 //! # Usage
 //!
-//! 1. Insert [`CharacterController`] alongside [`PhysicsBody`] when spawning a
-//!    character.
-//! 2. Each frame, write desired movement and jump intent into the component from
-//!    whichever input system owns the character.
-//! 3. Do **not** modify [`Velocity`] directly for locomotion — write to
-//!    [`CharacterController`] instead so that the controller and the physics
-//!    pipeline stay in sync.
+//! 1. Insert [`CharacterController`] and [`JumpImpulse`] alongside [`PhysicsBody`]
+//!    when spawning a jumpable character.
+//! 2. Each frame, write desired movement and jump intent into [`CharacterController`]
+//!    from whichever input system owns the character.
+//! 3. Do **not** mutate [`Velocity`] or [`Impulse`] directly for locomotion.
 //!
 //! ```
 //! use dd40_core::character::controller::CharacterController;
 //! use bevy::math::Vec3;
 //!
-//! // From an input system:
 //! fn move_character(mut query: bevy::prelude::Query<&mut CharacterController>) {
 //!     for mut ctrl in &mut query {
 //!         ctrl.movement = Vec3::new(1.0, 0.0, 0.0); // move right
@@ -29,10 +49,14 @@
 //!     }
 //! }
 //! ```
+//!
+//! [`JumpImpulse`]: crate::character::JumpImpulse
+//! [`Velocity`]: crate::character::physics::Velocity
+//! [`Impulse`]: crate::character::physics::Impulse
 
 use bevy::prelude::*;
 
-use super::{MovementSpeed, physics::{Grounded, PhysicsBody, PhysicsSet, Velocity}};
+use super::{JumpImpulse, MovementSpeed, physics::{Grounded, Impulse, PhysicsBody, PhysicsSet, Velocity}};
 
 // ---------------------------------------------------------------------------
 // Component
@@ -41,13 +65,12 @@ use super::{MovementSpeed, physics::{Grounded, PhysicsBody, PhysicsSet, Velocity
 /// Per-frame movement intent for a character.
 ///
 /// Written to by input systems (player, AI, network) and consumed once per
-/// [`FixedUpdate`] tick by [`apply_character_controller`], which translates the
-/// intent into [`Velocity`] before the physics pipeline runs.
+/// [`FixedUpdate`] tick by [`apply_character_controller`].
 ///
-/// All fields are reset / interpreted on each tick:
-/// - [`movement`] is applied every tick it is non-zero.
-/// - [`jump`] is consumed (set back to `false`) immediately after a jump fires.
-/// - [`sprint_multiplier`] scales the movement speed for that tick.
+/// All fields are reset after being consumed each tick:
+/// - [`movement`] is applied every tick it is non-zero, then cleared.
+/// - [`jump`] is reset to `false` after being processed.
+/// - [`sprint_multiplier`] is reset to `1.0` each tick.
 ///
 /// [`movement`]: CharacterController::movement
 /// [`jump`]: CharacterController::jump
@@ -56,38 +79,33 @@ use super::{MovementSpeed, physics::{Grounded, PhysicsBody, PhysicsSet, Velocity
 #[reflect(Component)]
 pub struct CharacterController {
     /// Desired movement direction in **world space**, projected onto the
-    /// horizontal (XZ) plane.
+    /// horizontal (XZ) plane and normalised.
     ///
-    /// The vector should be normalised before being written here.  The
-    /// controller multiplies it by [`MovementSpeed`] and
-    /// [`sprint_multiplier`] to produce the target horizontal velocity.
-    ///
-    /// [`sprint_multiplier`]: CharacterController::sprint_multiplier
+    /// The controller multiplies this by [`MovementSpeed`] and
+    /// [`sprint_multiplier`] to compute the target horizontal velocity, then
+    /// adds a correction impulse toward that target.
     pub movement: Vec3,
 
-    /// When `true` and the entity is [`Grounded`], the controller applies an
-    /// upward [`jump_impulse`] to [`Velocity`] and resets this field to
-    /// `false`.
+    /// When `true`, the controller attempts to jump this tick.
     ///
-    /// If the entity is not grounded, this field is ignored (but not reset, so
-    /// a buffered jump press is **not** re-tried next frame — callers should
-    /// set it again if they want queued jumps).
+    /// Requires a [`JumpImpulse`] component on the same entity — without it
+    /// the request is silently dropped.  Reset to `false` immediately after
+    /// being processed.
     ///
-    /// [`jump_impulse`]: CharacterController::jump_impulse
+    /// [`JumpImpulse`]: crate::character::JumpImpulse
     pub jump: bool,
-
-    /// Upward velocity (in world units per second) applied when a jump fires.
-    ///
-    /// Tuned per-character rather than globally so that different character
-    /// types can have different jump heights without touching [`PhysicsConfig`].
-    ///
-    /// [`PhysicsConfig`]: crate::character::physics::PhysicsConfig
-    pub jump_impulse: f32,
 
     /// Scale factor applied to [`MovementSpeed`] this tick.
     ///
-    /// `1.0` = normal speed, `2.0` = sprinting, `0.0` = no movement.
+    /// `1.0` = normal speed, `2.0` = sprinting.  Reset to `1.0` each tick.
     pub sprint_multiplier: f32,
+
+    /// Fraction of the movement correction impulse applied when the entity is
+    /// **not** grounded.
+    ///
+    /// `1.0` = full air control (same as ground), `0.0` = no air steering.
+    /// Typical values are `0.2`–`0.4`.
+    pub air_control: f32,
 }
 
 impl Default for CharacterController {
@@ -95,8 +113,8 @@ impl Default for CharacterController {
         Self {
             movement: Vec3::ZERO,
             jump: false,
-            jump_impulse: 8.0,
             sprint_multiplier: 1.0,
+            air_control: 0.3,
         }
     }
 }
@@ -105,55 +123,70 @@ impl Default for CharacterController {
 // System
 // ---------------------------------------------------------------------------
 
-/// Translates [`CharacterController`] intent into [`Velocity`] changes.
+/// Translates [`CharacterController`] intent into [`Impulse`] changes.
 ///
-/// Runs in [`FixedUpdate`] **before** [`PhysicsSet::Integrate`] so that the
-/// horizontal velocity set here is immediately picked up by the integration
-/// step and then refined by the collision stages.
+/// Runs in [`FixedUpdate`] **before** [`PhysicsSet::Integrate`] so the impulse
+/// is flushed into [`Velocity`] during integration that same tick.
 ///
-/// ### What this system does
+/// ### Ground vs. air movement
 ///
-/// - Sets `velocity.x` and `velocity.z` from `controller.movement ×
-///   speed × sprint_multiplier`.  Vertical velocity is **not** touched here
-///   (gravity and jump are handled separately).
-/// - If `controller.jump` is `true` and the entity is [`Grounded`], sets
-///   `velocity.y = controller.jump_impulse` and resets `controller.jump =
-///   false`.
-/// - If `controller.jump` is `true` but the entity is **not** grounded, the
-///   jump is silently dropped (not buffered).
-/// - Resets `controller.movement` and `controller.sprint_multiplier` to their
-///   defaults after applying them, so a missing input write results in the
-///   character stopping rather than continuing at the last velocity.
+/// When grounded, the full velocity correction is applied as an impulse so
+/// movement feels snappy.  When airborne, only `air_control × correction` is
+/// applied, preserving momentum and making mid-air direction changes gradual.
+///
+/// ### Jump
+///
+/// A jump impulse is added to `impulse.0.y` only when **all** of:
+/// - `controller.jump` is `true`
+/// - the entity has a [`JumpImpulse`] component
+/// - the entity is [`Grounded`]
+///
+/// The jump flag is always reset after processing regardless of whether the
+/// jump actually fired.
 fn apply_character_controller(
     mut query: Query<
         (
             &mut CharacterController,
             &MovementSpeed,
             &Grounded,
-            &mut Velocity,
+            &Velocity,
+            &mut Impulse,
+            Option<&JumpImpulse>,
         ),
         With<PhysicsBody>,
     >,
 ) {
-    for (mut controller, speed, grounded, mut velocity) in &mut query {
+    for (mut controller, speed, grounded, velocity, mut impulse, jump_impulse) in &mut query {
         // ── Horizontal movement ───────────────────────────────────────────
-        let horizontal_speed = speed.0 * controller.sprint_multiplier;
-        velocity.0.x = controller.movement.x * horizontal_speed;
-        velocity.0.z = controller.movement.z * horizontal_speed;
+        let target_h = Vec3::new(
+            controller.movement.x * speed.0 * controller.sprint_multiplier,
+            0.0,
+            controller.movement.z * speed.0 * controller.sprint_multiplier,
+        );
+        let current_h = Vec3::new(velocity.0.x, 0.0, velocity.0.z);
+        let correction = target_h - current_h;
+
+        let factor = if grounded.is_grounded() {
+            1.0
+        } else {
+            controller.air_control
+        };
+
+        impulse.0.x += correction.x * factor;
+        impulse.0.z += correction.z * factor;
 
         // ── Jump ─────────────────────────────────────────────────────────
         if controller.jump {
             if grounded.is_grounded() {
-                velocity.0.y = controller.jump_impulse;
+                if let Some(ji) = jump_impulse {
+                    impulse.0.y += ji.0;
+                }
             }
-            // Consume the intent regardless of grounded state so that a
-            // held-down jump key doesn't re-fire on the next grounding event.
+            // Always consume the flag so a held key doesn't re-fire next frame.
             controller.jump = false;
         }
 
         // ── Reset per-frame intent ────────────────────────────────────────
-        // Input systems write intent each Update tick; clearing here ensures
-        // a missed write (e.g. paused input) stops the character cleanly.
         controller.movement = Vec3::ZERO;
         controller.sprint_multiplier = 1.0;
     }
@@ -185,7 +218,7 @@ mod tests {
     use super::*;
     use crate::{
         block::registry::BlockRegistry,
-        character::physics::{Aabb, GravityScale, PhysicsPlugin},
+        character::{JumpImpulse, physics::{Aabb, GravityScale, PhysicsPlugin}},
         chunk::cache::ChunkCache,
     };
     use bevy::time::TimeUpdateStrategy;
@@ -204,26 +237,25 @@ mod tests {
         app
     }
 
-    /// Advances exactly one FixedUpdate tick (two app.update() calls: one to
-    /// seed the clock, one to overflow the accumulator).
+    /// Advances exactly one FixedUpdate tick (two app.update() calls).
     fn tick(app: &mut App) {
-        app.update();
-        app.update();
+        app.update(); // seed real-time clock
+        app.update(); // overflow accumulator → one FixedUpdate tick
     }
 
-    fn spawn_character(app: &mut App, pos: Vec3, grounded: bool) -> Entity {
-        let entity = app
-            .world_mut()
-            .spawn((
-                Transform::from_translation(pos),
-                PhysicsBody,
-                Aabb::player(),
-                GravityScale(0.0), // disable gravity so only controller drives motion
-                CharacterController::default(),
-                MovementSpeed(5.0),
-            ))
-            .id();
-        // Pre-set grounded flag so jump tests work without needing real blocks.
+    fn spawn_character(app: &mut App, pos: Vec3, grounded: bool, with_jump: bool) -> Entity {
+        let mut cmd = app.world_mut().spawn((
+            Transform::from_translation(pos),
+            PhysicsBody,
+            Aabb::player(),
+            GravityScale(0.0), // disable gravity so only the controller drives motion
+            CharacterController::default(),
+            MovementSpeed(5.0),
+        ));
+        if with_jump {
+            cmd.insert(JumpImpulse::default());
+        }
+        let entity = cmd.id();
         if grounded {
             app.world_mut()
                 .entity_mut(entity)
@@ -237,24 +269,16 @@ mod tests {
     #[test]
     fn movement_sets_horizontal_velocity() {
         let mut app = make_app(1.0 / 60.0);
-        let entity = spawn_character(&mut app, Vec3::ZERO, false);
+        let entity = spawn_character(&mut app, Vec3::ZERO, true, false);
 
-        app.world_mut()
-            .entity_mut(entity)
-            .get_mut::<CharacterController>()
-            .unwrap()
-            .movement = Vec3::new(1.0, 0.0, 0.0);
+        app.update(); // seed clock
 
-        // Seed the clock so the accumulator has a value before the real tick.
-        app.update();
-
-        // Manually re-write movement because the controller reset it during
-        // the seed frame's FixedUpdate.
-        app.world_mut()
-            .entity_mut(entity)
-            .get_mut::<CharacterController>()
-            .unwrap()
-            .movement = Vec3::new(1.0, 0.0, 0.0);
+        {
+            let mut entity_ref = app.world_mut().entity_mut(entity);
+            entity_ref.get_mut::<Grounded>().unwrap().0 = true;
+            entity_ref.get_mut::<CharacterController>().unwrap().movement =
+                Vec3::new(1.0, 0.0, 0.0);
+        }
 
         app.update(); // real FixedUpdate tick
 
@@ -269,9 +293,8 @@ mod tests {
     #[test]
     fn movement_does_not_affect_vertical_velocity() {
         let mut app = make_app(1.0 / 60.0);
-        let entity = spawn_character(&mut app, Vec3::ZERO, false);
+        let entity = spawn_character(&mut app, Vec3::ZERO, false, false);
 
-        // Manually pre-set velocity.y to detect any unwanted vertical write.
         app.world_mut()
             .entity_mut(entity)
             .get_mut::<Velocity>()
@@ -288,10 +311,6 @@ mod tests {
         tick(&mut app);
 
         let vel = app.world().get::<Velocity>(entity).unwrap();
-        // Vertical velocity should be unchanged by movement intent (gravity
-        // is disabled, so it stays at the manually-set 5.0, minus any
-        // friction from finalise — just check it wasn't zeroed by the
-        // controller).
         assert!(
             vel.0.y > 0.0,
             "movement should not zero out vertical velocity, got {}",
@@ -300,24 +319,17 @@ mod tests {
     }
 
     #[test]
-    fn jump_fires_when_grounded() {
+    fn jump_fires_when_grounded_and_has_jump_impulse() {
         let mut app = make_app(1.0 / 60.0);
-        let entity = spawn_character(&mut app, Vec3::ZERO, true);
+        let entity = spawn_character(&mut app, Vec3::ZERO, true, true);
 
-        app.update(); // seed clock; grounded is reset to false during Integrate
+        app.update(); // seed clock
 
-        // Re-set grounded so the second tick sees it as true.
-        app.world_mut()
-            .entity_mut(entity)
-            .get_mut::<Grounded>()
-            .unwrap()
-            .0 = true;
-
-        app.world_mut()
-            .entity_mut(entity)
-            .get_mut::<CharacterController>()
-            .unwrap()
-            .jump = true;
+        {
+            let mut entity_ref = app.world_mut().entity_mut(entity);
+            entity_ref.get_mut::<Grounded>().unwrap().0 = true;
+            entity_ref.get_mut::<CharacterController>().unwrap().jump = true;
+        }
 
         app.update(); // real FixedUpdate tick
 
@@ -330,9 +342,32 @@ mod tests {
     }
 
     #[test]
+    fn jump_ignored_without_jump_impulse_component() {
+        let mut app = make_app(1.0 / 60.0);
+        let entity = spawn_character(&mut app, Vec3::ZERO, true, false);
+
+        app.update(); // seed clock
+
+        {
+            let mut entity_ref = app.world_mut().entity_mut(entity);
+            entity_ref.get_mut::<Grounded>().unwrap().0 = true;
+            entity_ref.get_mut::<CharacterController>().unwrap().jump = true;
+        }
+
+        app.update(); // real FixedUpdate tick
+
+        let vel = app.world().get::<Velocity>(entity).unwrap();
+        assert!(
+            vel.0.y <= 0.0,
+            "jump should be ignored without JumpImpulse component, got {}",
+            vel.0.y
+        );
+    }
+
+    #[test]
     fn jump_does_not_fire_when_not_grounded() {
         let mut app = make_app(1.0 / 60.0);
-        let entity = spawn_character(&mut app, Vec3::ZERO, false);
+        let entity = spawn_character(&mut app, Vec3::ZERO, false, true);
 
         app.update(); // seed clock
 
@@ -345,8 +380,6 @@ mod tests {
         app.update(); // real FixedUpdate tick
 
         let vel = app.world().get::<Velocity>(entity).unwrap();
-        // No ground → jump should not apply. Gravity is disabled so vertical
-        // velocity should be near zero (only friction/initialisation noise).
         assert!(
             vel.0.y <= 0.0,
             "jump should not fire when not grounded, got {}",
@@ -355,53 +388,75 @@ mod tests {
     }
 
     #[test]
-    fn jump_flag_reset_after_firing() {
+    fn jump_flag_reset_after_processing() {
         let mut app = make_app(1.0 / 60.0);
-        let entity = spawn_character(&mut app, Vec3::ZERO, true);
+        let entity = spawn_character(&mut app, Vec3::ZERO, true, true);
 
         app.update(); // seed clock
 
-        app.world_mut()
-            .entity_mut(entity)
-            .get_mut::<Grounded>()
-            .unwrap()
-            .0 = true;
-        app.world_mut()
-            .entity_mut(entity)
-            .get_mut::<CharacterController>()
-            .unwrap()
-            .jump = true;
+        {
+            let mut entity_ref = app.world_mut().entity_mut(entity);
+            entity_ref.get_mut::<Grounded>().unwrap().0 = true;
+            entity_ref.get_mut::<CharacterController>().unwrap().jump = true;
+        }
 
         app.update(); // fires jump and resets the flag
 
         let ctrl = app.world().get::<CharacterController>(entity).unwrap();
+        assert!(!ctrl.jump, "jump flag should be reset after processing");
+    }
+
+    #[test]
+    fn air_control_reduces_horizontal_impulse() {
+        let mut app = make_app(1.0 / 20.0);
+        let grounded = spawn_character(&mut app, Vec3::ZERO, true, false);
+        let airborne = spawn_character(&mut app, Vec3::new(100.0, 0.0, 0.0), false, false);
+
+        app.update(); // seed clock
+
+        {
+            let mut entity_ref = app.world_mut().entity_mut(grounded);
+            entity_ref.get_mut::<Grounded>().unwrap().0 = true;
+            entity_ref.get_mut::<CharacterController>().unwrap().movement =
+                Vec3::new(1.0, 0.0, 0.0);
+        }
+        {
+            let mut entity_ref = app.world_mut().entity_mut(airborne);
+            entity_ref.get_mut::<CharacterController>().unwrap().movement =
+                Vec3::new(1.0, 0.0, 0.0);
+        }
+
+        app.update(); // real FixedUpdate tick
+
+        let grounded_vel = app.world().get::<Velocity>(grounded).unwrap().0.x;
+        let airborne_vel = app.world().get::<Velocity>(airborne).unwrap().0.x;
+
         assert!(
-            !ctrl.jump,
-            "jump flag should be reset after firing, got {}",
-            ctrl.jump
+            grounded_vel > airborne_vel,
+            "grounded ({}) should move faster than airborne ({}) due to air_control",
+            grounded_vel,
+            airborne_vel
         );
     }
 
     #[test]
-    fn sprint_multiplier_scales_speed() {
-        let mut app = make_app(1.0 / 60.0);
-        let normal = spawn_character(&mut app, Vec3::ZERO, false);
-        let sprinter = spawn_character(&mut app, Vec3::new(100.0, 0.0, 0.0), false);
+    fn sprint_multiplier_scales_velocity() {
+        let mut app = make_app(1.0 / 20.0);
+        let normal = spawn_character(&mut app, Vec3::ZERO, true, false);
+        let sprinter = spawn_character(&mut app, Vec3::new(100.0, 0.0, 0.0), true, false);
 
         app.update(); // seed clock
 
-        // Normal movement
         {
-            let world = app.world_mut();
-            let mut entity_ref = world.entity_mut(normal);
+            let mut entity_ref = app.world_mut().entity_mut(normal);
+            entity_ref.get_mut::<Grounded>().unwrap().0 = true;
             let mut ctrl = entity_ref.get_mut::<CharacterController>().unwrap();
             ctrl.movement = Vec3::new(1.0, 0.0, 0.0);
             ctrl.sprint_multiplier = 1.0;
         }
-        // Sprint movement
         {
-            let world = app.world_mut();
-            let mut entity_ref = world.entity_mut(sprinter);
+            let mut entity_ref = app.world_mut().entity_mut(sprinter);
+            entity_ref.get_mut::<Grounded>().unwrap().0 = true;
             let mut ctrl = entity_ref.get_mut::<CharacterController>().unwrap();
             ctrl.movement = Vec3::new(1.0, 0.0, 0.0);
             ctrl.sprint_multiplier = 2.0;
@@ -412,13 +467,9 @@ mod tests {
         let normal_vel = app.world().get::<Velocity>(normal).unwrap().0.x;
         let sprint_vel = app.world().get::<Velocity>(sprinter).unwrap().0.x;
 
-        // After finalise, friction is applied, but sprinter should still be
-        // proportionally faster. We check the ratio is approximately 2.
-        // (Both velocities are already decayed by the same friction factor, so
-        // the ratio is preserved.)
         assert!(
             sprint_vel > normal_vel,
-            "sprinter velocity ({}) should exceed normal ({})",
+            "sprinter ({}) should be faster than normal ({})",
             sprint_vel,
             normal_vel
         );
