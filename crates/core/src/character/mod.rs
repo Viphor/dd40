@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+pub mod controller;
 pub mod physics;
 pub mod plugin;
 

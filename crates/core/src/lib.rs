@@ -15,9 +15,12 @@ pub mod prelude {
             Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, events::*,
             registry::BlockRegistrySet,
         },
-        character::physics::{
-            Aabb, CharacterCollider, CharacterSpatialCache, CollisionShape, GravityScale, Grounded,
-            PhysicsBody, PhysicsConfig, PhysicsPlugin, PhysicsSet, Velocity,
+        character::{
+            controller::CharacterController,
+            physics::{
+                Aabb, CharacterCollider, CharacterSpatialCache, CollisionShape, GravityScale,
+                Grounded, PhysicsBody, PhysicsConfig, PhysicsPlugin, PhysicsSet, Velocity,
+            },
         },
         chunk::{CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos, events::*},
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},

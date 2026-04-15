@@ -13,6 +13,32 @@ pub use block_interaction::{
     BlockFace, BlockInteractionConfig, BlockInteractionPlugin, HeldBlock, TargetedBlock,
 };
 
+// ---------------------------------------------------------------------------
+// Player mode
+// ---------------------------------------------------------------------------
+
+/// Controls how the local player's camera and input are handled.
+///
+/// Toggle between modes at runtime with the **F1** key.
+#[derive(States, Debug, Default, Clone, PartialEq, Eq, Hash, Reflect)]
+pub enum PlayerMode {
+    /// The camera is attached to the player entity and follows its physics-
+    /// driven position.  Keyboard input feeds into [`CharacterController`] so
+    /// that movement is subject to gravity, block collisions, and the rest of
+    /// the physics pipeline.
+    #[default]
+    Controller,
+    /// The camera detaches from the player entity and flies freely.  Position
+    /// is updated directly as a function of time — no physics, no collisions.
+    /// The player entity remains where it was and continues to be simulated by
+    /// the physics pipeline (it will stand or fall on its own).
+    FreeCam,
+}
+
+// ---------------------------------------------------------------------------
+// Camera components
+// ---------------------------------------------------------------------------
+
 /// Mouse sensitivity for looking around.
 #[derive(Debug, Component, Reflect)]
 #[reflect(Component)]
@@ -41,11 +67,15 @@ impl Default for CameraRotation {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Startup systems
+// ---------------------------------------------------------------------------
+
 /// Spawns the player entity when the game enters [`AppState::Playing`].
 ///
-/// If a [`SpawnPosition`] resource is present (set by the network layer when the
-/// server sends a `SpawnResponse`), the player is placed at that position.
-/// Otherwise it falls back to the default spawn position `(0, 74, 0)`.
+/// If a [`SpawnPosition`] resource is present (set by the network layer when
+/// the server sends a `SpawnResponse`), the player is placed at that position.
+/// Otherwise it falls back to `(0, 84, 0)`.
 fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition>>) {
     let position = spawn_position
         .map(|sp| sp.0)
@@ -60,6 +90,7 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
         PhysicsBody,
         CharacterCollider,
         Aabb::player(),
+        CharacterController::default(),
         DebugInfo::new("Player Info")
             .with_color(YELLOW.into())
             .add("position", "Player position")
@@ -76,27 +107,21 @@ fn setup_camera(mut commands: Commands) {
     ));
 }
 
-fn update_debug_info(mut player_query: Single<(&Transform, &mut DebugInfo), With<Player>>) {
-    let pos = player_query.0.translation;
-    player_query.1.set(
-        "position",
-        format!("({:.1}, {:.1}, {:.1})", pos.x, pos.y, pos.z),
-    );
-    let chunk = BlockPos::from(player_query.0).chunk_pos();
-    player_query.1.set("chunk", chunk.to_string());
-}
+// ---------------------------------------------------------------------------
+// Mode lifecycle
+// ---------------------------------------------------------------------------
 
 fn on_pause(mut cursor_options: Query<&mut CursorOptions>) {
-    if let Ok(mut cursor_option) = cursor_options.single_mut() {
-        cursor_option.visible = true;
-        cursor_option.grab_mode = CursorGrabMode::None;
+    if let Ok(mut opts) = cursor_options.single_mut() {
+        opts.visible = true;
+        opts.grab_mode = CursorGrabMode::None;
     }
 }
 
 fn on_resume(mut cursor_options: Query<&mut CursorOptions>) {
-    if let Ok(mut cursor_option) = cursor_options.single_mut() {
-        cursor_option.visible = false;
-        cursor_option.grab_mode = CursorGrabMode::Locked;
+    if let Ok(mut opts) = cursor_options.single_mut() {
+        opts.visible = false;
+        opts.grab_mode = CursorGrabMode::Locked;
     }
 }
 
@@ -107,52 +132,122 @@ fn pause_on_escape(
 ) {
     if key.just_pressed(KeyCode::Escape) {
         match game_state.get() {
-            GameState::Running => {
-                next_state.set(GameState::Paused);
+            GameState::Running => next_state.set(GameState::Paused),
+            GameState::Paused => next_state.set(GameState::Running),
+        }
+    }
+}
+
+/// Toggles between [`PlayerMode::Controller`] and [`PlayerMode::FreeCam`] when
+/// **F1** is pressed.
+fn toggle_player_mode(
+    mode: Res<State<PlayerMode>>,
+    mut next_mode: ResMut<NextState<PlayerMode>>,
+    key: Res<ButtonInput<KeyCode>>,
+) {
+    if key.just_pressed(KeyCode::F1) {
+        match mode.get() {
+            PlayerMode::Controller => {
+                info!("Switching to FreeCam mode");
+                next_mode.set(PlayerMode::FreeCam);
             }
-            GameState::Paused => {
-                next_state.set(GameState::Running);
+            PlayerMode::FreeCam => {
+                info!("Switching to Controller mode");
+                next_mode.set(PlayerMode::Controller);
             }
         }
     }
 }
 
-/// Moves the player entity using WASD / Space / Left-Shift.
-fn player_movement(
+// ---------------------------------------------------------------------------
+// Controller mode — input → CharacterController
+// ---------------------------------------------------------------------------
+
+/// Reads keyboard input and writes movement intent into the player entity's
+/// [`CharacterController`].
+///
+/// Runs only in [`PlayerMode::Controller`].  The physics pipeline picks up the
+/// intent each `FixedUpdate` tick via `apply_character_controller`.
+fn player_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    time: Res<Time>,
-    mut player_query: Query<(&mut Transform, &MovementSpeed), With<Player>>,
+    mut player_query: Query<&mut CharacterController, With<Player>>,
     camera_query: Query<&Transform, (With<Camera3d>, Without<Player>)>,
 ) {
-    let Ok((mut transform, speed)) = player_query.single_mut() else {
+    let Ok(mut controller) = player_query.single_mut() else {
         return;
     };
-
     let Ok(camera_transform) = camera_query.single() else {
         return;
     };
 
-    let mut direction = Vec3::ZERO;
-
-    // Get the forward and right vectors from the camera's rotation
+    // Project camera facing onto the horizontal plane.
     let forward = camera_transform.forward();
     let right = camera_transform.right();
+    let forward_h = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+    let right_h = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
 
-    // Project onto horizontal plane (ignore Y component for movement)
-    let forward_horizontal = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
-    let right_horizontal = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
-
+    let mut direction = Vec3::ZERO;
     if keyboard.pressed(KeyCode::KeyW) {
-        direction += forward_horizontal;
+        direction += forward_h;
     }
     if keyboard.pressed(KeyCode::KeyS) {
-        direction -= forward_horizontal;
+        direction -= forward_h;
     }
     if keyboard.pressed(KeyCode::KeyA) {
-        direction -= right_horizontal;
+        direction -= right_h;
     }
     if keyboard.pressed(KeyCode::KeyD) {
-        direction += right_horizontal;
+        direction += right_h;
+    }
+
+    controller.movement = direction.normalize_or_zero();
+
+    if keyboard.just_pressed(KeyCode::Space) {
+        controller.jump = true;
+    }
+
+    controller.sprint_multiplier = if keyboard.pressed(KeyCode::ControlLeft) {
+        2.0
+    } else {
+        1.0
+    };
+}
+
+// ---------------------------------------------------------------------------
+// FreeCam mode — direct camera Transform mutation
+// ---------------------------------------------------------------------------
+
+/// Moves the camera entity directly as a function of time, bypassing physics
+/// entirely.
+///
+/// Runs only in [`PlayerMode::FreeCam`].  The camera follows its own facing
+/// direction for WASD, with Space/Shift for vertical movement.
+fn free_cam_movement(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+    mut camera_query: Query<(&mut Transform, &MouseSensitivity), With<Camera3d>>,
+) {
+    let Ok((mut transform, _)) = camera_query.single_mut() else {
+        return;
+    };
+
+    let forward = transform.forward();
+    let right = transform.right();
+    let forward_h = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+    let right_h = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
+
+    let mut direction = Vec3::ZERO;
+    if keyboard.pressed(KeyCode::KeyW) {
+        direction += forward_h;
+    }
+    if keyboard.pressed(KeyCode::KeyS) {
+        direction -= forward_h;
+    }
+    if keyboard.pressed(KeyCode::KeyA) {
+        direction -= right_h;
+    }
+    if keyboard.pressed(KeyCode::KeyD) {
+        direction += right_h;
     }
     if keyboard.pressed(KeyCode::Space) {
         direction += Vec3::Y;
@@ -161,19 +256,29 @@ fn player_movement(
         direction -= Vec3::Y;
     }
 
-    let sprint_multiplier = if keyboard.pressed(KeyCode::ControlLeft) {
+    let sprint = if keyboard.pressed(KeyCode::ControlLeft) {
         2.0
     } else {
         1.0
     };
 
+    // Use a fixed free-cam speed rather than MovementSpeed so the camera
+    // always feels responsive regardless of character stats.
+    const FREE_CAM_SPEED: f32 = 10.0;
+
     if direction != Vec3::ZERO {
         transform.translation +=
-            direction.normalize() * speed.0 * time.delta_secs() * sprint_multiplier;
+            direction.normalize() * FREE_CAM_SPEED * sprint * time.delta_secs();
     }
 }
 
+// ---------------------------------------------------------------------------
+// Shared camera systems
+// ---------------------------------------------------------------------------
+
 /// Handles mouse movement to rotate the camera.
+///
+/// Runs in both [`PlayerMode::Controller`] and [`PlayerMode::FreeCam`].
 fn mouse_look(
     accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
     mut camera_query: Query<
@@ -182,12 +287,9 @@ fn mouse_look(
     >,
     cursor_options: Query<&CursorOptions>,
 ) {
-    //let window = windows.single();
     let Ok(cursor_option) = cursor_options.single() else {
         return;
     };
-
-    // Only process mouse movement if cursor is grabbed
     if cursor_option.grab_mode != CursorGrabMode::Locked {
         return;
     }
@@ -199,18 +301,18 @@ fn mouse_look(
     let ev = accumulated_mouse_motion;
     rotation.yaw -= ev.delta.x * sensitivity.0;
     rotation.pitch -= ev.delta.y * sensitivity.0;
-
-    // Clamp pitch to prevent camera flipping
     rotation.pitch = rotation.pitch.clamp(
         -std::f32::consts::FRAC_PI_2 + 0.01,
         std::f32::consts::FRAC_PI_2 - 0.01,
     );
 
-    // Apply rotation to transform
     transform.rotation = Quat::from_euler(EulerRot::YXZ, rotation.yaw, rotation.pitch, 0.0);
 }
 
-/// Syncs the camera position with the player position.
+/// Syncs the camera translation to the player entity's position.
+///
+/// Runs only in [`PlayerMode::Controller`].  In [`PlayerMode::FreeCam`] the
+/// camera moves independently so this system is suppressed.
 fn sync_camera_to_player(
     player_query: Query<&Transform, (With<Player>, Without<Camera3d>)>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
@@ -218,12 +320,24 @@ fn sync_camera_to_player(
     let Ok(player_transform) = player_query.single() else {
         return;
     };
-
     let Ok(mut camera_transform) = camera_query.single_mut() else {
         return;
     };
-
     camera_transform.translation = player_transform.translation + Vec3::new(0.0, 1.6, 0.0);
+}
+
+// ---------------------------------------------------------------------------
+// Other systems
+// ---------------------------------------------------------------------------
+
+fn update_debug_info(mut player_query: Single<(&Transform, &mut DebugInfo), With<Player>>) {
+    let pos = player_query.0.translation;
+    player_query.1.set(
+        "position",
+        format!("({:.1}, {:.1}, {:.1})", pos.x, pos.y, pos.z),
+    );
+    let chunk = BlockPos::from(player_query.0).chunk_pos();
+    player_query.1.set("chunk", chunk.to_string());
 }
 
 fn load_nearby_chunks(
@@ -237,7 +351,6 @@ fn load_nearby_chunks(
     let player_pos = BlockPos::from(player_transform);
     let player_chunk_pos = player_pos.chunk_pos();
 
-    // Load chunks in a 3x3 area around the player
     for dz in -1..=1 {
         for dx in -1..=1 {
             let chunk_pos = ChunkPos {
@@ -251,34 +364,63 @@ fn load_nearby_chunks(
     }
 }
 
-/// Bevy plugin that registers player types and spawns the player on startup.
+// ---------------------------------------------------------------------------
+// Plugin
+// ---------------------------------------------------------------------------
+
+/// Bevy plugin that registers player types, spawns the player on startup, and
+/// handles input in both [`PlayerMode::Controller`] and [`PlayerMode::FreeCam`].
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
+        let playing_and_running =
+            in_state(AppState::Playing).and(in_state(GameState::Running));
+
         app.add_plugins(BlockInteractionPlugin::default())
+            .init_state::<PlayerMode>()
+            .register_type::<PlayerMode>()
             .register_type::<MovementSpeed>()
             .register_type::<MouseSensitivity>()
             .register_type::<CameraRotation>()
+            // ── Startup ───────────────────────────────────────────────────
             .add_systems(OnEnter(AppState::Playing), (spawn_player, setup_camera))
+            // ── Pause / resume cursor management ──────────────────────────
             .add_systems(OnEnter(GameState::Paused), on_pause)
             .add_systems(OnEnter(GameState::Running), on_resume)
+            // ── PreUpdate ─────────────────────────────────────────────────
             .add_systems(
                 PreUpdate,
-                load_nearby_chunks
-                    .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
+                load_nearby_chunks.run_if(playing_and_running.clone()),
             )
+            // ── Update — always while playing ─────────────────────────────
             .add_systems(
                 Update,
                 (
-                    //grab_cursor,
                     mouse_look,
-                    player_movement,
-                    sync_camera_to_player,
+                    toggle_player_mode,
                     update_debug_info,
                 )
-                    .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
+                    .run_if(playing_and_running.clone()),
             )
-            .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)));
+            .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)))
+            // ── Update — Controller mode only ─────────────────────────────
+            .add_systems(
+                Update,
+                (player_input, sync_camera_to_player)
+                    .run_if(
+                        playing_and_running
+                            .clone()
+                            .and(in_state(PlayerMode::Controller)),
+                    ),
+            )
+            // ── Update — FreeCam mode only ────────────────────────────────
+            .add_systems(
+                Update,
+                free_cam_movement.run_if(
+                    playing_and_running.and(in_state(PlayerMode::FreeCam)),
+                ),
+            );
     }
 }
+
