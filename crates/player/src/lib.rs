@@ -95,6 +95,8 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
         DebugInfo::new("Player Info")
             .with_color(YELLOW.into())
             .add("position", "Player position")
+            .add("velocity", "Player velocity")
+            .add("impulse", "Player impulse")
             .add("chunk", "Player chunk"),
     ));
 }
@@ -331,14 +333,25 @@ fn sync_camera_to_player(
 // Other systems
 // ---------------------------------------------------------------------------
 
-fn update_debug_info(mut player_query: Single<(&Transform, &mut DebugInfo), With<Player>>) {
-    let pos = player_query.0.translation;
-    player_query.1.set(
+fn update_debug_info(
+    player_query: Single<(&Transform, &Velocity, &Impulse, &mut DebugInfo), With<Player>>,
+) {
+    let (transform, velocity, impulse, mut debug_info) = player_query.into_inner();
+    let pos = transform.translation;
+    debug_info.set(
         "position",
         format!("({:.1}, {:.1}, {:.1})", pos.x, pos.y, pos.z),
     );
-    let chunk = BlockPos::from(player_query.0).chunk_pos();
-    player_query.1.set("chunk", chunk.to_string());
+    debug_info.set(
+        "velocity",
+        format!("({:.1}, {:.1}, {:.1})", velocity.x, velocity.y, velocity.z),
+    );
+    debug_info.set(
+        "impulse",
+        format!("({:.1}, {:.1}, {:.1})", impulse.x, impulse.y, impulse.z),
+    );
+    let chunk = BlockPos::from(transform).chunk_pos();
+    debug_info.set("chunk", chunk.to_string());
 }
 
 fn load_nearby_chunks(
@@ -375,8 +388,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        let playing_and_running =
-            in_state(AppState::Playing).and(in_state(GameState::Running));
+        let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
 
         app.add_plugins(BlockInteractionPlugin::default())
             .init_state::<PlayerMode>()
@@ -397,31 +409,23 @@ impl Plugin for PlayerPlugin {
             // ── Update — always while playing ─────────────────────────────
             .add_systems(
                 Update,
-                (
-                    mouse_look,
-                    toggle_player_mode,
-                    update_debug_info,
-                )
+                (mouse_look, toggle_player_mode, update_debug_info)
                     .run_if(playing_and_running.clone()),
             )
             .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)))
             // ── Update — Controller mode only ─────────────────────────────
             .add_systems(
                 Update,
-                (player_input, sync_camera_to_player)
-                    .run_if(
-                        playing_and_running
-                            .clone()
-                            .and(in_state(PlayerMode::Controller)),
-                    ),
+                (player_input, sync_camera_to_player).run_if(
+                    playing_and_running
+                        .clone()
+                        .and(in_state(PlayerMode::Controller)),
+                ),
             )
             // ── Update — FreeCam mode only ────────────────────────────────
             .add_systems(
                 Update,
-                free_cam_movement.run_if(
-                    playing_and_running.and(in_state(PlayerMode::FreeCam)),
-                ),
+                free_cam_movement.run_if(playing_and_running.and(in_state(PlayerMode::FreeCam))),
             );
     }
 }
-

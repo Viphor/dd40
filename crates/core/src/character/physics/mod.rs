@@ -253,7 +253,7 @@ impl Default for CollisionShape {
 ///
 /// Add this component to any entity that should be moved by the physics
 /// pipeline.  Entities without [`Velocity`] are treated as static.
-#[derive(Debug, Default, Clone, Copy, Component, Reflect)]
+#[derive(Debug, Default, Clone, Copy, Component, Reflect, Deref, DerefMut)]
 #[reflect(Component)]
 pub struct Velocity(pub Vec3);
 
@@ -331,7 +331,7 @@ pub(crate) struct TentativePosition(pub Vec3);
 ///
 /// Prefer writing here over mutating [`Velocity`] directly; this keeps all
 /// force sources composable and order-independent within a frame.
-#[derive(Debug, Default, Clone, Copy, Component, Reflect)]
+#[derive(Debug, Default, Clone, Copy, Component, Reflect, Deref, DerefMut)]
 #[reflect(Component)]
 pub struct Impulse(pub Vec3);
 
@@ -396,8 +396,8 @@ impl Default for PhysicsConfig {
     fn default() -> Self {
         Self {
             gravity: 20.0,
-            ground_friction: 10.0,
-            air_friction: 0.5,
+            ground_friction: 1.0,
+            air_friction: 0.0002,
             terminal_velocity: 60.0,
         }
     }
