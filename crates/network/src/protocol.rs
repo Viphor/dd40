@@ -31,19 +31,30 @@ pub struct EventChannel;
 // INPUTS
 // ============================================================================
 
-/// Client input that is sent every frame.
-/// The server will simulate the player based on these inputs.
+/// Client input that is sent every fixed tick.
+///
+/// The server applies these inputs authoritatively to the character entity.
+/// The controlling client mirrors the same logic on its [`Predicted`] entity
+/// for client-side prediction.
+///
+/// [`Predicted`]: lightyear::prelude::client::Predicted
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Reflect)]
 pub struct PlayerInput {
-    /// Movement direction (normalized or zero)
+    /// Movement direction in world space (normalised or zero).
     pub movement: Vec3,
-    /// Camera pitch (up/down rotation)
+    /// Camera pitch (up/down rotation in radians).
     pub pitch: f32,
-    /// Camera yaw (left/right rotation)
+    /// Camera yaw (left/right rotation in radians).
     pub yaw: f32,
-    /// Whether the player wants to place a block
+    /// Whether the player wants to jump this tick.
+    pub jump: bool,
+    /// Whether the player is sprinting (doubles [`MovementSpeed`]).
+    ///
+    /// [`MovementSpeed`]: dd40_core::character::MovementSpeed
+    pub sprint: bool,
+    /// Whether the player wants to place a block this tick.
     pub place_block: bool,
-    /// Whether the player wants to remove a block
+    /// Whether the player wants to remove a block this tick.
     pub remove_block: bool,
 }
 
@@ -53,9 +64,17 @@ impl Default for PlayerInput {
             movement: Vec3::ZERO,
             pitch: 0.0,
             yaw: 0.0,
+            jump: false,
+            sprint: false,
             place_block: false,
             remove_block: false,
         }
+    }
+}
+
+impl bevy::ecs::entity::MapEntities for PlayerInput {
+    fn map_entities<M: bevy::ecs::entity::EntityMapper>(&mut self, _mapper: &mut M) {
+        // PlayerInput contains no entity references.
     }
 }
 
@@ -107,8 +126,23 @@ pub struct PlayerLeftMessage {
 }
 
 // ============================================================================
-// COMPONENTS
+// MARKER COMPONENTS
 // ============================================================================
+
+/// Marker component replicated to all clients so they can identify networked
+/// character entities.
+///
+/// Registering this as a replicated lightyear component means it is present
+/// on the server entity **and** on the client-side [`Predicted`] /
+/// [`Interpolated`] copies.  Client systems filter on `With<NetworkCharacter>`
+/// to locate the right entities without depending on any other crate.
+///
+/// [`Predicted`]: lightyear::prelude::client::Predicted
+/// [`Interpolated`]: lightyear::prelude::client::Interpolated
+#[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq, Default, Reflect)]
+#[reflect(Component)]
+pub struct NetworkCharacter;
+
 
 /// Replicated player position
 #[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq, Reflect)]
@@ -203,13 +237,16 @@ impl Plugin for ProtocolPlugin {
         app.register_type::<PlayerInput>()
             .register_type::<PlayerPosition>()
             .register_type::<PlayerRotation>()
-            .register_type::<PlayerSpeed>();
+            .register_type::<PlayerSpeed>()
+            .register_type::<NetworkCharacter>();
 
-        // Register inputs
-        // TODO: Add InputPlugin once lightyear API is properly configured
-        // app.add_plugins(InputPlugin::<PlayerInput>::default());
+        // Register the native input plugin so PlayerInput is tick-synced
+        // between client and server via lightyear's input pipeline.
+        app.add_plugins(lightyear::prelude::input::native::InputPlugin::<PlayerInput>::default());
 
         // Register components with replication
+        app.register_component::<NetworkCharacter>();
+
         app.register_component::<PlayerPosition>()
             .add_prediction()
             .add_linear_interpolation();
@@ -348,6 +385,8 @@ mod tests {
         assert_eq!(input.movement, Vec3::ZERO);
         assert_eq!(input.pitch, 0.0);
         assert_eq!(input.yaw, 0.0);
+        assert!(!input.jump);
+        assert!(!input.sprint);
         assert!(!input.place_block);
         assert!(!input.remove_block);
     }

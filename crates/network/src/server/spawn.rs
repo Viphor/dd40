@@ -15,7 +15,7 @@
 
 use bevy::{platform::collections::HashMap, prelude::*};
 use dd40_core::prelude::*;
-use lightyear::prelude::{MessageReceiver, MessageSender};
+use lightyear::prelude::{MessageReceiver, MessageSender, PeerId};
 
 use crate::{
     protocol::{EventChannel, PlayerSpawnLocation, RequestSpawn},
@@ -57,26 +57,26 @@ impl Default for WorldSpawnConfig {
 }
 
 /// Stores the last known world-space position for each connected (or recently
-/// disconnected) player, keyed by lightyear client id.
+/// disconnected) player, keyed by lightyear [`PeerId`].
 ///
 /// Call [`PlayerLocations::set`] from any system that tracks authoritative
 /// player positions (e.g. one that reads replicated [`Transform`] components)
 /// so that reconnecting players are restored to their last known location.
 #[derive(Resource, Default, Debug)]
 pub struct PlayerLocations {
-    locations: HashMap<u64, Vec3>,
+    locations: HashMap<PeerId, Vec3>,
 }
 
 impl PlayerLocations {
-    /// Records or updates the last known position for `client_id`.
-    pub fn set(&mut self, client_id: u64, pos: Vec3) {
-        self.locations.insert(client_id, pos);
+    /// Records or updates the last known position for `peer_id`.
+    pub fn set(&mut self, peer_id: PeerId, pos: Vec3) {
+        self.locations.insert(peer_id, pos);
     }
 
-    /// Returns the last known position for `client_id`, or [`None`] if the
+    /// Returns the last known position for `peer_id`, or [`None`] if the
     /// player has never been seen before.
-    pub fn get(&self, client_id: u64) -> Option<Vec3> {
-        self.locations.get(&client_id).copied()
+    pub fn get(&self, peer_id: PeerId) -> Option<Vec3> {
+        self.locations.get(&peer_id).copied()
     }
 }
 
@@ -109,21 +109,22 @@ pub(crate) fn send_spawn_location(
     )>,
 ) {
     for (mut request, mut sender, mut chunk_requests) in connections.iter_mut() {
-        let Some(RequestSpawn(client_id)) = request.receive().next() else {
+        let Some(RequestSpawn(raw_id)) = request.receive().next() else {
             continue; // No spawn request from this client yet.
         };
+        let peer_id = PeerId::Netcode(raw_id);
 
         // 1. Resolve spawn position.
         let spawn_pos = player_locations
-            .get(client_id)
+            .get(peer_id)
             .unwrap_or(spawn_config.default_spawn);
 
         // 2. Derive the centre chunk from the spawn position.
         let centre = ChunkPos::from(&spawn_pos);
 
         debug!(
-            "Sending spawn location to client {}: pos={:?}, centre_chunk={:?}",
-            client_id, spawn_pos, centre,
+            "Sending spawn location to client {:?}: pos={:?}, centre_chunk={:?}",
+            peer_id, spawn_pos, centre,
         );
 
         // 3. Notify the client of its spawn position.
@@ -158,22 +159,28 @@ mod tests {
     #[test]
     fn player_locations_unknown_returns_none() {
         let locations = PlayerLocations::default();
-        assert!(locations.get(999).is_none());
+        assert!(locations.get(PeerId::Netcode(999)).is_none());
     }
 
     #[test]
     fn player_locations_set_and_get() {
         let mut locations = PlayerLocations::default();
-        locations.set(42, Vec3::new(100.0, 64.0, 200.0));
-        assert_eq!(locations.get(42), Some(Vec3::new(100.0, 64.0, 200.0)));
+        locations.set(PeerId::Netcode(42), Vec3::new(100.0, 64.0, 200.0));
+        assert_eq!(
+            locations.get(PeerId::Netcode(42)),
+            Some(Vec3::new(100.0, 64.0, 200.0))
+        );
     }
 
     #[test]
     fn player_locations_overwrite() {
         let mut locations = PlayerLocations::default();
-        locations.set(1, Vec3::new(0.0, 64.0, 0.0));
-        locations.set(1, Vec3::new(50.0, 70.0, 50.0));
-        assert_eq!(locations.get(1), Some(Vec3::new(50.0, 70.0, 50.0)));
+        locations.set(PeerId::Netcode(1), Vec3::new(0.0, 64.0, 0.0));
+        locations.set(PeerId::Netcode(1), Vec3::new(50.0, 70.0, 50.0));
+        assert_eq!(
+            locations.get(PeerId::Netcode(1)),
+            Some(Vec3::new(50.0, 70.0, 50.0))
+        );
     }
 
     #[test]

@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use bevy::{platform::collections::HashSet, prelude::*};
 use dd40_core::prelude::*;
-use lightyear::prelude::{LinkOf, MessageReceiver, MessageSender};
+use lightyear::prelude::{LinkOf, MessageReceiver, MessageSender, ReplicationSender, SendUpdatesMode};
 
 use crate::protocol::{PlaceBlockRequest, PlayerSpawnLocation, RequestSpawn};
 
@@ -12,16 +14,26 @@ pub(crate) struct ChunkRequests(HashSet<ChunkPos>);
 /// Observer that fires when lightyear adds a [`LinkOf`] component to an entity,
 /// signalling that a new client connection is ready.
 ///
-/// Attaches all required [`MessageSender`] and [`MessageReceiver`] components
-/// to the connection entity so that the chunk and spawn pipelines can communicate
-/// with the client, and inserts a [`NewClientMarker`] so that
-/// [`send_spawn_location`](crate::server::spawn::send_spawn_location) processes
-/// this connection exactly once on the next frame.
+/// Inserts:
+/// - [`ReplicationSender`] — required for lightyear to send replicated entity
+///   updates to this client.  Without it, no component replication reaches the
+///   client even if entities carry [`Replicate`].
+/// - [`MessageSender`] / [`MessageReceiver`] components for each message type
+///   used by the chunk and spawn pipelines.
+/// - [`ChunkRequests`] — deduplicates chunk load requests per connection.
+///
+/// [`Replicate`]: lightyear::prelude::Replicate
 pub(crate) fn add_message_handlers(trigger: On<Add, LinkOf>, mut commands: Commands) {
     let entity = trigger.entity;
     debug!("New client connection on entity {:?}", entity);
 
     commands.entity(entity).insert((
+        // Send entity-component updates every 100 ms, since the last ack.
+        ReplicationSender::new(
+            Duration::from_millis(100),
+            SendUpdatesMode::SinceLastAck,
+            false,
+        ),
         MessageSender::<ChunkReady>::default(),
         MessageSender::<BlockPlaced>::default(),
         MessageSender::<PlayerSpawnLocation>::default(),

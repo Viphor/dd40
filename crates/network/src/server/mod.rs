@@ -3,6 +3,7 @@ use dd40_core::plugin::CorePlugin;
 use lightyear::prelude::server::ServerPlugins;
 
 use crate::{
+    character::NetworkCharacterPlugin,
     connection::server::{DDServer, start},
     constants::tick_duration,
     protocol::*,
@@ -40,6 +41,9 @@ impl Plugin for ServerNetworkPlugin {
 
         // Add protocol plugin (registers messages, components, inputs)
         app.add_plugins(ProtocolPlugin);
+
+        // Add character replication plugin (spawn, input→controller, state sync)
+        app.add_plugins(NetworkCharacterPlugin);
 
         let _server = app.world_mut().spawn(self.0.clone()).id();
         app.add_systems(Startup, start);

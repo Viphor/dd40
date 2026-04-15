@@ -9,9 +9,12 @@ pub mod block_placement;
 pub mod chunk_provider;
 pub mod spawn;
 
+pub use spawn::SpawnChunkTimeout;
+
 use crate::{
+    character::NetworkCharacterPlugin,
     client::spawn::{
-        RequestSpawnEvent, SpawnChunkTimeout, on_ready_to_request_spawn, receive_spawn_location,
+        RequestSpawnEvent, on_ready_to_request_spawn, receive_spawn_location,
         timeout_initial_chunks, track_initial_chunks,
     },
     connection::{
@@ -57,6 +60,9 @@ impl Plugin for ClientNetworkPlugin {
 
         // Add protocol plugin (registers messages, components, inputs)
         app.add_plugins(ProtocolPlugin);
+
+        // Add character replication plugin (prediction, input buffering, position sync)
+        app.add_plugins(NetworkCharacterPlugin);
 
         let _client = app
             .world_mut()

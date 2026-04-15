@@ -72,6 +72,7 @@
 
 #[cfg(feature = "client")]
 pub mod client;
+pub mod character;
 pub mod connection;
 pub mod constants;
 pub mod protocol;
@@ -80,9 +81,10 @@ pub mod server;
 
 // Re-export commonly used types
 pub use protocol::{
-    PlaceBlockRequest, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage, PlayerPosition,
-    PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
+    NetworkCharacter, PlaceBlockRequest, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage,
+    PlayerPosition, PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
 };
+pub use character::NetworkCharacterPlugin;
 
 #[cfg(feature = "client")]
 pub use client::ClientNetworkPlugin;
