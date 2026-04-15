@@ -1,11 +1,11 @@
 //! Character controller — the bridge between input systems and the physics pipeline.
 //!
 //! Any system (player input, AI, network replication) that wants to move a
-//! character writes its intent into the [`CharacterController`] component.  A
-//! single physics-side system ([`apply_character_controller`]) then translates
-//! that intent into [`Impulse`] changes before [`PhysicsSet::Integrate`] runs,
-//! so gravity, block collision, and character-vs-character collision all act on
-//! the resulting velocity as normal.
+//! character writes its intent into [`CharacterInput`].  A single physics-side
+//! system ([`apply_character_controller`]) then translates that intent into
+//! [`Impulse`] changes before [`PhysicsSet::Integrate`] runs, so gravity,
+//! block collision, and character-vs-character collision all act on the
+//! resulting velocity as normal.
 //!
 //! # Movement model
 //!
@@ -18,34 +18,32 @@
 //! ```
 //!
 //! When grounded, the full correction is applied so movement feels snappy and
-//! responsive.  High ground friction then quickly zeroes residual velocity when
-//! the player releases a key.  In the air, only a fraction (`air_control`) of
-//! the correction is applied per tick, so direction changes are gradual and the
-//! player carries their existing momentum — consistent with typical platformer
-//! feel.
+//! responsive.  In the air, only a fraction (`air_control`) of the correction
+//! is applied per tick, so direction changes are gradual and the player carries
+//! existing momentum — consistent with typical platformer feel.
 //!
 //! # Jumping
 //!
 //! Jumping is **opt-in**: the entity must also have a [`JumpImpulse`] component.
-//! Without it, `controller.jump = true` is silently ignored.  This prevents
+//! Without it, [`CharacterInput::jump`] is silently ignored.  This prevents
 //! non-player physics bodies from gaining jump capability.
 //!
 //! # Usage
 //!
 //! 1. Insert [`CharacterController`] and [`JumpImpulse`] alongside [`PhysicsBody`]
-//!    when spawning a jumpable character.
-//! 2. Each frame, write desired movement and jump intent into [`CharacterController`]
-//!    from whichever input system owns the character.
+//!    when spawning a jumpable character.  [`CharacterInput`] is auto-inserted.
+//! 2. Each frame, write desired movement into [`CharacterInput`] from whichever
+//!    input system owns the character.
 //! 3. Do **not** mutate [`Velocity`] or [`Impulse`] directly for locomotion.
 //!
 //! ```
-//! use dd40_core::character::controller::CharacterController;
+//! use dd40_core::character::controller::CharacterInput;
 //! use bevy::math::Vec3;
 //!
-//! fn move_character(mut query: bevy::prelude::Query<&mut CharacterController>) {
-//!     for mut ctrl in &mut query {
-//!         ctrl.movement = Vec3::new(1.0, 0.0, 0.0); // move right
-//!         ctrl.jump = true;
+//! fn move_character(mut query: bevy::prelude::Query<&mut CharacterInput>) {
+//!     for mut input in &mut query {
+//!         input.movement = Vec3::new(1.0, 0.0, 0.0); // move right
+//!         input.jump = true;
 //!     }
 //! }
 //! ```
@@ -59,45 +57,105 @@ use bevy::prelude::*;
 use super::{JumpImpulse, MovementSpeed, physics::{Grounded, Impulse, PhysicsBody, PhysicsSet, Velocity}};
 
 // ---------------------------------------------------------------------------
-// Component
+// CharacterInput
 // ---------------------------------------------------------------------------
 
-/// Per-frame movement intent for a character.
+/// Per-tick movement intent written by any input source (local player, AI,
+/// network replication) and consumed by [`apply_character_controller`] every
+/// [`FixedUpdate`] tick.
 ///
-/// Written to by input systems (player, AI, network) and consumed once per
-/// [`FixedUpdate`] tick by [`apply_character_controller`].
+/// This is the **canonical bridge** between input systems and the physics
+/// pipeline.  Every system that wants to move a character should write here,
+/// and nothing else.
 ///
-/// All fields are reset after being consumed each tick:
-/// - [`movement`] is applied every tick it is non-zero, then cleared.
-/// - [`jump`] is reset to `false` after being processed.
-/// - [`sprint_multiplier`] is reset to `1.0` each tick.
+/// ## Reset semantics
 ///
-/// [`movement`]: CharacterController::movement
-/// [`jump`]: CharacterController::jump
-/// [`sprint_multiplier`]: CharacterController::sprint_multiplier
-#[derive(Debug, Clone, Component, Reflect)]
+/// Only [`jump`] is a one-shot flag — it is reset to `false` after being
+/// processed regardless of whether the jump fired.  All other fields
+/// ([`movement`], [`sprint`], [`pitch`], [`yaw`]) persist between ticks and
+/// must be actively overwritten by the input source each frame.  This is
+/// intentional: held-key inputs are written once per render frame and must
+/// remain visible across multiple fixed-rate physics ticks that may run in the
+/// same frame.
+///
+/// ## Usage
+///
+/// ```
+/// use bevy::prelude::*;
+/// use dd40_core::character::controller::CharacterInput;
+///
+/// fn move_character(mut query: Query<&mut CharacterInput>) {
+///     for mut input in &mut query {
+///         input.movement = Vec3::new(1.0, 0.0, 0.0); // move right
+///         input.jump = true;
+///     }
+/// }
+/// ```
+///
+/// [`jump`]: CharacterInput::jump
+/// [`movement`]: CharacterInput::movement
+/// [`sprint`]: CharacterInput::sprint
+/// [`pitch`]: CharacterInput::pitch
+/// [`yaw`]: CharacterInput::yaw
+#[derive(Debug, Default, Clone, PartialEq, Component, Reflect)]
 #[reflect(Component)]
-pub struct CharacterController {
+pub struct CharacterInput {
     /// Desired movement direction in **world space**, projected onto the
-    /// horizontal (XZ) plane and normalised.
-    ///
-    /// The controller multiplies this by [`MovementSpeed`] and
-    /// [`sprint_multiplier`] to compute the target horizontal velocity, then
-    /// adds a correction impulse toward that target.
+    /// horizontal (XZ) plane and normalised.  `Vec3::ZERO` = no movement.
     pub movement: Vec3,
 
-    /// When `true`, the controller attempts to jump this tick.
+    /// One-shot jump request.  Set to `true` to attempt a jump this tick.
     ///
-    /// Requires a [`JumpImpulse`] component on the same entity — without it
-    /// the request is silently dropped.  Reset to `false` immediately after
-    /// being processed.
+    /// Requires a [`JumpImpulse`] component on the entity — silently ignored
+    /// without it.  Reset to `false` after being processed.
     ///
     /// [`JumpImpulse`]: crate::character::JumpImpulse
     pub jump: bool,
 
-    /// Scale factor applied to [`MovementSpeed`] this tick.
+    /// Whether the character is sprinting this tick.  The effective speed is
+    /// `MovementSpeed × CharacterController::sprint_multiplier` when `true`.
+    pub sprint: bool,
+
+    /// Camera pitch (vertical look angle in radians, clamped to ±π/2 by
+    /// convention).  Does not affect physics; carried for replication.
+    pub pitch: f32,
+
+    /// Camera yaw (horizontal look angle in radians).  Does not affect
+    /// physics; carried for replication and camera-relative movement.
+    pub yaw: f32,
+}
+
+// ---------------------------------------------------------------------------
+// CharacterController
+// ---------------------------------------------------------------------------
+
+/// Physics configuration for a character.
+///
+/// This component stores **per-character tuning parameters** — values that are
+/// set at spawn and rarely change.  Per-tick movement intent lives in the
+/// companion [`CharacterInput`] component, which is auto-inserted via
+/// [`#[require]`] when `CharacterController` is added.
+///
+/// [`apply_character_controller`] reads both this component and [`CharacterInput`]
+/// to drive the physics pipeline.
+///
+/// # Usage
+///
+/// 1. Insert [`CharacterController`] alongside [`PhysicsBody`] when spawning
+///    a character.  [`CharacterInput`] is inserted automatically.
+/// 2. Each frame, write desired movement into [`CharacterInput`] from whichever
+///    system owns the character (player input, AI, network replication).
+/// 3. Do **not** mutate [`Velocity`] or [`Impulse`] directly for locomotion.
+///
+/// [`Velocity`]: crate::character::physics::Velocity
+/// [`Impulse`]: crate::character::physics::Impulse
+#[derive(Debug, Clone, Component, Reflect)]
+#[reflect(Component)]
+#[require(CharacterInput)]
+pub struct CharacterController {
+    /// Speed multiplier applied when [`CharacterInput::sprint`] is `true`.
     ///
-    /// `1.0` = normal speed, `2.0` = sprinting.  Reset to `1.0` each tick.
+    /// A value of `2.0` means sprinting moves at twice [`MovementSpeed`].
     pub sprint_multiplier: f32,
 
     /// Fraction of the movement correction impulse applied when the entity is
@@ -111,9 +169,7 @@ pub struct CharacterController {
 impl Default for CharacterController {
     fn default() -> Self {
         Self {
-            movement: Vec3::ZERO,
-            jump: false,
-            sprint_multiplier: 1.0,
+            sprint_multiplier: 2.0,
             air_control: 0.3,
         }
     }
@@ -123,7 +179,7 @@ impl Default for CharacterController {
 // System
 // ---------------------------------------------------------------------------
 
-/// Translates [`CharacterController`] intent into [`Impulse`] changes.
+/// Translates [`CharacterInput`] intent into [`Impulse`] changes.
 ///
 /// Runs in [`FixedUpdate`] **before** [`PhysicsSet::Integrate`] so the impulse
 /// is flushed into [`Velocity`] during integration that same tick.
@@ -137,16 +193,24 @@ impl Default for CharacterController {
 /// ### Jump
 ///
 /// A jump impulse is added to `impulse.0.y` only when **all** of:
-/// - `controller.jump` is `true`
+/// - `input.jump` is `true`
 /// - the entity has a [`JumpImpulse`] component
 /// - the entity is [`Grounded`]
 ///
-/// The jump flag is always reset after processing regardless of whether the
-/// jump actually fired.
+/// The [`CharacterInput::jump`] flag is always reset to `false` after
+/// processing.  All other fields ([`movement`], [`sprint`], [`pitch`],
+/// [`yaw`]) are **not** reset — they persist until the owning input source
+/// overwrites them.
+///
+/// [`movement`]: CharacterInput::movement
+/// [`sprint`]: CharacterInput::sprint
+/// [`pitch`]: CharacterInput::pitch
+/// [`yaw`]: CharacterInput::yaw
 fn apply_character_controller(
     mut query: Query<
         (
-            &mut CharacterController,
+            &mut CharacterInput,
+            &CharacterController,
             &MovementSpeed,
             &Grounded,
             &Velocity,
@@ -156,12 +220,21 @@ fn apply_character_controller(
         With<PhysicsBody>,
     >,
 ) {
-    for (mut controller, speed, grounded, velocity, mut impulse, jump_impulse) in &mut query {
+    for (mut input, controller, speed, grounded, velocity, mut impulse, jump_impulse) in
+        &mut query
+    {
         // ── Horizontal movement ───────────────────────────────────────────
+        let effective_speed = speed.0
+            * if input.sprint {
+                controller.sprint_multiplier
+            } else {
+                1.0
+            };
+
         let target_h = Vec3::new(
-            controller.movement.x * speed.0 * controller.sprint_multiplier,
+            input.movement.x * effective_speed,
             0.0,
-            controller.movement.z * speed.0 * controller.sprint_multiplier,
+            input.movement.z * effective_speed,
         );
         let current_h = Vec3::new(velocity.0.x, 0.0, velocity.0.z);
         let correction = target_h - current_h;
@@ -176,19 +249,15 @@ fn apply_character_controller(
         impulse.0.z += correction.z * factor;
 
         // ── Jump ─────────────────────────────────────────────────────────
-        if controller.jump {
+        if input.jump {
             if grounded.is_grounded() {
                 if let Some(ji) = jump_impulse {
                     impulse.0.y += ji.0;
                 }
             }
-            // Always consume the flag so a held key doesn't re-fire next frame.
-            controller.jump = false;
+            // Always consume the flag — a held key must not re-fire next tick.
+            input.jump = false;
         }
-
-        // ── Reset per-frame intent ────────────────────────────────────────
-        controller.movement = Vec3::ZERO;
-        controller.sprint_multiplier = 1.0;
     }
 }
 
@@ -196,16 +265,18 @@ fn apply_character_controller(
 // Plugin
 // ---------------------------------------------------------------------------
 
-/// Registers the [`CharacterController`] type and wires
+/// Registers [`CharacterInput`] and [`CharacterController`] types and wires
 /// [`apply_character_controller`] into the schedule.
 pub struct CharacterControllerPlugin;
 
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<CharacterController>().add_systems(
-            FixedUpdate,
-            apply_character_controller.before(PhysicsSet::Integrate),
-        );
+        app.register_type::<CharacterInput>()
+            .register_type::<CharacterController>()
+            .add_systems(
+                FixedUpdate,
+                apply_character_controller.before(PhysicsSet::Integrate),
+            );
     }
 }
 
@@ -276,7 +347,7 @@ mod tests {
         {
             let mut entity_ref = app.world_mut().entity_mut(entity);
             entity_ref.get_mut::<Grounded>().unwrap().0 = true;
-            entity_ref.get_mut::<CharacterController>().unwrap().movement =
+            entity_ref.get_mut::<CharacterInput>().unwrap().movement =
                 Vec3::new(1.0, 0.0, 0.0);
         }
 
@@ -304,7 +375,7 @@ mod tests {
 
         app.world_mut()
             .entity_mut(entity)
-            .get_mut::<CharacterController>()
+            .get_mut::<CharacterInput>()
             .unwrap()
             .movement = Vec3::new(0.0, 0.0, 1.0);
 
@@ -328,7 +399,7 @@ mod tests {
         {
             let mut entity_ref = app.world_mut().entity_mut(entity);
             entity_ref.get_mut::<Grounded>().unwrap().0 = true;
-            entity_ref.get_mut::<CharacterController>().unwrap().jump = true;
+            entity_ref.get_mut::<CharacterInput>().unwrap().jump = true;
         }
 
         app.update(); // real FixedUpdate tick
@@ -351,7 +422,7 @@ mod tests {
         {
             let mut entity_ref = app.world_mut().entity_mut(entity);
             entity_ref.get_mut::<Grounded>().unwrap().0 = true;
-            entity_ref.get_mut::<CharacterController>().unwrap().jump = true;
+            entity_ref.get_mut::<CharacterInput>().unwrap().jump = true;
         }
 
         app.update(); // real FixedUpdate tick
@@ -373,7 +444,7 @@ mod tests {
 
         app.world_mut()
             .entity_mut(entity)
-            .get_mut::<CharacterController>()
+            .get_mut::<CharacterInput>()
             .unwrap()
             .jump = true;
 
@@ -397,12 +468,12 @@ mod tests {
         {
             let mut entity_ref = app.world_mut().entity_mut(entity);
             entity_ref.get_mut::<Grounded>().unwrap().0 = true;
-            entity_ref.get_mut::<CharacterController>().unwrap().jump = true;
+            entity_ref.get_mut::<CharacterInput>().unwrap().jump = true;
         }
 
         app.update(); // fires jump and resets the flag
 
-        let ctrl = app.world().get::<CharacterController>(entity).unwrap();
+        let ctrl = app.world().get::<CharacterInput>(entity).unwrap();
         assert!(!ctrl.jump, "jump flag should be reset after processing");
     }
 
@@ -417,12 +488,12 @@ mod tests {
         {
             let mut entity_ref = app.world_mut().entity_mut(grounded);
             entity_ref.get_mut::<Grounded>().unwrap().0 = true;
-            entity_ref.get_mut::<CharacterController>().unwrap().movement =
+            entity_ref.get_mut::<CharacterInput>().unwrap().movement =
                 Vec3::new(1.0, 0.0, 0.0);
         }
         {
             let mut entity_ref = app.world_mut().entity_mut(airborne);
-            entity_ref.get_mut::<CharacterController>().unwrap().movement =
+            entity_ref.get_mut::<CharacterInput>().unwrap().movement =
                 Vec3::new(1.0, 0.0, 0.0);
         }
 
@@ -450,16 +521,16 @@ mod tests {
         {
             let mut entity_ref = app.world_mut().entity_mut(normal);
             entity_ref.get_mut::<Grounded>().unwrap().0 = true;
-            let mut ctrl = entity_ref.get_mut::<CharacterController>().unwrap();
-            ctrl.movement = Vec3::new(1.0, 0.0, 0.0);
-            ctrl.sprint_multiplier = 1.0;
+            let mut ci = entity_ref.get_mut::<CharacterInput>().unwrap();
+            ci.movement = Vec3::new(1.0, 0.0, 0.0);
+            ci.sprint = false;
         }
         {
             let mut entity_ref = app.world_mut().entity_mut(sprinter);
             entity_ref.get_mut::<Grounded>().unwrap().0 = true;
-            let mut ctrl = entity_ref.get_mut::<CharacterController>().unwrap();
-            ctrl.movement = Vec3::new(1.0, 0.0, 0.0);
-            ctrl.sprint_multiplier = 2.0;
+            let mut ci = entity_ref.get_mut::<CharacterInput>().unwrap();
+            ci.movement = Vec3::new(1.0, 0.0, 0.0);
+            ci.sprint = true;
         }
 
         app.update(); // real FixedUpdate tick

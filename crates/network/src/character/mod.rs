@@ -32,13 +32,13 @@
 //!
 //! [`Connected`]: lightyear::prelude::server::Connected
 //! [`ActionState<PlayerInput>`]: lightyear::prelude::input::native::ActionState
-//! [`CharacterController`]: dd40_core::character::controller::CharacterController
-//! [`Predicted`]: lightyear::prelude::client::Predicted
-//! [`Interpolated`]: lightyear::prelude::client::Interpolated
+//! [`CharacterInput`]: dd40_core::character::controller::CharacterInput
+//! [`Predicted`]: lightyear::prelude::Predicted
+//! [`Interpolated`]: lightyear::prelude::Interpolated
 //! [`InputMarker<PlayerInput>`]: lightyear::prelude::input::native::InputMarker
 
 use bevy::prelude::*;
-use dd40_core::character::controller::CharacterController;
+use dd40_core::character::controller::CharacterInput;
 use lightyear::prelude::input::native::ActionState;
 
 use crate::protocol::PlayerInput;
@@ -53,8 +53,7 @@ pub mod client;
 // SHARED LOGIC
 // ============================================================================
 
-/// Translates one tick's worth of [`PlayerInput`] into [`CharacterController`]
-/// intent.
+/// Translates one tick's worth of [`PlayerInput`] into [`CharacterInput`] intent.
 ///
 /// This function **must be identical** on server and client.  Any divergence
 /// will cause constant rollback corrections on the controlling client.
@@ -67,11 +66,13 @@ pub mod client;
 /// [`PlayerInput`]: crate::protocol::PlayerInput
 pub(crate) fn apply_input_to_controller(
     action: &ActionState<PlayerInput>,
-    controller: &mut CharacterController,
+    char_input: &mut CharacterInput,
 ) {
-    controller.movement = action.0.movement;
-    controller.jump = action.0.jump;
-    controller.sprint_multiplier = if action.0.sprint { 2.0 } else { 1.0 };
+    char_input.movement = action.0.movement;
+    char_input.jump = action.0.jump;
+    char_input.sprint = action.0.sprint;
+    char_input.pitch = action.0.pitch;
+    char_input.yaw = action.0.yaw;
 }
 
 // ============================================================================

@@ -5,7 +5,8 @@
 
 use bevy::prelude::*;
 use dd40_core::character::{
-    controller::CharacterController,
+    Player,
+    controller::CharacterInput,
     physics::PhysicsSet,
 };
 use lightyear::prelude::{
@@ -22,28 +23,32 @@ use super::apply_input_to_controller;
 // OBSERVERS
 // ============================================================================
 
-/// Attaches [`InputMarker<PlayerInput>`] to a newly-created [`Predicted`]
-/// entity that belongs to a network character.
+/// Attaches [`InputMarker<PlayerInput>`] and the [`Player`] marker to a
+/// newly-created [`Predicted`] entity that belongs to a network character.
 ///
 /// lightyear creates the `Predicted` entity and copies all registered
 /// components (including [`NetworkCharacter`]) onto it before adding the
 /// `Predicted` marker.  By the time this observer fires, the entity already
 /// has `NetworkCharacter`, so the query is safe.
 ///
-/// `InputMarker` tells lightyear's input pipeline that this entity is the one
-/// whose [`ActionState<PlayerInput>`] should be populated from the local
-/// player's buffered inputs.
+/// - [`InputMarker`] tells lightyear's input pipeline that this entity is the
+///   one whose [`ActionState<PlayerInput>`] should be populated from the local
+///   player's buffered inputs.
+/// - [`Player`] makes `dd40_player`'s input systems (e.g. `player_input`,
+///   `sync_camera_to_player`) work on the predicted entity without any
+///   modification to the player crate.
 fn on_predicted_character_added(
     trigger: On<Add, Predicted>,
     mut commands: Commands,
     query: Query<(), With<NetworkCharacter>>,
 ) {
     if query.get(trigger.entity).is_ok() {
-        commands
-            .entity(trigger.entity)
-            .insert(InputMarker::<PlayerInput>::default());
+        commands.entity(trigger.entity).insert((
+            InputMarker::<PlayerInput>::default(),
+            Player,
+        ));
         info!(
-            "Attached InputMarker<PlayerInput> to predicted character {:?}",
+            "Attached InputMarker + Player to predicted character {:?}",
             trigger.entity
         );
     }
@@ -53,52 +58,34 @@ fn on_predicted_character_added(
 // SYSTEMS
 // ============================================================================
 
-/// Reads keyboard state and writes it into the [`ActionState<PlayerInput>`]
-/// component on the locally-controlled entity.
+/// Reads [`CharacterInput`] (written by `dd40_player`'s input systems) and
+/// forwards it into [`ActionState<PlayerInput>`] so lightyear can send it to
+/// the server for the correct tick.
 ///
 /// Runs in [`FixedPreUpdate`] inside [`InputSystems::WriteClientInputs`] so
-/// lightyear picks the input up for the correct tick before sending it to the
-/// server.
+/// lightyear picks the input up before it advances the tick counter.
 ///
-/// Movement is expressed in **local camera space** (−Z = forward, +X = right).
-/// If your app needs world-space or camera-relative movement, add your own
-/// system in `FixedPreUpdate` at `InputSystems::WriteClientInputs` and remove
-/// this one from the app.  Pitch and yaw default to `0.0`; write them from a
-/// camera or look-input system if you need rotation replication.
-fn buffer_client_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut input_query: Query<&mut ActionState<PlayerInput>, With<InputMarker<PlayerInput>>>,
+/// This is a pure bridge — the network crate never reads the keyboard.
+/// Movement intent is always sourced from [`CharacterInput`], which is written
+/// by whatever input system owns the character (typically `dd40_player`'s
+/// `player_input` system, or an AI system).
+fn bridge_input_to_action_state(
+    mut query: Query<
+        (&CharacterInput, &mut ActionState<PlayerInput>),
+        (With<NetworkCharacter>, With<Predicted>),
+    >,
 ) {
-    let Ok(mut action) = input_query.single_mut() else {
-        return;
-    };
-
-    // Local-space directional movement: -Z forward, +X right.
-    let mut movement = Vec3::ZERO;
-    if keyboard.pressed(KeyCode::KeyW) {
-        movement.z -= 1.0;
+    for (char_input, mut action) in &mut query {
+        action.0 = PlayerInput {
+            movement: char_input.movement,
+            jump: char_input.jump,
+            sprint: char_input.sprint,
+            pitch: char_input.pitch,
+            yaw: char_input.yaw,
+            place_block: false,
+            remove_block: false,
+        };
     }
-    if keyboard.pressed(KeyCode::KeyS) {
-        movement.z += 1.0;
-    }
-    if keyboard.pressed(KeyCode::KeyD) {
-        movement.x += 1.0;
-    }
-    if keyboard.pressed(KeyCode::KeyA) {
-        movement.x -= 1.0;
-    }
-
-    action.0 = PlayerInput {
-        movement: movement.normalize_or_zero(),
-        // Pitch/yaw are preserved from the previous tick so an external system
-        // can write them independently without racing this system.
-        pitch: action.0.pitch,
-        yaw: action.0.yaw,
-        jump: keyboard.just_pressed(KeyCode::Space),
-        sprint: keyboard.pressed(KeyCode::ControlLeft),
-        place_block: false,
-        remove_block: false,
-    };
 }
 
 /// Syncs the replicated [`PlayerPosition`] into [`Transform::translation`]
@@ -136,18 +123,18 @@ fn sync_transform_to_position(
 }
 
 /// Applies the locally-controlled player's buffered [`PlayerInput`] to the
-/// [`Predicted`] entity's [`CharacterController`].
+/// [`Predicted`] entity's [`CharacterInput`].
 ///
 /// Uses the same [`apply_input_to_controller`] function as the server so
 /// rollback prediction is deterministic.
 fn client_apply_inputs(
     mut query: Query<
-        (&ActionState<PlayerInput>, &mut CharacterController),
+        (&ActionState<PlayerInput>, &mut CharacterInput),
         (With<NetworkCharacter>, With<Predicted>),
     >,
 ) {
-    for (action, mut controller) in &mut query {
-        apply_input_to_controller(action, &mut controller);
+    for (action, mut char_input) in &mut query {
+        apply_input_to_controller(action, &mut char_input);
     }
 }
 
@@ -183,7 +170,7 @@ impl Plugin for ClientCharacterPlugin {
 
         app.add_systems(
             FixedPreUpdate,
-            buffer_client_input.in_set(InputSystems::WriteClientInputs),
+            bridge_input_to_action_state.in_set(InputSystems::WriteClientInputs),
         );
 
         app.add_systems(

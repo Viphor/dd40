@@ -2,7 +2,10 @@ use bevy::color::palettes::basic::YELLOW;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
-use dd40_core::character::{CharacterBuilder, JumpImpulse, MovementSpeed, Player, SpawnPosition};
+use dd40_core::character::{
+    CharacterBuilder, JumpImpulse, MovementSpeed, Player, SpawnPosition,
+    controller::CharacterInput,
+};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
@@ -166,20 +169,24 @@ fn toggle_player_mode(
 // Controller mode — input → CharacterController
 // ---------------------------------------------------------------------------
 
-/// Reads keyboard input and writes movement intent into the player entity's
-/// [`CharacterController`].
+/// Reads keyboard and camera state and writes movement intent into the
+/// player entity's [`CharacterInput`].
 ///
 /// Runs only in [`PlayerMode::Controller`].  The physics pipeline picks up the
 /// intent each `FixedUpdate` tick via `apply_character_controller`.
+///
+/// Pitch and yaw from [`CameraRotation`] are forwarded into [`CharacterInput`]
+/// so the network crate can replicate head orientation without knowing about
+/// the camera.
 fn player_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut player_query: Query<&mut CharacterController, With<Player>>,
-    camera_query: Query<&Transform, (With<Camera3d>, Without<Player>)>,
+    camera_query: Query<(&Transform, &CameraRotation), With<Camera3d>>,
+    mut player_query: Query<&mut CharacterInput, With<Player>>,
 ) {
-    let Ok(mut controller) = player_query.single_mut() else {
+    let Ok(mut char_input) = player_query.single_mut() else {
         return;
     };
-    let Ok(camera_transform) = camera_query.single() else {
+    let Ok((camera_transform, camera_rotation)) = camera_query.single() else {
         return;
     };
 
@@ -203,17 +210,17 @@ fn player_input(
         direction += right_h;
     }
 
-    controller.movement = direction.normalize_or_zero();
+    char_input.movement = direction.normalize_or_zero();
 
-    if keyboard.just_pressed(KeyCode::Space) {
-        controller.jump = true;
-    }
+    // OR-assign so a pending jump set earlier this frame is not overwritten.
+    char_input.jump |= keyboard.just_pressed(KeyCode::Space);
 
-    controller.sprint_multiplier = if keyboard.pressed(KeyCode::ControlLeft) {
-        2.0
-    } else {
-        1.0
-    };
+    char_input.sprint = keyboard.pressed(KeyCode::ControlLeft);
+
+    // Forward orientation so the network crate can replicate it without a
+    // camera dependency.
+    char_input.pitch = camera_rotation.pitch;
+    char_input.yaw = camera_rotation.yaw;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,11 +389,18 @@ fn load_nearby_chunks(
 // Plugin
 // ---------------------------------------------------------------------------
 
-/// Bevy plugin that registers player types, spawns the player on startup, and
-/// handles input in both [`PlayerMode::Controller`] and [`PlayerMode::FreeCam`].
-pub struct PlayerPlugin;
+/// Bevy plugin that **only handles input and camera** — it does not spawn a
+/// player entity.
+///
+/// Use this in networked mode where the network crate spawns the character and
+/// adds the [`Player`] marker.  All input systems query [`With<Player>`] and
+/// will automatically pick up the network-spawned entity.
+///
+/// For single-player mode, prefer [`PlayerPlugin`] which bundles this with
+/// [`PlayerSpawnPlugin`].
+pub struct PlayerInputPlugin;
 
-impl Plugin for PlayerPlugin {
+impl Plugin for PlayerInputPlugin {
     fn build(&self, app: &mut App) {
         let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
 
@@ -397,7 +411,7 @@ impl Plugin for PlayerPlugin {
             .register_type::<MouseSensitivity>()
             .register_type::<CameraRotation>()
             // ── Startup ───────────────────────────────────────────────────
-            .add_systems(OnEnter(AppState::Playing), (spawn_player, setup_camera))
+            .add_systems(OnEnter(AppState::Playing), setup_camera)
             // ── Pause / resume cursor management ──────────────────────────
             .add_systems(OnEnter(GameState::Paused), on_pause)
             .add_systems(OnEnter(GameState::Running), on_resume)
@@ -427,5 +441,36 @@ impl Plugin for PlayerPlugin {
                 Update,
                 free_cam_movement.run_if(playing_and_running.and(in_state(PlayerMode::FreeCam))),
             );
+    }
+}
+
+/// Bevy plugin that **only spawns the player entity** when entering
+/// [`AppState::Playing`].
+///
+/// In networked mode the character is spawned by the network crate, so this
+/// plugin should be omitted.  Use [`PlayerInputPlugin`] for input handling
+/// in that case.
+pub struct PlayerSpawnPlugin;
+
+impl Plugin for PlayerSpawnPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(OnEnter(AppState::Playing), spawn_player);
+    }
+}
+
+/// Bevy plugin that registers player types, spawns the player on startup, and
+/// handles input in both [`PlayerMode::Controller`] and [`PlayerMode::FreeCam`].
+///
+/// This is the convenience plugin for **single-player** mode.  It combines
+/// [`PlayerSpawnPlugin`] and [`PlayerInputPlugin`].
+///
+/// In **networked** mode, use [`PlayerInputPlugin`] only — the network crate
+/// spawns the character and adds the [`Player`] marker, so [`PlayerSpawnPlugin`]
+/// is not needed and would create a duplicate entity.
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins((PlayerSpawnPlugin, PlayerInputPlugin));
     }
 }

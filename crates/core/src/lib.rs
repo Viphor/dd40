@@ -17,7 +17,7 @@ pub mod prelude {
         },
         character::{
             JumpImpulse,
-            controller::CharacterController,
+            controller::{CharacterController, CharacterInput},
             physics::{
                 Aabb, CharacterCollider, CharacterSpatialCache, CollisionShape, GravityScale,
                 Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsPlugin, PhysicsSet, Velocity,
