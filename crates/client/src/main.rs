@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
-use dd40_network::ClientNetworkPlugin;
-use dd40_player::PlayerPlugin;
 use dd40_gui::plugin::GuiPlugin;
+use dd40_network::ClientNetworkPlugin;
+use dd40_player::PlayerInputPlugin;
 use dd40_renderer::RendererPlugin;
 
 fn main() {
@@ -22,7 +22,7 @@ fn main() {
         )
         .add_plugins((
             CorePlugin,
-            PlayerPlugin,
+            PlayerInputPlugin,
             DebugUiPlugin,
             ClientNetworkPlugin,
             RendererPlugin,

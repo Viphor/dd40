@@ -3,8 +3,7 @@ use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use dd40_core::character::{
-    CharacterBuilder, JumpImpulse, MovementSpeed, Player, SpawnPosition,
-    controller::CharacterInput,
+    CharacterBuilder, JumpImpulse, MovementSpeed, Player, SpawnPosition, controller::CharacterInput,
 };
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;

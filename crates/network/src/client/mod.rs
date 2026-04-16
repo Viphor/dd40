@@ -12,7 +12,7 @@ pub mod spawn;
 pub use spawn::SpawnChunkTimeout;
 
 use crate::{
-    character::NetworkCharacterPlugin,
+    character::client::ClientCharacterPlugin,
     client::spawn::{
         RequestSpawnEvent, on_ready_to_request_spawn, receive_spawn_location,
         timeout_initial_chunks, track_initial_chunks,
@@ -62,7 +62,7 @@ impl Plugin for ClientNetworkPlugin {
         app.add_plugins(ProtocolPlugin);
 
         // Add character replication plugin (prediction, input buffering, position sync)
-        app.add_plugins(NetworkCharacterPlugin);
+        app.add_plugins(ClientCharacterPlugin);
 
         let _client = app
             .world_mut()
