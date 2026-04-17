@@ -3,21 +3,23 @@ use dd40_core::plugin::CorePlugin;
 use lightyear::prelude::server::ServerPlugins;
 
 use crate::{
-    character::server::ServerCharacterPlugin,
-    connection::server::{DDServer, start},
-    constants::tick_duration,
     protocol::*,
     server::{
         block_placement::receive_place_requests,
+        character::ServerCharacterPlugin,
         chunk_provider::{receive_chunk_requests, send_chunk_data},
         chunk_requests::{ChunkRequests, add_message_handlers},
+        connection::{DDServer, start},
         spawn::{PlayerLocations, WorldSpawnConfig, send_spawn_location},
     },
+    shared::constants::tick_duration,
 };
 
 pub mod block_placement;
+pub mod character;
 pub mod chunk_provider;
 pub mod chunk_requests;
+pub mod connection;
 pub mod spawn;
 
 /// Plugin that sets up server-side networking.

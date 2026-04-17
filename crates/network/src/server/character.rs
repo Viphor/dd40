@@ -17,7 +17,7 @@ use lightyear::prelude::{
 use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
 use crate::server::spawn::{PlayerLocations, WorldSpawnConfig};
 
-use super::apply_input_to_controller;
+use crate::shared::character::apply_input_to_controller;
 
 // ============================================================================
 // OBSERVERS

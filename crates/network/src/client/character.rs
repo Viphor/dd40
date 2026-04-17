@@ -4,20 +4,17 @@
 //! when the `client` feature is active.
 
 use bevy::prelude::*;
-use dd40_core::character::{
-    Player,
-    controller::CharacterInput,
-    physics::PhysicsSet,
-};
+use dd40_core::character::{Player, controller::CharacterInput, physics::PhysicsSet};
 use lightyear::prelude::{
     Interpolated, Predicted,
     client::input::InputSystems,
     input::native::{ActionState, InputMarker},
 };
 
-use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition};
-
-use super::apply_input_to_controller;
+use crate::{
+    protocol::{NetworkCharacter, PlayerInput, PlayerPosition},
+    shared::character::apply_input_to_controller,
+};
 
 // ============================================================================
 // OBSERVERS
@@ -43,10 +40,9 @@ fn on_predicted_character_added(
     query: Query<(), With<NetworkCharacter>>,
 ) {
     if query.get(trigger.entity).is_ok() {
-        commands.entity(trigger.entity).insert((
-            InputMarker::<PlayerInput>::default(),
-            Player,
-        ));
+        commands
+            .entity(trigger.entity)
+            .insert((InputMarker::<PlayerInput>::default(), Player));
         info!(
             "Attached InputMarker + Player to predicted character {:?}",
             trigger.entity
@@ -72,7 +68,11 @@ fn on_predicted_character_added(
 fn bridge_input_to_action_state(
     mut query: Query<
         (&CharacterInput, &mut ActionState<PlayerInput>),
-        (With<NetworkCharacter>, With<Predicted>),
+        (
+            With<NetworkCharacter>,
+            With<Predicted>,
+            With<InputMarker<PlayerInput>>,
+        ),
     >,
 ) {
     for (char_input, mut action) in &mut query {
@@ -96,10 +96,7 @@ fn bridge_input_to_action_state(
 /// would re-simulate from the stale `Transform` instead of the rolled-back
 /// position, causing divergence.
 fn sync_position_to_transform(
-    mut query: Query<
-        (&PlayerPosition, &mut Transform),
-        (With<NetworkCharacter>, With<Predicted>),
-    >,
+    mut query: Query<(&PlayerPosition, &mut Transform), (With<NetworkCharacter>, With<Predicted>)>,
 ) {
     for (pos, mut transform) in &mut query {
         transform.translation = pos.to_vec3();
@@ -112,10 +109,7 @@ fn sync_position_to_transform(
 /// This keeps the prediction checkpoint (stored by lightyear in
 /// `PlayerPosition`) up to date so rollbacks start from the correct position.
 fn sync_transform_to_position(
-    mut query: Query<
-        (&Transform, &mut PlayerPosition),
-        (With<NetworkCharacter>, With<Predicted>),
-    >,
+    mut query: Query<(&Transform, &mut PlayerPosition), (With<NetworkCharacter>, With<Predicted>)>,
 ) {
     for (transform, mut pos) in &mut query {
         *pos = PlayerPosition::from_vec3(transform.translation);

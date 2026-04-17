@@ -4,17 +4,22 @@ use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
+use dd40_core::prelude::{BlockPlaced, ChunkReady, LoadingTracker, RequestChunk};
 use lightyear::{
     link::Link,
     netcode::NetcodeClient,
     prelude::{
-        Authentication, Client, Connect, LocalAddr, PeerAddr, PredictionManager,
-        ReplicationReceiver, UdpIo, client::NetcodeConfig,
+        Authentication, Client, Connect, Connected, LocalAddr, MessageReceiver, MessageSender,
+        PeerAddr, PredictionManager, ReplicationReceiver, UdpIo, client::NetcodeConfig,
     },
 };
 pub use lightyear::{link::RecvLinkConditioner, prelude::LinkConditionerConfig};
 
-use crate::connection::shared::{SHARED_SETTINGS, SharedSettings};
+use crate::shared::connection::{SHARED_SETTINGS, SharedSettings};
+use crate::{
+    client::{loading::remove_connection_loading_item, spawn::RequestSpawnEvent},
+    protocol::*,
+};
 
 #[derive(Component, Debug, Clone)]
 #[component(on_add = DDClient::on_add)]
@@ -77,4 +82,34 @@ pub(crate) fn connect(mut commands: Commands, client: Single<Entity, With<Client
     commands.trigger(Connect {
         entity: client.into_inner(),
     });
+}
+
+/// Observer that fires when lightyear adds the [`Connected`] component to the
+/// client entity, i.e. when the server handshake completes.
+///
+/// Attaches all required [`MessageSender`] and [`MessageReceiver`] components
+/// to the connection entity and clears the `"network:server_connection"` gate.
+///
+/// The `"network:initial_chunks"` gate is registered later, when the server
+/// sends [`PlayerSpawnLocation`], so that the timeout only starts counting
+/// once we actually have something to wait for.
+pub fn on_server_connected(
+    trigger: On<Add, Connected>,
+    mut commands: Commands,
+    tracker: ResMut<LoadingTracker>,
+) {
+    let entity = trigger.entity;
+
+    commands.entity(entity).insert((
+        MessageSender::<RequestSpawn>::default(),
+        MessageSender::<RequestChunk>::default(),
+        MessageSender::<PlaceBlockRequest>::default(),
+        MessageReceiver::<ChunkReady>::default(),
+        MessageReceiver::<BlockPlaced>::default(),
+        MessageReceiver::<PlayerSpawnLocation>::default(),
+        Name::new("ServerConnection"),
+    ));
+
+    remove_connection_loading_item(tracker);
+    commands.trigger(RequestSpawnEvent);
 }

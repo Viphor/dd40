@@ -72,34 +72,27 @@
 
 #[cfg(feature = "client")]
 pub mod client;
-pub mod character;
-pub mod connection;
-pub mod constants;
 pub mod protocol;
 #[cfg(feature = "server")]
 pub mod server;
+pub mod shared;
 
 // Re-export commonly used types
 pub use protocol::{
     NetworkCharacter, PlaceBlockRequest, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage,
     PlayerPosition, PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
 };
-pub use character::NetworkCharacterPlugin;
+pub use shared::connection::{CLIENT_PORT, SERVER_ADDR, SERVER_PORT};
 
 #[cfg(feature = "client")]
-pub use client::ClientNetworkPlugin;
-#[cfg(feature = "client")]
-pub use connection::{client::DDClient, shared::CLIENT_PORT};
+pub use client::{connection::DDClient, plugin::ClientNetworkPlugin};
 
 #[cfg(feature = "server")]
-pub use connection::{
-    server::DDServer,
-    shared::{SERVER_ADDR, SERVER_PORT},
+pub use server::{
+    ServerNetworkPlugin,
+    connection::DDServer,
+    spawn::{PlayerLocations, WorldSpawnConfig},
 };
-#[cfg(feature = "server")]
-pub use server::ServerNetworkPlugin;
-#[cfg(feature = "server")]
-pub use server::spawn::{PlayerLocations, WorldSpawnConfig};
 
 /// Helper functions for coordinate conversions
 pub use protocol::{chunk_local_to_global, global_to_chunk_local};

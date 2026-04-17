@@ -3,10 +3,8 @@ use dd40_chunk_storage::plugin::DiskStoragePlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_network::{
     ServerNetworkPlugin,
-    connection::{
-        server::{DDServer, LinkConditionerConfig, RecvLinkConditioner},
-        shared::SHARED_SETTINGS,
-    },
+    server::connection::{DDServer, LinkConditionerConfig, RecvLinkConditioner},
+    shared::connection::SHARED_SETTINGS,
 };
 use dd40_world::{WorldPlugin, generators::flat::FlatWorldGenerator};
 

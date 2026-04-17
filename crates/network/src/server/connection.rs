@@ -13,7 +13,7 @@ use lightyear::{
     },
 };
 
-use crate::connection::shared::{SHARED_SETTINGS, SharedSettings, parse_private_key_from_env};
+use crate::shared::connection::{SHARED_SETTINGS, SharedSettings, parse_private_key_from_env};
 
 #[derive(Component, Debug, Clone)]
 #[component(on_add = DDServer::on_add)]
