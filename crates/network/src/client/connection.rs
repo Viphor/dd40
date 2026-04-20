@@ -15,11 +15,11 @@ use lightyear::{
 };
 pub use lightyear::{link::RecvLinkConditioner, prelude::LinkConditionerConfig};
 
-use crate::shared::connection::{SHARED_SETTINGS, SharedSettings};
 use crate::{
-    client::{loading::remove_connection_loading_item, spawn::RequestSpawnEvent},
-    protocol::*,
+    client::loading::register_spawn_location_loading_item,
+    shared::connection::{SHARED_SETTINGS, SharedSettings},
 };
+use crate::{client::loading::remove_connection_loading_item, protocol::*};
 
 #[derive(Component, Debug, Clone)]
 #[component(on_add = DDClient::on_add)]
@@ -96,7 +96,7 @@ pub(crate) fn connect(mut commands: Commands, client: Single<Entity, With<Client
 pub fn on_server_connected(
     trigger: On<Add, Connected>,
     mut commands: Commands,
-    tracker: ResMut<LoadingTracker>,
+    mut tracker: ResMut<LoadingTracker>,
 ) {
     let entity = trigger.entity;
 
@@ -110,6 +110,6 @@ pub fn on_server_connected(
         Name::new("ServerConnection"),
     ));
 
-    remove_connection_loading_item(tracker);
-    commands.trigger(RequestSpawnEvent);
+    remove_connection_loading_item(&mut tracker);
+    register_spawn_location_loading_item(&mut tracker);
 }

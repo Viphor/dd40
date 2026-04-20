@@ -85,7 +85,7 @@ pub mod render_state;
 pub mod systems;
 
 use bevy::prelude::*;
-use dd40_core::prelude::{AppState, GameState};
+use dd40_core::prelude::AppState;
 
 use lod::LodConfig;
 use mesh_task::PendingMeshTasks;
@@ -156,7 +156,7 @@ impl Plugin for RendererPlugin {
         app.configure_sets(
             Update,
             (UpdateLodSet, RebuildChunksSet.after(UpdateLodSet))
-                .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
+                .run_if(in_state(AppState::Playing)),
         );
 
         // PreUpdate: react to new chunk data as early as possible.
@@ -170,14 +170,14 @@ impl Plugin for RendererPlugin {
             Update,
             update_lod_levels
                 .in_set(UpdateLodSet)
-                .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
+                .run_if(in_state(AppState::Playing)),
         );
         app.add_systems(
             Update,
             (spawn_mesh_tasks, apply_mesh_tasks)
                 .chain()
                 .in_set(RebuildChunksSet)
-                .run_if(in_state(AppState::Playing).and(in_state(GameState::Running))),
+                .run_if(in_state(AppState::Playing)),
         );
     }
 }

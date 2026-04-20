@@ -23,7 +23,10 @@ pub mod prelude {
                 Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsPlugin, PhysicsSet, Velocity,
             },
         },
-        chunk::{CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos, events::*},
+        chunk::{
+            CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos,
+            cache::ChunkCache, events::*,
+        },
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
         world::WorldGenerationSet,

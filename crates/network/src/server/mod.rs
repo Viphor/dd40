@@ -10,7 +10,7 @@ use crate::{
         chunk_provider::{receive_chunk_requests, send_chunk_data},
         chunk_requests::{ChunkRequests, add_message_handlers},
         connection::{DDServer, start},
-        spawn::{PlayerLocations, WorldSpawnConfig, send_spawn_location},
+        spawn::{PlayerLocations, WorldSpawnConfig},
     },
     shared::constants::tick_duration,
 };
@@ -59,7 +59,6 @@ impl Plugin for ServerNetworkPlugin {
         app.register_type::<ChunkRequests>()
             .add_observer(add_message_handlers)
             .add_systems(Update, receive_chunk_requests)
-            .add_systems(Update, send_spawn_location)
             .add_systems(Update, send_chunk_data);
 
         // Process incoming place-block requests from clients and broadcast results.

@@ -10,8 +10,7 @@ use crate::{
         connection::{DDClient, connect, on_server_connected},
         loading::register_connection_loading_item,
         spawn::{
-            SpawnChunkTimeout, on_ready_to_request_spawn, receive_spawn_location,
-            timeout_initial_chunks, track_initial_chunks,
+            SpawnChunkTimeout, receive_spawn_location, timeout_initial_chunks, track_initial_chunks,
         },
     },
     protocol::*,
@@ -74,7 +73,6 @@ impl Plugin for ClientNetworkPlugin {
         app.add_systems(PostUpdate, receive_chunk_data);
         app.add_systems(PostUpdate, receive_placed_blocks);
         app.add_systems(PostUpdate, send_place_requests);
-        app.add_observer(on_ready_to_request_spawn);
 
         // Spawn-location and chunk-tracking systems run after chunk data has
         // been forwarded so notifications are written before we drain them.

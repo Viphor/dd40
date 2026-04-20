@@ -1,27 +1,12 @@
 use std::time::Duration;
 
 use bevy::{platform::collections::HashSet, prelude::*};
-use dd40_core::{character::SpawnPosition, prelude::*};
-use lightyear::prelude::{MessageReceiver, MessageSender};
+use dd40_core::{character::Player, prelude::*};
 
-use crate::protocol::{EventChannel, PlayerSpawnLocation, RequestSpawn};
-
-/// The loading tracker key held while the client is waiting for the initial
-/// 3×3 spawn chunks to arrive from the server.
-///
-/// Registered in [`LoadingTracker`] when a [`PlayerSpawnLocation`] message is
-/// received and cleared once every chunk in the 3×3 grid has arrived — or
-/// when [`SpawnChunkTimeout`] fires, whichever comes first.
-pub const LOADING_KEY_INITIAL_CHUNKS: &str = "network:initial_chunks";
-
-/// The loading tracker key used by the network client while waiting for the
-/// server to send the player's spawn location.
-///
-/// Registered in [`LoadingTracker`] when the server connection is established and
-/// cleared once a [`PlayerSpawnLocation`] message is received. This is separate
-/// from [`LOADING_KEY_INITIAL_CHUNKS`] so that the client can show a different
-/// loading message while waiting for the spawn location vs. waiting for the spawn chunks.
-pub const LOADING_KEY_SPAWN_LOCATION: &str = "network:spawn_location";
+use crate::client::loading::{
+    LOADING_KEY_INITIAL_CHUNKS, register_initial_chunks_loading_item,
+    remove_initial_chunks_loading_item, remove_spawn_location_loading_item,
+};
 
 /// How long the client will wait for the initial spawn chunks before giving up
 /// and transitioning to [`AppState::Playing`] anyway.
@@ -29,13 +14,6 @@ pub const LOADING_KEY_SPAWN_LOCATION: &str = "network:spawn_location";
 /// Override [`SpawnChunkTimeout`] after adding [`ClientNetworkPlugin`] to use
 /// a different value.
 pub const DEFAULT_SPAWN_CHUNK_TIMEOUT_SECS: f32 = 15.0;
-
-// ============================================================================
-// EVENTS
-// ============================================================================
-
-#[derive(Event, Debug, Clone)]
-pub(crate) struct RequestSpawnEvent;
 
 // ============================================================================
 // RESOURCES
@@ -115,21 +93,6 @@ impl Default for SpawnChunkTimeout {
 // SYSTEMS
 // ============================================================================
 
-pub(crate) fn on_ready_to_request_spawn(
-    _event: On<RequestSpawnEvent>,
-    client_id: Option<Res<ClientId>>,
-    mut tracker: ResMut<LoadingTracker>,
-    mut sender: Single<&mut MessageSender<RequestSpawn>>,
-) {
-    let id = client_id.as_ref().map(|id| id.0).unwrap_or(0);
-    trace!("Sending RequestSpawn for client id {}", id);
-    sender.send::<EventChannel>(RequestSpawn(id));
-    tracker.add(
-        LOADING_KEY_SPAWN_LOCATION,
-        "Waiting for spawn location from server…",
-    );
-}
-
 /// Reads incoming [`PlayerSpawnLocation`] messages and sets up the initial
 /// chunk gate and spawn position.
 ///
@@ -143,48 +106,41 @@ pub(crate) fn on_ready_to_request_spawn(
 ///    starts the [`SpawnChunkTimeout`] countdown.
 pub(crate) fn receive_spawn_location(
     mut commands: Commands,
-    mut receiver: Single<&mut MessageReceiver<PlayerSpawnLocation>>,
+    player: Single<&Transform, Added<Player>>,
+    mut requester: MessageWriter<RequestChunk>,
     mut tracker: ResMut<LoadingTracker>,
     mut timeout: ResMut<SpawnChunkTimeout>,
     time: Res<Time>,
 ) {
-    for msg in receiver.receive() {
-        let pos = msg.position;
-        info!("Received PlayerSpawnLocation: {:?}", pos);
-        if tracker.remove(LOADING_KEY_SPAWN_LOCATION) {
-            info!(
-                "ClientNetworkPlugin: received spawn location — cleared \"{}\"",
-                LOADING_KEY_SPAWN_LOCATION,
-            );
-        }
+    let pos = player.translation;
+    info!("Received PlayerSpawnLocation: {:?}", pos);
+    remove_spawn_location_loading_item(&mut tracker);
 
-        // Derive the centre chunk from the spawn position.
-        let centre = ChunkPos::from(&pos);
+    // Derive the centre chunk from the spawn position.
+    let centre = ChunkPos::from(&pos);
 
-        // Build the 3×3 grid of expected chunk positions.
-        let pending: HashSet<ChunkPos> = (-1_i32..=1)
-            .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, centre.z + dz)))
-            .collect();
+    // Build the 3×3 grid of expected chunk positions.
+    let pending: HashSet<ChunkPos> = (-1_i32..=1)
+        .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, centre.z + dz)))
+        .collect();
 
-        debug!(
-            "InitialChunksGate: expecting {} chunks centred on {:?}",
-            pending.len(),
-            centre,
-        );
+    debug!(
+        "InitialChunksGate: expecting {} chunks centred on {:?}",
+        pending.len(),
+        centre,
+    );
 
-        commands.insert_resource(InitialChunksGate { pending });
-        commands.insert_resource(SpawnPosition(pos));
+    commands.insert_resource(InitialChunksGate {
+        pending: pending.clone(),
+    });
 
-        // Register the loading gate and start the timeout from now.
-        if !tracker.contains(LOADING_KEY_INITIAL_CHUNKS) {
-            tracker.add(LOADING_KEY_INITIAL_CHUNKS, "Loading spawn chunks…");
-            info!(
-                "ClientNetworkPlugin: waiting on \"{}\"",
-                LOADING_KEY_INITIAL_CHUNKS,
-            );
-        }
-        timeout.start(time.elapsed());
+    requester.write_batch(pending.iter().map(|pos| RequestChunk { pos: *pos }));
+
+    // Register the loading gate and start the timeout from now.
+    if !tracker.contains(LOADING_KEY_INITIAL_CHUNKS) {
+        register_initial_chunks_loading_item(&mut tracker);
     }
+    timeout.start(time.elapsed());
 }
 
 /// Drains [`InitialChunksGate::pending`] as chunks arrive and releases the
@@ -219,7 +175,7 @@ pub(crate) fn track_initial_chunks(
 
     if gate.pending.is_empty() {
         commands.remove_resource::<InitialChunksGate>();
-        release_initial_chunks_gate(&mut tracker);
+        remove_initial_chunks_loading_item(&mut tracker);
     }
 }
 
@@ -247,35 +203,13 @@ pub(crate) fn timeout_initial_chunks(
              Some terrain around the spawn point may not have arrived yet."
         );
         commands.remove_resource::<InitialChunksGate>();
-        release_initial_chunks_gate(&mut tracker);
-    }
-}
-
-/// Removes the `"network:initial_chunks"` key from [`LoadingTracker`] and logs
-/// the result. Extracted to avoid duplicating the info/warn logic.
-fn release_initial_chunks_gate(tracker: &mut LoadingTracker) {
-    if tracker.remove(LOADING_KEY_INITIAL_CHUNKS) {
-        info!(
-            "ClientNetworkPlugin: initial chunks ready — cleared \"{}\"",
-            LOADING_KEY_INITIAL_CHUNKS,
-        );
+        remove_initial_chunks_loading_item(&mut tracker);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn loading_key_initial_chunks_is_stable() {
-        assert_eq!(LOADING_KEY_INITIAL_CHUNKS, "network:initial_chunks");
-    }
-
-    #[test]
-    fn spawn_position_stores_vec3() {
-        let pos = SpawnPosition(Vec3::new(1.0, 74.0, 2.0));
-        assert_eq!(pos.0, Vec3::new(1.0, 74.0, 2.0));
-    }
 
     #[test]
     fn initial_chunks_gate_contains_nine_positions() {
@@ -285,20 +219,6 @@ mod tests {
             .collect();
         let gate = InitialChunksGate { pending };
         assert_eq!(gate.pending.len(), 9);
-    }
-
-    #[test]
-    fn initial_chunks_gate_empties_as_chunks_arrive() {
-        let centre = ChunkPos::new(0, 0);
-        let mut pending: HashSet<ChunkPos> = (-1_i32..=1)
-            .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, centre.z + dz)))
-            .collect();
-        for dx in -1_i32..=1 {
-            for dz in -1_i32..=1 {
-                pending.remove(&ChunkPos::new(dx, dz));
-            }
-        }
-        assert!(pending.is_empty());
     }
 
     #[test]
