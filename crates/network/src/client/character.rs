@@ -4,7 +4,9 @@
 //! when the `client` feature is active.
 
 use bevy::prelude::*;
-use dd40_core::character::{Player, controller::CharacterInput, physics::PhysicsSet};
+use dd40_core::character::{
+    Player, builder::CharacterBuilder, controller::CharacterInput, physics::PhysicsSet,
+};
 use lightyear::prelude::{
     Interpolated, Predicted,
     client::input::InputSystems,
@@ -13,7 +15,7 @@ use lightyear::prelude::{
 
 use crate::{
     protocol::{NetworkCharacter, PlayerInput, PlayerPosition},
-    shared::character::apply_input_to_controller,
+    shared::character::{apply_input_to_controller, character_bundle},
 };
 
 // ============================================================================
@@ -34,20 +36,17 @@ use crate::{
 /// - [`Player`] makes `dd40_player`'s input systems (e.g. `player_input`,
 ///   `sync_camera_to_player`) work on the predicted entity without any
 ///   modification to the player crate.
-fn on_predicted_character_added(
-    trigger: On<Add, Predicted>,
-    mut commands: Commands,
-    query: Query<(), With<NetworkCharacter>>,
-) {
-    if query.get(trigger.entity).is_ok() {
-        commands
-            .entity(trigger.entity)
-            .insert((InputMarker::<PlayerInput>::default(), Player));
-        info!(
-            "Attached InputMarker + Player to predicted character {:?}",
-            trigger.entity
-        );
-    }
+fn on_predicted_character_added(trigger: On<Add, Predicted>, mut commands: Commands) {
+    commands.entity(trigger.entity).insert((
+        InputMarker::<PlayerInput>::default(),
+        Player,
+        CharacterBuilder::new("ThePlayer").build(),
+        character_bundle(),
+    ));
+    info!(
+        "Attached InputMarker + Player to predicted character {:?}",
+        trigger.entity
+    );
 }
 
 // ============================================================================

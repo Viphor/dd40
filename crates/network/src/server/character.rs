@@ -5,17 +5,21 @@
 
 use bevy::prelude::*;
 use dd40_core::character::{
-    CharacterBundle, JumpImpulse, MovementSpeed,
-    controller::{CharacterController, CharacterInput},
-    physics::{Aabb, CharacterCollider, PhysicsBody, PhysicsSet},
+    builder::CharacterBuilder, controller::CharacterInput, physics::PhysicsSet,
 };
 use lightyear::prelude::{
     Connected, ControlledBy, InterpolationTarget, NetworkTarget, PredictionTarget, RemoteId,
     Replicate, input::native::ActionState, server::ClientOf,
 };
 
-use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
-use crate::server::spawn::{PlayerLocations, WorldSpawnConfig};
+use crate::{
+    protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation},
+    server::user::get_user,
+};
+use crate::{
+    server::spawn::{PlayerLocations, WorldSpawnConfig},
+    shared::character::character_bundle,
+};
 
 use crate::shared::character::apply_input_to_controller;
 
@@ -54,6 +58,14 @@ fn server_spawn_character(
     };
     let client_id = remote.0;
 
+    let Some(user) = get_user(client_id.to_bits()) else {
+        warn!(
+            "No user found for client {:?} — skipping character spawn",
+            client_id
+        );
+        return;
+    };
+
     let spawn_pos = player_locations
         .get(client_id)
         .unwrap_or(spawn_config.default_spawn);
@@ -66,17 +78,11 @@ fn server_spawn_character(
     commands.spawn((
         // ── Identity ─────────────────────────────────────────────────────
         NetworkCharacter,
-        CharacterBundle::new(
-            format!("NetworkPlayer_{client_id:?}"),
-            MovementSpeed::default(),
-            Transform::from_translation(spawn_pos),
-        ),
+        CharacterBuilder::new(user.name)
+            .transform(Transform::from_translation(spawn_pos))
+            .build(),
         // ── Physics ──────────────────────────────────────────────────────
-        PhysicsBody,
-        CharacterCollider,
-        Aabb::player(),
-        JumpImpulse::default(),
-        CharacterController::default(),
+        character_bundle(),
         // ── Networked state ───────────────────────────────────────────────
         // Lightyear reads ActionState from this component and populates it
         // with the inputs buffered by the controlling client.
@@ -162,6 +168,6 @@ impl Plugin for ServerCharacterPlugin {
             server_apply_inputs.before(PhysicsSet::Integrate),
         );
 
-        app.add_systems(PostUpdate, server_sync_state);
+        app.add_systems(FixedUpdate, server_sync_state.after(PhysicsSet::Finalise));
     }
 }

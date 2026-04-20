@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_inspector_egui::bevy_egui::EguiPlugin;
+use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
 use dd40_gui::plugin::GuiPlugin;
@@ -29,7 +29,7 @@ fn main() {
             GuiPlugin,
         ))
         .add_plugins(EguiPlugin::default())
-        //.add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(WorldInspectorPlugin::new())
         .add_systems(Startup, setup)
         .run();
 }

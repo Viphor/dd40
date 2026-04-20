@@ -94,7 +94,7 @@ pub fn log_plugin() -> LogPlugin {
             },
             Filter {
                 module: "dd40_renderer",
-                level: Level::TRACE,
+                level: Level::DEBUG,
             },
         ],
     };

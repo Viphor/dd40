@@ -2823,7 +2823,6 @@ dependencies = [
  "dd40_chunk_storage",
  "dd40_core",
  "dd40_network",
- "dd40_player",
  "dd40_world",
 ]
 

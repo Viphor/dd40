@@ -3,7 +3,8 @@ use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use dd40_core::character::{
-    CharacterBuilder, JumpImpulse, MovementSpeed, Player, SpawnPosition, controller::CharacterInput,
+    JumpImpulse, MovementSpeed, Player, SpawnPosition, builder::CharacterBuilder,
+    controller::CharacterInput,
 };
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
@@ -212,7 +213,7 @@ fn player_input(
     char_input.movement = direction.normalize_or_zero();
 
     // OR-assign so a pending jump set earlier this frame is not overwritten.
-    char_input.jump |= keyboard.just_pressed(KeyCode::Space);
+    char_input.jump = keyboard.just_pressed(KeyCode::Space);
 
     char_input.sprint = keyboard.pressed(KeyCode::ControlLeft);
 

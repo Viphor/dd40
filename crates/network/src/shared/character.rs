@@ -1,4 +1,7 @@
-use dd40_core::character::controller::CharacterInput;
+use dd40_core::{
+    character::controller::CharacterInput,
+    prelude::{Aabb, CharacterCollider, CharacterController, JumpImpulse, PhysicsBody},
+};
 use lightyear::prelude::input::native::ActionState;
 
 use crate::protocol::PlayerInput;
@@ -23,4 +26,22 @@ pub(crate) fn apply_input_to_controller(
     char_input.sprint = action.0.sprint;
     char_input.pitch = action.0.pitch;
     char_input.yaw = action.0.yaw;
+}
+
+pub(crate) fn character_bundle() -> (
+    CharacterInput,
+    PhysicsBody,
+    CharacterCollider,
+    Aabb,
+    JumpImpulse,
+    CharacterController,
+) {
+    (
+        CharacterInput::default(),
+        PhysicsBody,
+        CharacterCollider,
+        Aabb::player(),
+        JumpImpulse::default(),
+        CharacterController::default(),
+    )
 }

@@ -21,6 +21,7 @@ pub mod chunk_provider;
 pub mod chunk_requests;
 pub mod connection;
 pub mod spawn;
+pub mod user;
 
 /// Plugin that sets up server-side networking.
 ///
