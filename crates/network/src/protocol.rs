@@ -7,7 +7,7 @@
 use bevy::math::Curve;
 use bevy::prelude::*;
 pub use dd40_core::prelude::PlaceBlockRequest;
-use dd40_core::prelude::*;
+use dd40_core::{character::Character, prelude::*};
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -143,7 +143,6 @@ pub struct PlayerLeftMessage {
 #[reflect(Component)]
 pub struct NetworkCharacter;
 
-
 /// Replicated player position
 #[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq, Reflect)]
 pub struct PlayerPosition {
@@ -246,10 +245,19 @@ impl Plugin for ProtocolPlugin {
 
         // Register components with replication
         app.register_component::<NetworkCharacter>();
+        app.register_component::<Character>();
 
         app.register_component::<PlayerPosition>()
             .add_prediction()
             .add_linear_interpolation();
+
+        // Velocity must be predicted alongside position so rollback re-simulation
+        // starts from the correct (position, velocity) pair.  Without this,
+        // restoring position but not velocity causes the re-simulation to
+        // immediately diverge, producing visible drift especially during jumps
+        // and gravity-driven falls.
+        app.register_component::<Velocity>()
+            .add_prediction();
 
         app.register_component::<PlayerRotation>()
             .add_prediction()

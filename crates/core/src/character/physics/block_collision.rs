@@ -36,7 +36,8 @@ use crate::{
     block::registry::BlockRegistry,
     block::{Block, BlockPos},
     character::physics::{
-        Aabb, CollisionShape, Grounded, PhysicsBody, PhysicsSet, TentativePosition, Velocity,
+        Aabb, CharacterPosition, CollisionShape, Grounded, PhysicsBody, PhysicsSet,
+        TentativePosition, Velocity,
     },
     chunk::{CHUNK_SIZE_Y, cache::ChunkCache},
 };
@@ -274,22 +275,21 @@ fn sweep_axis(
                     entity_face - block_face
                 };
 
-                if gap < 0.0 {
-                    // Already penetrating on this axis — skip to avoid
-                    // over-correction.  A gap of exactly 0 means the entity
-                    // is touching (but not inside) the block face; we still
-                    // want to record this as a stop so that e.g. an entity
-                    // standing exactly on a block top is recognised as grounded.
-                    trace!(
-                        "block_collision: {:?} sweep — skipping block id={} at {:?} \
-                         (already penetrating, gap={:.4})",
-                        axis,
-                        block.block_id.0,
-                        block_pos,
-                        gap,
-                    );
-                    continue;
-                }
+                // A gap of exactly 0 means the entity is touching (but not
+                // inside) the block face — still record as a stop so that e.g.
+                // an entity standing exactly on a block top is recognised as
+                // grounded.
+                //
+                // A negative gap means the entity is already penetrating this
+                // block face (e.g. a block was placed overlapping the entity).
+                // We intentionally do NOT skip here: `stop_component` will be
+                // on the *opposite* side of `current` from `target`, so the
+                // `is_nearer` check naturally ejects the entity back to the
+                // block face.  The Y-axis sweep runs first, so after an upward
+                // ejection the X/Z cross-section checks will no longer include
+                // the same block (baabb.max.y == e_min.y fails the strict `>`
+                // test in `overlaps_cross_section`), preventing any spurious
+                // sideways correction.
 
                 // Compute the position of the entity origin that places it
                 // flush against this block face.
@@ -329,12 +329,13 @@ fn sweep_axis(
                     hit = true;
                     trace!(
                         "block_collision: {:?} sweep — new nearest stop at {:.4} \
-                         (block id={} at {:?}, gap={:.4})",
+                         (block id={} at {:?}, gap={:.4}{})",
                         axis,
                         resolved,
                         block.block_id.0,
                         block_pos,
                         gap,
+                        if gap < 0.0 { ", ejecting" } else { "" },
                     );
                 }
 
@@ -462,7 +463,7 @@ fn resolve_block_collisions(
     registry: Res<BlockRegistry>,
     mut query: Query<
         (
-            &Transform,
+            &CharacterPosition,
             &Aabb,
             &mut TentativePosition,
             &mut Velocity,
@@ -471,8 +472,8 @@ fn resolve_block_collisions(
         With<PhysicsBody>,
     >,
 ) {
-    for (transform, aabb, mut tentative, mut velocity, mut grounded) in &mut query {
-        let current = transform.translation;
+    for (char_pos, aabb, mut tentative, mut velocity, mut grounded) in &mut query {
+        let current = char_pos.0;
         let target = tentative.0;
 
         // Sweep Y first so the grounded flag is available to X/Z friction

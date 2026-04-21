@@ -275,7 +275,9 @@ impl Plugin for CharacterControllerPlugin {
             .register_type::<CharacterController>()
             .add_systems(
                 FixedUpdate,
-                apply_character_controller.before(PhysicsSet::Integrate),
+                apply_character_controller
+                    .after(PhysicsSet::InputSync)
+                    .before(PhysicsSet::Integrate),
             );
     }
 }

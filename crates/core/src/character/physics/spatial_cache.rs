@@ -43,6 +43,7 @@
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
+use crate::block::BlockPos;
 use crate::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
 
 use super::{Aabb, CharacterCollider, PhysicsBody, TentativePosition};
@@ -132,6 +133,47 @@ impl CharacterSpatialCache {
     /// Returns the number of chunks that have at least one character.
     pub fn occupied_chunk_count(&self) -> usize {
         self.chunks.len()
+    }
+
+    /// Returns an iterator over all entities that may overlap the 1×1×1 block
+    /// cell at `block_pos`.
+    ///
+    /// This is a **conservative spatial filter**: it returns every entity
+    /// registered in any chunk whose XZ footprint intersects the block cell.
+    /// The block cell can straddle a chunk boundary, so up to four chunks may
+    /// be queried.
+    ///
+    /// Each entity is yielded **at most once** even when it appears in multiple
+    /// matching chunks (e.g. a character standing on a chunk-boundary edge).
+    ///
+    /// Callers must still perform a precise AABB overlap test — this method
+    /// only narrows the candidate set.
+    pub fn candidates_for_block(&self, block_pos: BlockPos) -> impl Iterator<Item = Entity> {
+        let min_x = block_pos.x as f32;
+        let min_z = block_pos.z as f32;
+        // Subtract EPSILON so the open upper edge (e.g. x = block_pos.x + 1)
+        // doesn't pull in an extra chunk unnecessarily.
+        let max_x = min_x + 1.0 - f32::EPSILON;
+        let max_z = min_z + 1.0 - f32::EPSILON;
+
+        let cx_min = world_to_chunk_axis(min_x, CHUNK_SIZE_X as i32);
+        let cx_max = world_to_chunk_axis(max_x, CHUNK_SIZE_X as i32);
+        let cz_min = world_to_chunk_axis(min_z, CHUNK_SIZE_Z as i32);
+        let cz_max = world_to_chunk_axis(max_z, CHUNK_SIZE_Z as i32);
+
+        // Collect and deduplicate — a block on a chunk boundary spans two chunks
+        // and any character there would appear in both.
+        let mut seen: Vec<Entity> = Vec::new();
+        for cx in cx_min..=cx_max {
+            for cz in cz_min..=cz_max {
+                for &entity in self.entities_in_chunk(ChunkPos::new(cx, cz)) {
+                    if !seen.contains(&entity) {
+                        seen.push(entity);
+                    }
+                }
+            }
+        }
+        seen.into_iter()
     }
 }
 
@@ -446,16 +488,18 @@ mod tests {
 
     #[test]
     fn cache_tracks_entity_across_chunk_boundary_move() {
+        use crate::character::physics::CharacterPosition;
         let mut app = make_app(1.0 / 20.0);
 
         // Start well inside chunk (0,0).
         let e = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
 
-        // Teleport the entity to the chunk (1,0) by writing to Transform directly.
+        // Teleport the entity to chunk (1,0) by writing to CharacterPosition
+        // directly — Transform is a visual output so physics no longer reads it.
         tick(&mut app);
         {
-            let mut t = app.world_mut().get_mut::<Transform>(e).unwrap();
-            t.translation.x = 20.0; // well inside chunk (1,0)
+            let mut cp = app.world_mut().get_mut::<CharacterPosition>(e).unwrap();
+            cp.0.x = 20.0; // well inside chunk (1,0)
         }
         tick(&mut app);
 

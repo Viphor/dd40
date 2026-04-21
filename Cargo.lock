@@ -2756,6 +2756,7 @@ dependencies = [
  "dd40_player",
  "dd40_renderer",
  "dd40_world",
+ "lightyear_ui",
 ]
 
 [[package]]

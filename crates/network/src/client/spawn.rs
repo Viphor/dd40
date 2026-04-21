@@ -3,9 +3,12 @@ use std::time::Duration;
 use bevy::{platform::collections::HashSet, prelude::*};
 use dd40_core::{character::Player, prelude::*};
 
-use crate::client::loading::{
-    LOADING_KEY_INITIAL_CHUNKS, register_initial_chunks_loading_item,
-    remove_initial_chunks_loading_item, remove_spawn_location_loading_item,
+use crate::{
+    PlayerPosition,
+    client::loading::{
+        LOADING_KEY_INITIAL_CHUNKS, register_initial_chunks_loading_item,
+        remove_initial_chunks_loading_item, remove_spawn_location_loading_item,
+    },
 };
 
 /// How long the client will wait for the initial spawn chunks before giving up
@@ -106,13 +109,13 @@ impl Default for SpawnChunkTimeout {
 ///    starts the [`SpawnChunkTimeout`] countdown.
 pub(crate) fn receive_spawn_location(
     mut commands: Commands,
-    player: Single<&Transform, Added<Player>>,
+    player: Single<&PlayerPosition, Added<Player>>,
     mut requester: MessageWriter<RequestChunk>,
     mut tracker: ResMut<LoadingTracker>,
     mut timeout: ResMut<SpawnChunkTimeout>,
     time: Res<Time>,
 ) {
-    let pos = player.translation;
+    let pos = player.to_vec3();
     info!("Received PlayerSpawnLocation: {:?}", pos);
     remove_spawn_location_loading_item(&mut tracker);
 

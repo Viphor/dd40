@@ -212,8 +212,9 @@ fn player_input(
 
     char_input.movement = direction.normalize_or_zero();
 
-    // OR-assign so a pending jump set earlier this frame is not overwritten.
-    char_input.jump = keyboard.just_pressed(KeyCode::Space);
+    // Use |= so a jump set on a previous render frame is not overwritten
+    // before the next physics tick has a chance to consume it.
+    char_input.jump |= keyboard.just_pressed(KeyCode::Space);
 
     char_input.sprint = keyboard.pressed(KeyCode::ControlLeft);
 
@@ -430,11 +431,12 @@ impl Plugin for PlayerInputPlugin {
             // ── Update — Controller mode only ─────────────────────────────
             .add_systems(
                 Update,
-                (player_input, sync_camera_to_player).run_if(
-                    playing_and_running
-                        .clone()
-                        .and(in_state(PlayerMode::Controller)),
-                ),
+                (player_input, sync_camera_to_player.in_set(CharacterRenderSet::CameraSync))
+                    .run_if(
+                        playing_and_running
+                            .clone()
+                            .and(in_state(PlayerMode::Controller)),
+                    ),
             )
             // ── Update — FreeCam mode only ────────────────────────────────
             .add_systems(

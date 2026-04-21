@@ -1,16 +1,38 @@
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 pub mod builder;
 pub mod controller;
 pub mod physics;
 pub mod plugin;
 
+/// Ordering anchor for render-frame visual systems.
+///
+/// Both `dd40_network` and `dd40_player` import this set so they can enforce
+/// a deterministic order between frame interpolation and camera-follow without
+/// a direct crate dependency on each other.
+///
+/// **Expected order (both in `Update`):**
+/// 1. `CharacterRenderSet::FrameInterpolation` — write the smoothed `Transform`
+/// 2. `CharacterRenderSet::CameraSync` — follow the now-smoothed `Transform`
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CharacterRenderSet {
+    /// Write the visual `Transform` for predicted characters.
+    ///
+    /// Frame-interpolation and visual-correction application belong here.
+    FrameInterpolation,
+    /// Sync the camera (or any other follower) to the player `Transform`.
+    ///
+    /// Always runs **after** [`CharacterRenderSet::FrameInterpolation`].
+    CameraSync,
+}
+
 /// Marker component that identifies the player entity.
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
 pub struct Player;
 
-#[derive(Debug, Default, Component, Reflect)]
+#[derive(Debug, Default, Component, Reflect, PartialEq, Eq, Serialize, Deserialize)]
 #[reflect(Component)]
 pub struct Character;
 

@@ -49,8 +49,13 @@ pub mod spatial_cache;
 
 pub use spatial_cache::CharacterSpatialCache;
 
-use bevy::prelude::*;
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    prelude::*,
+};
+use serde::{Deserialize, Serialize};
 
+use crate::character::CharacterRenderSet;
 use block_collision::BlockCollisionPlugin;
 use character_collision::CharacterCollisionPlugin;
 use integration::IntegrationPlugin;
@@ -59,13 +64,27 @@ use integration::IntegrationPlugin;
 // System ordering
 // ---------------------------------------------------------------------------
 
-/// Labels the four ordered stages of one physics tick.
+/// Labels the ordered stages of one physics tick.
 ///
 /// Configure your own systems against these labels if you need to hook into
-/// the pipeline (e.g. custom force applicators before [`PhysicsSet::Integrate`],
-/// or post-solve callbacks after [`PhysicsSet::Finalise`]).
+/// the pipeline.
+///
+/// **Expected order:**
+/// `InputSync` → `Integrate` → `BlockCollision` → `CharacterCollision` → `Finalise`
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhysicsSet {
+    /// External input injection phase.
+    ///
+    /// Network systems (and any other non-local input source) that write to
+    /// [`CharacterInput`] must run here so that
+    /// [`apply_character_controller`][crate::character::controller] always
+    /// sees the up-to-date intent before it translates it into physics
+    /// impulses.
+    ///
+    /// Runs **before** [`PhysicsSet::Integrate`].
+    ///
+    /// [`CharacterInput`]: crate::character::controller::CharacterInput
+    InputSync,
     /// Apply external forces (gravity, impulses) and integrate velocity into
     /// a **tentative** new world position stored in [`TentativePosition`].
     Integrate,
@@ -253,7 +272,15 @@ impl Default for CollisionShape {
 ///
 /// Add this component to any entity that should be moved by the physics
 /// pipeline.  Entities without [`Velocity`] are treated as static.
-#[derive(Debug, Default, Clone, Copy, Component, Reflect, Deref, DerefMut)]
+///
+/// Registered as a predicted component in the network protocol so lightyear
+/// includes it in rollback snapshots alongside [`PlayerPosition`].  This is
+/// essential for correct prediction: restoring only position but not velocity
+/// causes the re-simulation to diverge immediately on gravity-affected or
+/// collision-affected entities.
+///
+/// [`PlayerPosition`]: crate::network (conceptual, defined in `dd40_network`)
+#[derive(Debug, Default, Clone, Copy, Component, Reflect, Deref, DerefMut, PartialEq, Serialize, Deserialize)]
 #[reflect(Component)]
 pub struct Velocity(pub Vec3);
 
@@ -311,14 +338,49 @@ impl Grounded {
 
 // ---------------------------------------------------------------------------
 
+/// The confirmed physics position of a character, separate from [`Transform`].
+///
+/// This is the single source of truth for where the physics solver believes
+/// the entity is. The pipeline reads this at the start of each tick (in
+/// [`PhysicsSet::Integrate`]) and writes the resolved position back to it in
+/// [`PhysicsSet::Finalise`].
+///
+/// [`Transform`] is a **visual-only** output. For non-networked entities the
+/// pipeline also writes [`Transform`] every tick so they render correctly with
+/// no extra setup. For networked predicted entities, the network bridge
+/// overrides [`Transform`] in `Update` with a frame-interpolated value,
+/// keeping rendering smooth without contaminating physics.
+///
+/// When first added, the `on_add` hook copies the entity's current
+/// [`Transform`] translation so the physics solver starts at the right
+/// position without any manual initialisation.
+#[derive(Debug, Default, Clone, Copy, Component, Reflect, PartialEq)]
+#[reflect(Component)]
+#[component(on_add)]
+pub struct CharacterPosition(pub Vec3);
+
+impl CharacterPosition {
+    fn on_add(mut world: DeferredWorld, context: HookContext) {
+        let translation = world
+            .get::<Transform>(context.entity)
+            .map(|t| t.translation)
+            .unwrap_or(Vec3::ZERO);
+        if let Some(mut pos) = world.get_mut::<CharacterPosition>(context.entity) {
+            pos.0 = translation;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 /// Internal scratch component that holds the **tentative** world position
 /// produced by [`PhysicsSet::Integrate`] and refined by the collision stages
-/// before being written back to [`Transform`] during [`PhysicsSet::Finalise`].
+/// before being written back during [`PhysicsSet::Finalise`].
 ///
 /// This component is managed entirely by the physics pipeline; do **not**
 /// read or write it from outside the physics module.
 #[derive(Debug, Default, Clone, Copy, Component)]
-pub(crate) struct TentativePosition(pub Vec3);
+pub struct TentativePosition(pub Vec3);
 
 // ---------------------------------------------------------------------------
 
@@ -358,7 +420,7 @@ pub struct Impulse(pub Vec3);
 /// pipeline never panics on missing components.
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
-#[require(Velocity, GravityScale, Grounded, TentativePosition, Impulse)]
+#[require(Velocity, GravityScale, Grounded, TentativePosition, Impulse, CharacterPosition)]
 pub struct PhysicsBody;
 
 // ---------------------------------------------------------------------------
@@ -418,6 +480,7 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Aabb>()
+            .register_type::<CharacterPosition>()
             .register_type::<Velocity>()
             .register_type::<Impulse>()
             .register_type::<GravityScale>()
@@ -427,8 +490,13 @@ impl Plugin for PhysicsPlugin {
             .register_type::<PhysicsConfig>()
             .register_type::<CollisionShape>()
             .init_resource::<PhysicsConfig>()
-            // Order the four stages inside FixedUpdate so physics runs at a
-            // deterministic rate decoupled from the render frame rate.
+            // InputSync precedes Integrate so external input injection always
+            // lands before the controller runs.
+            .configure_sets(
+                FixedUpdate,
+                PhysicsSet::InputSync.before(PhysicsSet::Integrate),
+            )
+            // Order the four physics stages inside FixedUpdate.
             .configure_sets(
                 FixedUpdate,
                 (
@@ -438,6 +506,13 @@ impl Plugin for PhysicsPlugin {
                     PhysicsSet::Finalise,
                 )
                     .chain(),
+            )
+            // Enforce render-frame ordering: frame interpolation writes
+            // Transform before the camera-follow system reads it.
+            .configure_sets(
+                Update,
+                CharacterRenderSet::FrameInterpolation
+                    .before(CharacterRenderSet::CameraSync),
             )
             .add_plugins((
                 IntegrationPlugin,

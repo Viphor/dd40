@@ -348,7 +348,7 @@ pub(super) fn draw_targeted_block_highlight(
     let center = Vec3::new(pos.x as f32 + 0.5, pos.y as f32 + 0.5, pos.z as f32 + 0.5);
 
     // Expand very slightly to avoid Z-fighting with block faces.
-    const EPSILON: f32 = 0.002;
+    const EPSILON: f32 = 0.0002;
     let size = Vec3::splat(1.0 + EPSILON * 2.0);
 
     gizmos.cube(

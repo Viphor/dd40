@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use dd40_core::{
     block::{Block, events::BlockPlaced},
+    character::physics::{Aabb, CharacterPosition, CharacterSpatialCache, CollisionShape},
     chunk::cache::ChunkCache,
     prelude::*,
 };
@@ -19,16 +20,22 @@ use crate::{
 /// 2. Check [`BlockRegistry::is_replaceable`] — requests targeting non-replaceable blocks are
 ///    silently dropped (the server is authoritative; the client will not see its
 ///    optimistic placement confirmed).
-/// 3. Apply the placement directly to the cached [`Chunk`] so that subsequent reads
+/// 3. Check whether any character (player, NPC, or any other entity with a
+///    [`CharacterPosition`] and [`Aabb`]) occupies the target cell.  Collidable
+///    blocks (solid, slab, …) are rejected if they would overlap a character.
+///    Non-collidable blocks (flowers, torches, …) are always allowed.
+/// 4. Apply the placement directly to the cached [`Chunk`] so that subsequent reads
 ///    from other systems see the updated state immediately.
-/// 4. Write a [`BlockPlaced`] Bevy message so that any other server systems that
+/// 5. Write a [`BlockPlaced`] Bevy message so that any other server systems that
 ///    observe block-placement events (e.g. `log_block_placed`) are notified.
-/// 5. Broadcast a [`BlockPlacedMessage`] over [`BlockChannel`] to every connected
+/// 6. Broadcast a [`BlockPlacedMessage`] over [`BlockChannel`] to every connected
 ///    client whose [`ChunkRequests`] set currently contains the target [`ChunkPos`],
 ///    meaning that chunk is already loaded on that client.
 pub(crate) fn receive_place_requests(
     registry: Res<BlockRegistry>,
     mut cache: ResMut<ChunkCache>,
+    spatial_cache: Res<CharacterSpatialCache>,
+    characters: Query<(&CharacterPosition, &Aabb)>,
     mut placed_writer: MessageWriter<BlockPlaced>,
     mut receivers: Query<(&mut MessageReceiver<PlaceBlockRequest>, &ChunkRequests)>,
     mut broadcasters: Query<(&mut MessageSender<BlockPlaced>, &ChunkRequests)>,
@@ -72,6 +79,43 @@ pub(crate) fn receive_place_requests(
                     req.pos, block.block_id
                 );
                 continue;
+            }
+
+            // Reject placements that would trap a character inside a collidable
+            // block.  Non-collidable blocks (CollisionShape::None) can always be
+            // placed freely since they have no physical presence.
+            let held_block = Block::new(req.block_id);
+            if !matches!(registry.collision_shape(&held_block), CollisionShape::None) {
+                // The block cell's AABB in world space.  Our `Aabb` convention
+                // places the origin at the bottom-centre, so for a 1×1×1 cell
+                // the origin is at (x + 0.5, y, z + 0.5) with half-extents 0.5.
+                let block_aabb = Aabb::new(0.5, 0.5, 0.5);
+                let block_origin = Vec3::new(
+                    req.pos.x as f32 + 0.5,
+                    req.pos.y as f32,
+                    req.pos.z as f32 + 0.5,
+                );
+
+                // Use the spatial cache to limit the check to characters that
+                // share a chunk with the target cell, then run a precise AABB
+                // test only on those candidates.
+                let overlaps_character =
+                    spatial_cache
+                        .candidates_for_block(req.pos)
+                        .any(|entity| match characters.get(entity) {
+                            Ok((char_pos, char_aabb)) => {
+                                char_aabb.overlaps(char_pos.0, &block_aabb, block_origin)
+                            }
+                            Err(_) => false,
+                        });
+
+                if overlaps_character {
+                    debug!(
+                        "Server: ignoring PlaceBlockRequest at {} — cell occupied by a character",
+                        req.pos
+                    );
+                    continue;
+                }
             }
 
             accepted.push(req);

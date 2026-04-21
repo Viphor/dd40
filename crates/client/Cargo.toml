@@ -7,6 +7,10 @@ edition = "2024"
 name = "dd40_client"
 path = "src/main.rs"
 
+[features]
+default = ["debug_network"]
+debug_network = ["dd40_network/debug_ui", "dep:lightyear_ui"]
+
 [dependencies]
 # Client uses the full Bevy feature set (window, rendering, audio, etc.).
 bevy = { workspace = true, default-features = true }
@@ -17,4 +21,5 @@ dd40_debug_ui = { workspace = true }
 dd40_network = { workspace = true, features = ["client"] }
 dd40_renderer = { workspace = true }
 dd40_gui = { workspace = true }
+lightyear_ui = { version = "0.26", optional = true }
 bevy-inspector-egui = "0.36.0"

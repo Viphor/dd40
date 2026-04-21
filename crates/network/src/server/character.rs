@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use dd40_core::character::{
     builder::CharacterBuilder, controller::CharacterInput, physics::PhysicsSet,
 };
+use dd40_core::prelude::CharacterPosition;
 use lightyear::prelude::{
     Connected, ControlledBy, InterpolationTarget, NetworkTarget, PredictionTarget, RemoteId,
     Replicate, input::native::ActionState, server::ClientOf,
@@ -132,7 +133,7 @@ fn server_apply_inputs(
 fn server_sync_state(
     mut query: Query<
         (
-            &Transform,
+            &CharacterPosition,
             &CharacterInput,
             &mut PlayerPosition,
             &mut PlayerRotation,
@@ -140,8 +141,8 @@ fn server_sync_state(
         With<NetworkCharacter>,
     >,
 ) {
-    for (transform, char_input, mut pos, mut rot) in &mut query {
-        *pos = PlayerPosition::from_vec3(transform.translation);
+    for (char_pos, char_input, mut pos, mut rot) in &mut query {
+        *pos = PlayerPosition::from_vec3(char_pos.0);
         rot.pitch = char_input.pitch;
         rot.yaw = char_input.yaw;
     }
@@ -163,9 +164,7 @@ impl Plugin for ServerCharacterPlugin {
 
         app.add_systems(
             FixedUpdate,
-            // Must run before CharacterControllerPlugin's apply_character_controller,
-            // which itself runs before PhysicsSet::Integrate.
-            server_apply_inputs.before(PhysicsSet::Integrate),
+            server_apply_inputs.in_set(PhysicsSet::InputSync),
         );
 
         app.add_systems(FixedUpdate, server_sync_state.after(PhysicsSet::Finalise));

@@ -2,15 +2,45 @@
 //!
 //! [`ClientCharacterPlugin`] is added automatically by [`NetworkCharacterPlugin`]
 //! when the `client` feature is active.
+//!
+//! # Architecture
+//!
+//! The client uses three separate representations for a predicted character:
+//!
+//! | Component | Role |
+//! |-----------|------|
+//! | [`PlayerPosition`] | Network / rollback truth — lightyear checkpoints and restores this |
+//! | [`CharacterPosition`] | Physics truth — the pipeline reads and writes this each tick |
+//! | [`Transform`] | Visual truth — set by [`apply_frame_interpolation`] in `Update` |
+//!
+//! Each `FixedUpdate` tick:
+//! 1. [`restore_and_record_previous`] detects rollbacks by comparing `PlayerPosition`
+//!    (restored to the confirmed checkpoint by lightyear) against `CharacterPosition`
+//!    (the last predicted result).  If they differ, a [`VisualCorrectionOffset`] is
+//!    inserted.  Then `CharacterPosition` is synced from `PlayerPosition`.
+//! 2. [`client_apply_inputs`] forwards buffered [`PlayerInput`] into [`CharacterInput`].
+//! 3. The physics pipeline runs.
+//! 4. [`record_and_sync_post_physics`] saves `CharacterPosition` as `current`, then
+//!    copies it back to `PlayerPosition` so lightyear records the new prediction.
+//!
+//! Each render frame (`Update`):
+//! - [`apply_frame_interpolation`] blends `previous` → `current` using the
+//!   fixed-timestep overstep fraction and adds and decays any active
+//!   [`VisualCorrectionOffset`].
 
-use bevy::prelude::*;
-use dd40_core::character::{
-    Player, builder::CharacterBuilder, controller::CharacterInput, physics::PhysicsSet,
+use bevy::{prelude::*, time::Fixed};
+use dd40_core::{
+    character::{
+        CharacterRenderSet, Player, builder::CharacterBuilder, controller::CharacterInput,
+        physics::PhysicsSet,
+    },
+    prelude::CharacterPosition,
 };
 use lightyear::prelude::{
     Interpolated, Predicted,
     client::input::InputSystems,
     input::native::{ActionState, InputMarker},
+    is_in_rollback,
 };
 
 use crate::{
@@ -19,30 +49,86 @@ use crate::{
 };
 
 // ============================================================================
+// COMPONENTS
+// ============================================================================
+
+/// Stores the [`CharacterPosition`] from the two most recent physics ticks for
+/// sub-tick frame interpolation.
+///
+/// Updated each `FixedUpdate` by [`restore_and_record_previous`] (writes
+/// `previous`) and [`record_and_sync_post_physics`] (writes `current`).
+/// Read each render frame by [`apply_frame_interpolation`].
+#[derive(Component)]
+struct PhysicsInterpolationData {
+    /// Physics position at the **start** of the most recent tick (end of the
+    /// previous tick), used as the interpolation origin.
+    previous: Vec3,
+    /// Physics position at the **end** of the most recent tick, used as the
+    /// interpolation target.
+    current: Vec3,
+}
+
+/// A decaying world-space offset added to [`Transform`] each render frame to
+/// smooth out the visual "pop" caused by a prediction rollback.
+///
+/// Inserted by [`compute_visual_correction`] when a rollback moves the entity
+/// by more than [`VISUAL_CORRECTION_MIN_ERROR`].  Removed automatically by
+/// [`apply_frame_interpolation`] once the magnitude falls below
+/// [`VISUAL_CORRECTION_THRESHOLD`].
+#[derive(Component)]
+struct VisualCorrectionOffset(Vec3);
+
+/// Minimum rollback displacement (in world units) that triggers a
+/// [`VisualCorrectionOffset`].  Smaller corrections are applied instantly.
+const VISUAL_CORRECTION_MIN_ERROR: f32 = 0.05;
+
+/// Once the [`VisualCorrectionOffset`] magnitude drops below this threshold
+/// (in world units) the component is removed and the correction stops.
+const VISUAL_CORRECTION_THRESHOLD: f32 = 0.001;
+
+/// How quickly the [`VisualCorrectionOffset`] decays toward zero, expressed as
+/// a lerp blend rate per second.  Higher values produce a snappier but more
+/// noticeable correction; lower values are smoother but take longer to settle.
+const VISUAL_CORRECTION_DECAY: f32 = 15.0;
+
+// ============================================================================
 // OBSERVERS
 // ============================================================================
 
-/// Attaches [`InputMarker<PlayerInput>`] and the [`Player`] marker to a
-/// newly-created [`Predicted`] entity that belongs to a network character.
+/// Attaches local-player components to a newly-created [`Predicted`] character.
 ///
-/// lightyear creates the `Predicted` entity and copies all registered
-/// components (including [`NetworkCharacter`]) onto it before adding the
-/// `Predicted` marker.  By the time this observer fires, the entity already
-/// has `NetworkCharacter`, so the query is safe.
+/// lightyear creates the `Predicted` entity with all replicated components
+/// (including [`PlayerPosition`]) already in place before the `Predicted`
+/// marker is added, so by the time this observer fires the spawn position is
+/// available.
 ///
-/// - [`InputMarker`] tells lightyear's input pipeline that this entity is the
-///   one whose [`ActionState<PlayerInput>`] should be populated from the local
-///   player's buffered inputs.
-/// - [`Player`] makes `dd40_player`'s input systems (e.g. `player_input`,
-///   `sync_camera_to_player`) work on the predicted entity without any
-///   modification to the player crate.
-fn on_predicted_character_added(trigger: On<Add, Predicted>, mut commands: Commands) {
+/// We explicitly set both [`CharacterPosition`] and [`PhysicsInterpolationData`]
+/// from the replicated [`PlayerPosition`] so the first render frame shows the
+/// entity at the correct spawn location rather than at the origin.
+fn on_predicted_character_added(
+    trigger: On<Add, Predicted>,
+    mut commands: Commands,
+    position_query: Query<&PlayerPosition>,
+) {
+    let initial_pos = position_query
+        .get(trigger.entity)
+        .map(|p| p.to_vec3())
+        .unwrap_or(Vec3::ZERO);
+
     commands.entity(trigger.entity).insert((
         InputMarker::<PlayerInput>::default(),
         Player,
         CharacterBuilder::new("ThePlayer").build(),
         character_bundle(),
+        // Override the on_add-initialised CharacterPosition with the actual
+        // server-confirmed spawn position.
+        CharacterPosition(initial_pos),
+        PhysicsInterpolationData {
+            previous: initial_pos,
+            current: initial_pos,
+        },
     ));
+
     info!(
         "Attached InputMarker + Player to predicted character {:?}",
         trigger.entity
@@ -50,20 +136,18 @@ fn on_predicted_character_added(trigger: On<Add, Predicted>, mut commands: Comma
 }
 
 // ============================================================================
-// SYSTEMS
+// FIXED-UPDATE SYSTEMS  (run inside lightyear's rollback replay loop)
 // ============================================================================
 
-/// Reads [`CharacterInput`] (written by `dd40_player`'s input systems) and
-/// forwards it into [`ActionState<PlayerInput>`] so lightyear can send it to
-/// the server for the correct tick.
+/// Reads [`CharacterInput`] and forwards it into [`ActionState<PlayerInput>`]
+/// so lightyear buffers it for the current tick and sends it to the server.
 ///
 /// Runs in [`FixedPreUpdate`] inside [`InputSystems::WriteClientInputs`] so
-/// lightyear picks the input up before it advances the tick counter.
+/// lightyear sees the fresh input **before** it advances the tick counter.
+/// Placing it here (instead of `FixedUpdate`) eliminates a 1-tick delay on
+/// one-shot flags like [`CharacterInput::jump`].
 ///
-/// This is a pure bridge — the network crate never reads the keyboard.
-/// Movement intent is always sourced from [`CharacterInput`], which is written
-/// by whatever input system owns the character (typically `dd40_player`'s
-/// `player_input` system, or an AI system).
+/// [`CharacterInput::jump`]: dd40_core::character::controller::CharacterInput::jump
 fn bridge_input_to_action_state(
     mut query: Query<
         (&CharacterInput, &mut ActionState<PlayerInput>),
@@ -87,39 +171,59 @@ fn bridge_input_to_action_state(
     }
 }
 
-/// Syncs the replicated [`PlayerPosition`] into [`Transform::translation`]
-/// **before** physics runs on the [`Predicted`] entity.
+/// Saves the current [`CharacterPosition`] as the interpolation `previous`
+/// value, then restores it from the lightyear rollback checkpoint
+/// ([`PlayerPosition`]).
 ///
-/// lightyear's rollback mechanism restores `PlayerPosition` to a confirmed
-/// checkpoint and then re-runs `FixedUpdate`.  Without this sync, physics
-/// would re-simulate from the stale `Transform` instead of the rolled-back
-/// position, causing divergence.
-fn sync_position_to_transform(
-    mut query: Query<(&PlayerPosition, &mut Transform), (With<NetworkCharacter>, With<Predicted>)>,
+/// Also detects rollbacks: when `PlayerPosition` (restored by lightyear to a
+/// confirmed checkpoint) differs from `CharacterPosition` (the last predicted
+/// result), a [`VisualCorrectionOffset`] is inserted so the rendered entity
+/// slides smoothly to the corrected position rather than popping.
+///
+/// Must run **before** [`PhysicsSet::Integrate`] so physics always starts from
+/// the rolled-back position, not stale visual state.
+fn restore_and_record_previous(
+    mut commands: Commands,
+    mut query: Query<
+        (
+            Entity,
+            &PlayerPosition,
+            &mut CharacterPosition,
+            &mut PhysicsInterpolationData,
+            Option<&VisualCorrectionOffset>,
+        ),
+        (With<NetworkCharacter>, With<Predicted>),
+    >,
 ) {
-    for (pos, mut transform) in &mut query {
-        transform.translation = pos.to_vec3();
+    for (entity, player_pos, mut char_pos, mut interp, existing_correction) in &mut query {
+        let new_physics_pos = player_pos.to_vec3();
+
+        // Detect rollback: lightyear just restored PlayerPosition to a
+        // confirmed checkpoint that differs from our last predicted position.
+        // The visual error is how far the entity appears to jump — we decay it
+        // over the next few render frames instead of snapping.
+        let delta = char_pos.0 - new_physics_pos;
+        if delta.length() > VISUAL_CORRECTION_MIN_ERROR {
+            let total = delta + existing_correction.map_or(Vec3::ZERO, |e| e.0);
+            if total.length() > VISUAL_CORRECTION_MIN_ERROR {
+                commands.entity(entity).insert(VisualCorrectionOffset(total));
+            }
+        }
+
+        // Record where physics was at the end of the last tick — this becomes
+        // the interpolation origin for the current render frame window.
+        interp.previous = char_pos.0;
+        // Restore the physics position from the lightyear checkpoint so
+        // rollback re-simulation starts from the correct confirmed state.
+        char_pos.0 = new_physics_pos;
     }
 }
 
-/// Syncs the physics-resolved [`Transform::translation`] back to
-/// [`PlayerPosition`] **after** physics finalises.
+/// Applies the locally-buffered [`PlayerInput`] to the predicted entity's
+/// [`CharacterInput`], using the same logic as the server for determinism.
 ///
-/// This keeps the prediction checkpoint (stored by lightyear in
-/// `PlayerPosition`) up to date so rollbacks start from the correct position.
-fn sync_transform_to_position(
-    mut query: Query<(&Transform, &mut PlayerPosition), (With<NetworkCharacter>, With<Predicted>)>,
-) {
-    for (transform, mut pos) in &mut query {
-        *pos = PlayerPosition::from_vec3(transform.translation);
-    }
-}
-
-/// Applies the locally-controlled player's buffered [`PlayerInput`] to the
-/// [`Predicted`] entity's [`CharacterInput`].
-///
-/// Uses the same [`apply_input_to_controller`] function as the server so
-/// rollback prediction is deterministic.
+/// Must run **before** [`PhysicsSet::Integrate`] so the physics step uses the
+/// current tick's input.
 fn client_apply_inputs(
     mut query: Query<
         (&ActionState<PlayerInput>, &mut CharacterInput),
@@ -131,11 +235,76 @@ fn client_apply_inputs(
     }
 }
 
-/// Syncs the interpolated [`PlayerPosition`] to [`Transform`] for remote
-/// player entities so they render at the smoothed position each frame.
+/// Records the post-physics [`CharacterPosition`] as the interpolation
+/// `current` value, then copies it back to [`PlayerPosition`] so lightyear
+/// stores this prediction in its history for future rollback comparisons.
 ///
-/// This runs every frame in [`Update`] rather than `FixedUpdate` so rendering
-/// is not locked to the fixed timestep.
+/// Must run **after** [`PhysicsSet::Finalise`].
+fn record_and_sync_post_physics(
+    mut query: Query<
+        (
+            &CharacterPosition,
+            &mut PlayerPosition,
+            &mut PhysicsInterpolationData,
+        ),
+        (With<NetworkCharacter>, With<Predicted>),
+    >,
+) {
+    for (char_pos, mut player_pos, mut interp) in &mut query {
+        interp.current = char_pos.0;
+        *player_pos = PlayerPosition::from_vec3(char_pos.0);
+    }
+}
+
+// ============================================================================
+// UPDATE SYSTEMS  (run every render frame)
+// ============================================================================
+
+/// Blends the predicted entity's [`Transform`] between the two most recent
+/// physics tick positions using the fixed-timestep overstep fraction, then
+/// adds and decays any active [`VisualCorrectionOffset`].
+///
+/// This gives the local player smooth sub-tick motion at any frame rate while
+/// keeping the physics simulation running at its fixed rate.  The correction
+/// offset gradually fades after a rollback so the entity slides smoothly to
+/// the physics-correct position rather than snapping.
+fn apply_frame_interpolation(
+    fixed_time: Res<Time<Fixed>>,
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<
+        (
+            Entity,
+            &PhysicsInterpolationData,
+            Option<&mut VisualCorrectionOffset>,
+            &mut Transform,
+        ),
+        (With<NetworkCharacter>, With<Predicted>),
+    >,
+) {
+    let overstep = fixed_time.overstep_fraction();
+    let dt = time.delta_secs();
+
+    for (entity, interp, correction, mut transform) in &mut query {
+        transform.translation = interp.previous.lerp(interp.current, overstep);
+
+        if let Some(mut offset) = correction {
+            transform.translation += offset.0;
+
+            offset.0 = offset
+                .0
+                .lerp(Vec3::ZERO, (VISUAL_CORRECTION_DECAY * dt).min(1.0));
+
+            if offset.0.length_squared() < VISUAL_CORRECTION_THRESHOLD * VISUAL_CORRECTION_THRESHOLD
+            {
+                commands.entity(entity).remove::<VisualCorrectionOffset>();
+            }
+        }
+    }
+}
+
+/// Syncs the snapshot-interpolated [`PlayerPosition`] to [`Transform`] for
+/// remote player entities so they render at the smoothed position each frame.
 fn sync_interpolated_position_to_transform(
     mut query: Query<
         (&PlayerPosition, &mut Transform),
@@ -161,32 +330,35 @@ impl Plugin for ClientCharacterPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_predicted_character_added);
 
+        // Bridge CharacterInput → ActionState in FixedPreUpdate so lightyear
+        // buffers the current frame's input (including the one-shot jump flag)
+        // before it advances the tick counter.  Skip during rollback: lightyear
+        // already restores the historical ActionState for each replayed tick, and
+        // running the bridge would overwrite it with stale CharacterInput values
+        // (e.g. jump=false after apply_character_controller already consumed it).
         app.add_systems(
             FixedPreUpdate,
-            bridge_input_to_action_state.in_set(InputSystems::WriteClientInputs),
+            bridge_input_to_action_state
+                .in_set(InputSystems::WriteClientInputs)
+                .run_if(not(is_in_rollback)),
         );
 
         app.add_systems(
             FixedUpdate,
-            (
-                // 1. Restore rolled-back PlayerPosition into Transform before physics.
-                sync_position_to_transform,
-                // 2. Write input intent into CharacterController before physics integrate.
-                client_apply_inputs,
-            )
-                .before(PhysicsSet::Integrate),
+            (restore_and_record_previous, client_apply_inputs).in_set(PhysicsSet::InputSync),
         );
 
         app.add_systems(
             FixedUpdate,
-            // 3. Write physics-resolved position back to PlayerPosition after finalise.
-            sync_transform_to_position.after(PhysicsSet::Finalise),
+            record_and_sync_post_physics.after(PhysicsSet::Finalise),
         );
 
         app.add_systems(
             Update,
-            // Runs every render frame so interpolated remote players are smooth.
-            sync_interpolated_position_to_transform,
+            (
+                apply_frame_interpolation.in_set(CharacterRenderSet::FrameInterpolation),
+                sync_interpolated_position_to_transform,
+            ),
         );
     }
 }

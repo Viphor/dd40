@@ -16,11 +16,13 @@ pub mod prelude {
             registry::BlockRegistrySet,
         },
         character::{
+            CharacterRenderSet,
             JumpImpulse,
             controller::{CharacterController, CharacterInput},
             physics::{
-                Aabb, CharacterCollider, CharacterSpatialCache, CollisionShape, GravityScale,
-                Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsPlugin, PhysicsSet, Velocity,
+                Aabb, CharacterCollider, CharacterPosition, CharacterSpatialCache, CollisionShape,
+                GravityScale, Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsPlugin,
+                PhysicsSet, Velocity,
             },
         },
         chunk::{

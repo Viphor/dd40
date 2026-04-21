@@ -13,7 +13,7 @@ debug_ui = ["lightyear/debug"]
 bevy = { workspace = true, features = ["bevy_log", "bevy_state", "async_executor", "multi_threaded"] }
 dd40_core = { path = "../core" }
 serde = { version = "1.0", features = ["derive"] }
-lightyear = { version = "0.26", features = ["udp", "netcode", "std", "input_native"] }
+lightyear = { version = "0.26", features = ["udp", "netcode", "std", "input_native", "client"] }
 rand = "0.8"
 crossbeam-channel = "0.5"
 

@@ -9,8 +9,9 @@ use lightyear::{
     link::Link,
     netcode::NetcodeClient,
     prelude::{
-        Authentication, Client, Connect, Connected, LocalAddr, MessageReceiver, MessageSender,
-        PeerAddr, PredictionManager, ReplicationReceiver, UdpIo, client::NetcodeConfig,
+        Authentication, Client, Connect, Connected, InputTimelineConfig, LocalAddr,
+        MessageReceiver, MessageSender, PeerAddr, PredictionManager, ReplicationReceiver, UdpIo,
+        client::{InputDelayConfig, NetcodeConfig},
     },
 };
 pub use lightyear::{link::RecvLinkConditioner, prelude::LinkConditionerConfig};
@@ -55,6 +56,15 @@ impl DDClient {
                 PeerAddr(settings.server_addr),
                 ReplicationReceiver::default(),
                 PredictionManager::default(),
+                // At 30 Hz one tick ≈ 33 ms.  Allow up to 1 tick of input delay
+                // to absorb minor jitter before falling back to rollback prediction.
+                // This dramatically reduces rollbacks on lossy connections without
+                // adding noticeable input lag.
+                InputTimelineConfig::default().with_input_delay(InputDelayConfig {
+                    minimum_input_delay_ticks: 0,
+                    maximum_input_delay_before_prediction: 1,
+                    maximum_predicted_ticks: 15,
+                }),
                 Name::from("Client"),
             ));
 

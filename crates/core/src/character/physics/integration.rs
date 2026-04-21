@@ -15,7 +15,7 @@
 
 use bevy::prelude::*;
 
-use super::{Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsSet, TentativePosition, Velocity};
+use super::{CharacterPosition, Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsSet, TentativePosition, Velocity};
 
 // ---------------------------------------------------------------------------
 // Systems
@@ -24,13 +24,16 @@ use super::{Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsSet, Tentative
 /// Resets [`Grounded`] and applies gravity + velocity integration to produce
 /// a [`TentativePosition`].
 ///
+/// Reads [`CharacterPosition`] as the physics-authoritative starting point.
+/// [`Transform`] is not touched here — it is written by the rendering layer.
+///
 /// Runs in [`PhysicsSet::Integrate`] during [`FixedUpdate`].
 fn integrate(
     time: Res<Time>,
     config: Res<PhysicsConfig>,
     mut query: Query<
         (
-            &Transform,
+            &CharacterPosition,
             &mut Velocity,
             &mut Impulse,
             &super::GravityScale,
@@ -42,55 +45,59 @@ fn integrate(
 ) {
     let dt = time.delta_secs();
 
-    for (transform, mut velocity, mut impulse, gravity_scale, mut grounded, mut tentative) in
+    for (char_pos, mut velocity, mut impulse, gravity_scale, mut grounded, mut tentative) in
         &mut query
     {
         // ── 0. Flush pending impulses ─────────────────────────────────────
-        // Any system (character controller, explosions, …) may have added to
-        // the Impulse accumulator this frame.  Apply and reset before doing
-        // anything else so impulses are not double-counted.
         velocity.0 += impulse.0;
         impulse.0 = Vec3::ZERO;
 
         // ── 1. Reset grounded flag ────────────────────────────────────────
-        // The block-collision stage will set it again if the entity lands on
-        // something this frame.
         grounded.0 = false;
 
         // ── 2. Apply gravity ──────────────────────────────────────────────
-        // Gravity pulls in the −Y direction.  A GravityScale of 0 means the
-        // entity floats freely (flying mode); negative values invert gravity.
         let gravity_accel = -config.gravity * gravity_scale.0;
         velocity.0.y += gravity_accel * dt;
 
         // ── 3. Clamp to terminal velocity ─────────────────────────────────
-        // Only clamp downward speed; upward speed (from jumps) is unrestricted
-        // so jump height stays predictable.
         if velocity.0.y < -config.terminal_velocity {
             velocity.0.y = -config.terminal_velocity;
         }
 
-        // ── 4. Produce tentative position ─────────────────────────────────
-        tentative.0 = transform.translation + velocity.0 * dt;
+        // ── 4. Produce tentative position from the physics truth ──────────
+        tentative.0 = char_pos.0 + velocity.0 * dt;
     }
 }
 
-/// Copies the resolved [`TentativePosition`] back into [`Transform`] and
-/// applies velocity damping (friction).
+/// Copies the resolved [`TentativePosition`] into [`CharacterPosition`] and
+/// [`Transform`], then applies velocity damping (friction).
+///
+/// [`CharacterPosition`] is the physics-authoritative value read next tick.
+/// [`Transform`] is kept in sync so non-networked entities render correctly
+/// without any additional bridge system. Networked predicted entities have
+/// their [`Transform`] overridden by the frame-interpolation system in
+/// `Update`, so this write is purely a safe fallback for them.
 ///
 /// Runs in [`PhysicsSet::Finalise`] during [`FixedUpdate`].
 fn finalise(
     time: Res<Time>,
     config: Res<PhysicsConfig>,
     mut query: Query<
-        (&mut Transform, &mut Velocity, &Grounded, &TentativePosition),
+        (
+            &mut Transform,
+            &mut CharacterPosition,
+            &mut Velocity,
+            &Grounded,
+            &TentativePosition,
+        ),
         With<PhysicsBody>,
     >,
 ) {
     let dt = time.delta_secs();
 
-    for (mut transform, mut velocity, grounded, tentative) in &mut query {
-        // ── Write resolved position ───────────────────────────────────────
+    for (mut transform, mut char_pos, mut velocity, grounded, tentative) in &mut query {
+        // ── Write resolved position to both physics truth and visual fallback
+        char_pos.0 = tentative.0;
         transform.translation = tentative.0;
 
         // ── Apply friction ────────────────────────────────────────────────
