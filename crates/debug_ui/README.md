@@ -1,70 +1,27 @@
-# Debug UI Crate
+# dd40_debug_ui
 
-This crate provides debug UI elements for the dd40 game client.
+Debug overlay crate for dd40. Provides an in-game heads-up display of
+performance and world statistics, an orientation gizmo, and an extensible
+system for any other crate to push custom debug information into the overlay
+without depending on this crate.
 
-## Features
+Depends only on `dd40_core`. Replace this crate with a custom debug UI by
+swapping the plugin in `dd40_client`.
 
-- **FPS Counter**: Displays current frames per second in the top-left corner
-  - Green text for good performance (≥60 FPS)
-  - Yellow text for moderate performance (30-59 FPS)
-  - Red text for low performance (<30 FPS)
+## Module overview
 
-- **Block Statistics**: Displays information about blocks in the world
-  - **Loaded Blocks**: Total number of non-air blocks currently loaded in the world (light blue text)
-  - **Rendered Blocks**: Number of blocks actually being rendered (orange text)
-  - **Culling Efficiency**: Percentage of loaded blocks that are culled (not rendered) due to occlusion (cyan text)
-
-## Usage
-
-Add the `DebugUiPlugin` to your Bevy app:
-
-```rust
-use bevy::prelude::*;
-use dd40_debug_ui::DebugUiPlugin;
-
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(DebugUiPlugin)
-        .run();
-}
+```
+src/
+├── lib.rs               — DebugUiPlugin: FPS counter, chunk stats, custom element host
+├── custom.rs            — DebugUiElementRoot marker, spawn_custom_debug_ui / update_custom_debug_ui systems
+└── orientation_gizmo.rs — OrientationGizmoPlugin: axis gizmo in the bottom-right corner
 ```
 
-The FPS counter will automatically appear in the top-left corner of the window.
+## Extensibility
 
-## Implementation Details
-
-The plugin:
-1. Adds Bevy's `FrameTimeDiagnosticsPlugin` for frame timing data
-2. Creates a UI overlay with debug text elements arranged in a column
-3. Updates the FPS display every frame with smoothed values
-4. Color-codes the FPS based on performance thresholds
-5. Reads `BlockStatistics` resource from the world crate to display block counts
-6. Calculates and displays culling efficiency percentage
-
-## Future Enhancements
-
-Planned additions to the debug UI:
-- Position/velocity display
-- Block type under cursor
-- Chunk coordinates
-- Memory usage
-- Entity count
-- Toggle visibility with hotkey (F3)
-- Performance graphs
-- Debug console
-- Networking statistics
-- World generation progress
-
-## Performance
-
-The debug UI has minimal performance impact:
-- Single UI container with four text elements
-- Updates only when diagnostics are available
-- Uses Bevy's built-in diagnostics system
-- Block statistics are updated via efficient query counting
-
-## Dependencies
-
-- `bevy` - Core game engine
-- `dd40_world` - For accessing `BlockStatistics` resource
+Any crate (or game code) can surface runtime data in the overlay by attaching a
+`DebugInfo` component (from `dd40_core::debug`) to any entity. The
+`spawn_custom_debug_ui` and `update_custom_debug_ui` systems in this crate
+detect those components automatically and create or update the corresponding
+text elements. No dependency on `dd40_debug_ui` is required from the crate
+providing the data.
