@@ -1,0 +1,23 @@
+{
+  "skill_name": "dd40-create-system",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I want to add a redstone system to dd40. It should handle redstone ticks, power levels, and connectivity between redstone components. Other systems like pistons and dispensers will need to read power levels and respond to changes, so I imagine this is foundational.",
+      "expected_output": "The skill should classify this as a core system, ask for the name (confirm 'redstone'), scaffold crates/redstone/ with Cargo.toml (depending on dd40_core), src/lib.rs, and src/plugin.rs with RedstonePlugin. It should add the crate to the workspace Cargo.toml members and workspace.dependencies. All pub items have /// doc comments. It should suggest next steps for a core system: system sets, foundational types (PowerLevel, RedstoneTick), events/messages.",
+      "assertions": []
+    },
+    {
+      "id": 1,
+      "prompt": "I'd like to create a flying system for dd40. It should allow certain entities to fly — overriding gravity when a fly mode is active. It'll build on the existing physics system and won't need to be depended on by anything else.",
+      "expected_output": "The skill should classify this as a non-core system, detect dd40_core (and ideally note the physics types live there) as the dependency, ask the user to confirm. Scaffolds crates/flying/ with Cargo.toml (dd40_core dependency), src/lib.rs, src/plugin.rs with FlyingPlugin. Adds to workspace members. All pub items have /// doc comments. Suggests non-core next steps: system functions, local components, plugin wiring, ordering relative to PhysicsSet.",
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "Can you help me add a weather system? It'll simulate rain, thunder, and clear skies. The weather state needs to be something other systems can react to — like crops growing faster in rain — so other crates will definitely import from it. I'm thinking the crate name should be 'weather'.",
+      "expected_output": "The skill should classify this as a core system (other crates import from it), accept 'weather' as the name → crate will be dd40_weather. Scaffolds crates/weather/ with Cargo.toml (dd40_core), src/lib.rs, src/plugin.rs with WeatherPlugin. Registers in workspace. All pub items have /// doc comments. Suggests core next steps: system sets (WeatherSet), types (WeatherState, etc.), events (WeatherChanged), traits.",
+      "assertions": []
+    }
+  ]
+}
