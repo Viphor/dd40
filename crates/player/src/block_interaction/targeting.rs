@@ -98,8 +98,8 @@ impl BlockFace {
 /// systems (e.g. block placement / breaking) should read from here rather than
 /// running their own raycast.
 ///
-/// When `pos` is `Some`, `face` is always `Some` too — they are set together
-/// and cleared together.
+/// When `pos` is `Some`, `face` and `block_id` are always `Some` too — they
+/// are set together and cleared together.
 #[derive(Resource, Debug, Default, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct TargetedBlock {
@@ -113,6 +113,13 @@ pub struct TargetedBlock {
     /// Add [`BlockFace::normal`]`()` to [`pos`][TargetedBlock::pos] to get the
     /// position where a newly placed block should go.
     pub face: Option<BlockFace>,
+
+    /// The [`BlockId`] of the targeted block, or `None` when no block is
+    /// targeted.
+    ///
+    /// Populated alongside `pos` so that interaction systems (mining, etc.) can
+    /// look up block definitions without a second cache lookup.
+    pub block_id: Option<BlockId>,
 }
 
 // ── DDA raycast ───────────────────────────────────────────────────────────────
@@ -148,7 +155,7 @@ fn dda_raycast(
     max_distance: f32,
     cache: &ChunkCache,
     registry: &BlockRegistry,
-) -> Option<(BlockPos, BlockFace)> {
+) -> Option<(BlockPos, BlockFace, BlockId)> {
     // Current voxel coordinates (the cell the ray tip is currently inside).
     let mut voxel = IVec3::new(
         origin.x.floor() as i32,
@@ -267,7 +274,7 @@ fn dda_raycast(
                                 }
                             }
                         };
-                        return Some((pos, face));
+                        return Some((pos, face, block.block_id));
                     }
                 }
             }
@@ -318,13 +325,15 @@ pub(super) fn update_targeted_block(
     let direction = *camera_transform.forward();
 
     match dda_raycast(origin, direction, config.max_distance, &cache, &registry) {
-        Some((pos, face)) => {
+        Some((pos, face, block_id)) => {
             targeted.pos = Some(pos);
             targeted.face = Some(face);
+            targeted.block_id = Some(block_id);
         }
         None => {
             targeted.pos = None;
             targeted.face = None;
+            targeted.block_id = None;
         }
     }
 }
@@ -408,7 +417,7 @@ mod tests {
         cache: &ChunkCache,
         registry: &BlockRegistry,
     ) -> Option<BlockPos> {
-        dda_raycast(origin, direction, max_distance, cache, registry).map(|(pos, _)| pos)
+        dda_raycast(origin, direction, max_distance, cache, registry).map(|(pos, _, _)| pos)
     }
 
     /// Convenience wrapper: calls `dda_raycast` and returns only the
@@ -420,7 +429,7 @@ mod tests {
         cache: &ChunkCache,
         registry: &BlockRegistry,
     ) -> Option<BlockFace> {
-        dda_raycast(origin, direction, max_distance, cache, registry).map(|(_, face)| face)
+        dda_raycast(origin, direction, max_distance, cache, registry).map(|(_, face, _)| face)
     }
 
     /// Build a minimal [`BlockRegistry`] containing Air (id 0) and Stone (id 1).

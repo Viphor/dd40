@@ -39,35 +39,31 @@ of the network stack.
 
 ---
 
-### 3. Vanilla blocks live in `dd40_core`
+### 3. `MiningState` lives in `dd40_player`, not `dd40_core`
 
-**Rule violated:** `dd40_core` should contain no game content, only engine
-infrastructure.
+**Rule violated (partial):** `MiningState` is a resource that the HUD and
+renderer will eventually need to read (for progress bars and block-crack
+animations). If they read it directly, they'd need to depend on `dd40_player`,
+violating the single-dependency rule.
 
-**Current state:** `dd40_core::vanilla_blocks` registers the standard block
-types (stone, dirt, grass, etc.) during startup.
+**Current state:** `MiningState` is defined in
+`dd40_player::block_interaction::mining` and is publicly exported.
 
-**Planned fix (owner-acknowledged):** Move vanilla blocks to a dedicated crate
-(e.g., `dd40_vanilla`) that depends on `dd40_core` and registers itself in
-`BlockRegistrySet`. `dd40_core` would then only register `BlockId::AIR` (which
-is an engine invariant, not content).
+**Fix:** Move `MiningState` to `dd40_core` so that `dd40_renderer`, `dd40_gui`,
+and any custom HUD crate can read it without taking a dependency on
+`dd40_player`. The mining system in `dd40_player` would then write the value as
+it does today.
 
 ---
 
-### 4. Root `Cargo.toml` package depends on `dd40_world` and `dd40_network`
+### 4. Block crack animation is unimplemented
 
-**Rule violated:** Non-configuration packages should not depend on multiple
-dd40 crates.
+**Current state:** The mining system tracks `progress` in `MiningState` (range
+`0.0–1.0`) but no renderer or HUD currently visualises it. The crack texture
+overlay familiar from Minecraft is not yet implemented.
 
-**Current state:** The workspace root defines a `[package]` section that
-depends on `dd40_core`, `dd40_world`, `dd40_debug_ui`, and `dd40_network` in
-order to host examples. This means the workspace root behaves like an
-unofficial third configuration crate.
-
-**Fix:** Move the examples into a dedicated workspace member (e.g.,
-`crates/examples`) that is allowed to depend on multiple dd40 crates, or
-promote each example to its own mini-crate. Remove the `[package]` section
-from the workspace root so `Cargo.toml` is purely a workspace manifest.
+**Fix:** Once `MiningState` is moved to `dd40_core` (see item 3), the renderer
+can read `progress` and overlay a crack texture on the targeted block.
 
 ---
 

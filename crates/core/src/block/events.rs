@@ -2,6 +2,7 @@ use bevy::ecs::{entity::Entity, message::Message};
 use serde::{Deserialize, Serialize};
 
 use crate::block::{BlockId, BlockPos};
+use crate::tools::EquippedTool;
 
 /// Sent by a player system to request placing a block at a given world position.
 ///
@@ -75,4 +76,60 @@ pub struct BlockChanged {
     pub old_block_id: BlockId,
     /// The block type after the change.
     pub new_block_id: BlockId,
+}
+
+// ── Mining messages ───────────────────────────────────────────────────────────
+
+/// Sent by the player when they begin holding left-click on a targeted block.
+///
+/// The network layer forwards this to the server, which records the start time
+/// and computes the required mining duration.  The server will only honour a
+/// subsequent [`MineBlockRequest`] if sufficient time has elapsed.
+///
+/// # Authoritativeness
+///
+/// Sending this message does **not** remove the block locally.  Block removal
+/// only happens after [`MineBlockRequest`] is validated by the server and a
+/// [`BlockRemoved`] message is broadcast back.
+#[derive(Message, Debug, Clone, Serialize, Deserialize)]
+pub struct StartMiningRequest {
+    /// World-space position of the block being mined.
+    pub pos: BlockPos,
+    /// The tool the player has equipped when mining starts.
+    ///
+    /// Sent so the server can independently compute the required duration using
+    /// the same [`mining_duration`][crate::tools::mining_duration] formula.
+    pub tool: EquippedTool,
+}
+
+/// Sent by the player when they stop mining before completing (button released,
+/// crosshair moved to a different block, etc.).
+///
+/// The server removes the active mining session for this client on receipt.
+/// If no session exists the message is silently ignored.
+#[derive(Message, Debug, Clone, Serialize, Deserialize)]
+pub struct AbortMiningRequest {
+    /// World-space position of the block that was being mined.
+    pub pos: BlockPos,
+}
+
+/// Sent by the player when their local mining timer has expired.
+///
+/// The server validates:
+/// 1. An active mining session exists for this client at `pos`.
+/// 2. Sufficient time has elapsed since the [`StartMiningRequest`] (with a
+///    small latency tolerance of `0.3 s`).
+/// 3. The block at `pos` has not already been removed or replaced.
+///
+/// If all checks pass, the server removes the block and broadcasts
+/// [`BlockRemoved`] to all clients.
+#[derive(Message, Debug, Clone, Serialize, Deserialize)]
+pub struct MineBlockRequest {
+    /// World-space position of the block to remove.
+    pub pos: BlockPos,
+    /// The tool equipped when the mining completed.
+    ///
+    /// Must match the `tool` from the corresponding [`StartMiningRequest`];
+    /// the server recomputes the required duration from this value.
+    pub tool: EquippedTool,
 }

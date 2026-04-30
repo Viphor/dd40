@@ -6,7 +6,7 @@ pub mod debug;
 pub mod loading;
 pub mod plugin;
 pub mod state;
-pub mod vanilla_blocks;
+pub mod tools;
 pub mod world;
 
 pub mod prelude {
@@ -31,6 +31,10 @@ pub mod prelude {
         },
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
+        tools::{
+            EquippedTool, ToolKindId, ToolKindDefinition, ToolRegistry, ToolRegistrySet,
+            ToolTierId, ToolTierDefinition, mining_duration,
+        },
         world::WorldGenerationSet,
     };
 }

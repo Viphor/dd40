@@ -2724,17 +2724,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
-name = "dd40"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dd40_core",
- "dd40_debug_ui",
- "dd40_network",
- "dd40_world",
-]
-
-[[package]]
 name = "dd40_chunk_storage"
 version = "0.1.0"
 dependencies = [
@@ -2755,6 +2744,7 @@ dependencies = [
  "dd40_network",
  "dd40_player",
  "dd40_renderer",
+ "dd40_vanilla_palette",
  "dd40_world",
  "lightyear_ui",
 ]
@@ -2824,7 +2814,16 @@ dependencies = [
  "dd40_chunk_storage",
  "dd40_core",
  "dd40_network",
+ "dd40_vanilla_palette",
  "dd40_world",
+]
+
+[[package]]
+name = "dd40_vanilla_palette"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
 ]
 
 [[package]]

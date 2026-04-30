@@ -13,7 +13,8 @@ use dd40_core::prelude::*;
 pub mod block_interaction;
 
 pub use block_interaction::{
-    BlockFace, BlockInteractionConfig, BlockInteractionPlugin, HeldBlock, TargetedBlock,
+    BlockFace, BlockInteractionConfig, BlockInteractionPlugin, HeldBlock, MiningState,
+    TargetedBlock,
 };
 
 // ---------------------------------------------------------------------------
@@ -100,7 +101,8 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
             .add("position", "Player position")
             .add("velocity", "Player velocity")
             .add("impulse", "Player impulse")
-            .add("chunk", "Player chunk"),
+            .add("chunk", "Player chunk")
+            .add("mining", "Idle"),
     ));
 }
 
@@ -341,8 +343,23 @@ fn sync_camera_to_player(
 // Other systems
 // ---------------------------------------------------------------------------
 
+fn add_debug_info(mut commands: Commands, player_query: Query<Entity, Added<Player>>) {
+    for player_entity in player_query.iter() {
+        commands.entity(player_entity).insert(
+            DebugInfo::new("Player Info")
+                .with_color(YELLOW.into())
+                .add("position", "Player position")
+                .add("velocity", "Player velocity")
+                .add("impulse", "Player impulse")
+                .add("chunk", "Player chunk")
+                .add("mining", "Mining status"),
+        );
+    }
+}
+
 fn update_debug_info(
     player_query: Single<(&Transform, &Velocity, &Impulse, &mut DebugInfo), With<Player>>,
+    mining: Res<MiningState>,
 ) {
     let (transform, velocity, impulse, mut debug_info) = player_query.into_inner();
     let pos = transform.translation;
@@ -360,6 +377,14 @@ fn update_debug_info(
     );
     let chunk = BlockPos::from(transform).chunk_pos();
     debug_info.set("chunk", chunk.to_string());
+
+    let mining_text = match mining.as_ref() {
+        MiningState::Idle => "Idle".to_string(),
+        MiningState::Mining { pos, progress, .. } => {
+            format!("{} ({:.0}%)", pos, progress * 100.0)
+        }
+    };
+    debug_info.set("mining", mining_text);
 }
 
 fn load_nearby_chunks(
@@ -421,6 +446,8 @@ impl Plugin for PlayerInputPlugin {
                 PreUpdate,
                 load_nearby_chunks.run_if(playing_and_running.clone()),
             )
+            // ── Update —───────────────────────────────────────────────────
+            .add_systems(Update, add_debug_info)
             // ── Update — always while playing ─────────────────────────────
             .add_systems(
                 Update,
@@ -431,7 +458,10 @@ impl Plugin for PlayerInputPlugin {
             // ── Update — Controller mode only ─────────────────────────────
             .add_systems(
                 Update,
-                (player_input, sync_camera_to_player.in_set(CharacterRenderSet::CameraSync))
+                (
+                    player_input,
+                    sync_camera_to_player.in_set(CharacterRenderSet::CameraSync),
+                )
                     .run_if(
                         playing_and_running
                             .clone()

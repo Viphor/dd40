@@ -5,6 +5,7 @@ use lightyear::prelude::server::ServerPlugins;
 use crate::{
     protocol::*,
     server::{
+        block_mining::{receive_abort_mining, receive_mine_block, receive_start_mining},
         block_placement::receive_place_requests,
         character::ServerCharacterPlugin,
         chunk_provider::{receive_chunk_requests, send_chunk_data},
@@ -15,6 +16,7 @@ use crate::{
     shared::constants::tick_duration,
 };
 
+pub mod block_mining;
 pub mod block_placement;
 pub mod character;
 pub mod chunk_provider;
@@ -63,6 +65,11 @@ impl Plugin for ServerNetworkPlugin {
 
         // Process incoming place-block requests from clients and broadcast results.
         app.add_systems(Update, receive_place_requests);
+
+        // Process incoming mining requests from clients.
+        app.add_systems(Update, receive_start_mining);
+        app.add_systems(Update, receive_abort_mining);
+        app.add_systems(Update, receive_mine_block);
     }
 }
 

@@ -1,8 +1,11 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
 
 use crate::{
-    character::plugin::CharacterPlugin, chunk::cache::ChunkCachePlugin, loading::LoadingPlugin,
-    prelude::*, vanilla_blocks::setup_vanilla_blocks,
+    character::plugin::CharacterPlugin,
+    chunk::cache::ChunkCachePlugin,
+    loading::LoadingPlugin,
+    prelude::*,
+    tools::{ToolRegistry, configure_tool_registry_ordering},
 };
 
 /// Bevy plugin that registers core types with the reflection system.
@@ -18,9 +21,11 @@ impl Plugin for CorePlugin {
             .init_state::<AppState>()
             .init_state::<GameState>()
             .insert_resource(BlockRegistry::new())
+            .insert_resource(ToolRegistry::new())
             .register_type::<BlockId>()
             .register_type::<Block>()
             .register_type::<BlockRegistry>()
+            .register_type::<ToolRegistry>()
             .register_type::<ChunkPos>()
             .register_type::<BlockPos>()
             .add_message::<ChunkReady>()
@@ -29,11 +34,18 @@ impl Plugin for CorePlugin {
             .add_message::<BlockPlaced>()
             .add_message::<BlockRemoved>()
             .add_message::<BlockChanged>()
-            .configure_sets(
-                Startup,
-                (BlockRegistrySet, WorldGenerationSet.after(BlockRegistrySet)),
-            )
-            .add_systems(Startup, setup_vanilla_blocks.in_set(BlockRegistrySet));
+            .add_message::<StartMiningRequest>()
+            .add_message::<AbortMiningRequest>()
+            .add_message::<MineBlockRequest>();
+
+        // System set ordering: tools must be registered before blocks (block
+        // definitions may reference ToolKindId), and both must finish before
+        // world generation reads the registry.
+        configure_tool_registry_ordering(app);
+        app.configure_sets(
+            Startup,
+            (BlockRegistrySet, WorldGenerationSet.after(BlockRegistrySet)),
+        );
 
         app.add_plugins(ChunkCachePlugin);
     }

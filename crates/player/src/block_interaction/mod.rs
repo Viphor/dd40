@@ -42,10 +42,15 @@
 //! ```
 
 use bevy::prelude::*;
-use dd40_core::block::events::{BlockPlaced, PlaceBlockRequest};
+use dd40_core::block::events::{
+    AbortMiningRequest, BlockPlaced, BlockRemoved, MineBlockRequest, PlaceBlockRequest,
+    StartMiningRequest,
+};
 use dd40_core::prelude::*;
 
+pub use crate::block_interaction::mining::MiningState;
 pub use crate::block_interaction::placement::HeldBlock;
+use crate::block_interaction::mining::{apply_removed_blocks, update_mining};
 use crate::block_interaction::placement::{apply_placed_blocks, try_place_block};
 pub use crate::block_interaction::targeting::{BlockFace, BlockInteractionConfig, TargetedBlock};
 use crate::block_interaction::targeting::{
@@ -53,30 +58,34 @@ use crate::block_interaction::targeting::{
 };
 use crate::PlayerMode;
 
+pub mod mining;
 pub mod placement;
 mod targeting;
 
 // ── Plugin ────────────────────────────────────────────────────────────────────
 
-/// Plugin that adds player block-targeting, highlight rendering, and block
-/// placement.
+/// Plugin that adds player block-targeting, highlight rendering, block
+/// placement, and block mining.
 ///
 /// Registers the following resources:
 /// - [`BlockInteractionConfig`] — raycast reach and highlight colour.
 /// - [`TargetedBlock`]          — the block and face the player is looking at.
-/// - [`HeldBlock`]              — the block type the player will place on
-///                                right-click.
+/// - [`HeldBlock`]              — the block type the player will place on right-click.
+/// - [`MiningState`]            — current mining progress (readable by HUD / renderer).
 ///
 /// Registers the following Bevy messages:
-/// - [`PlaceBlockRequest`] — written by [`try_place_block`] and consumed by
-///   the network layer to forward the request to the server.
-/// - [`BlockPlaced`]       — written by the network layer when a placement is
-///   confirmed; consumed by [`apply_placed_blocks`] to update the local
-///   [`ChunkCache`].
+/// - [`PlaceBlockRequest`]     — written here, consumed by the network layer.
+/// - [`BlockPlaced`]           — written by the network layer; consumed here to
+///                               update the local [`ChunkCache`].
+/// - [`StartMiningRequest`]    — written here, consumed by the network layer.
+/// - [`AbortMiningRequest`]    — written here, consumed by the network layer.
+/// - [`MineBlockRequest`]      — written here, consumed by the network layer.
 ///
 /// All gameplay systems run only while the app is in [`AppState::Playing`]
 /// **and** [`GameState::Running`], so they are automatically suppressed during
-/// loading screens and pause menus.
+/// loading screens and pause menus.  The exception is [`apply_removed_blocks`],
+/// which runs whenever [`AppState::Playing`] — including while paused — so
+/// that block removals from other players are applied immediately.
 ///
 /// # Example
 ///
@@ -118,22 +127,24 @@ impl Plugin for BlockInteractionPlugin {
         })
         .insert_resource(TargetedBlock::default())
         .insert_resource(HeldBlock::default())
+        .insert_resource(MiningState::default())
         .register_type::<BlockInteractionConfig>()
         .register_type::<TargetedBlock>()
-        .register_type::<HeldBlock>();
+        .register_type::<HeldBlock>()
+        .register_type::<MiningState>();
 
         // ── Messages ──────────────────────────────────────────────────────
-        // PlaceBlockRequest: written here, consumed by the network layer.
         app.add_message::<PlaceBlockRequest>();
-        // BlockPlaced: written by the network layer, consumed here.
         app.add_message::<BlockPlaced>();
+        app.add_message::<BlockRemoved>();
+        app.add_message::<StartMiningRequest>();
+        app.add_message::<AbortMiningRequest>();
+        app.add_message::<MineBlockRequest>();
 
         // ── Startup ───────────────────────────────────────────────────────
         app.add_systems(Startup, spawn_debug_entity);
 
         // ── Per-frame gameplay systems ─────────────────────────────────────
-        // All targeting/placement systems require Controller mode: the player
-        // should not be able to interact with the world while in FreeCam.
         let playing_running_controller = in_state(AppState::Playing)
             .and(in_state(GameState::Running))
             .and(in_state(PlayerMode::Controller));
@@ -149,24 +160,31 @@ impl Plugin for BlockInteractionPlugin {
                 update_debug_info,
                 // 4. On right-click: validate and emit PlaceBlockRequest.
                 try_place_block,
+                // 5. On left-click: track mining timer, emit mining requests.
+                update_mining,
             )
                 .chain()
                 .run_if(playing_running_controller),
         );
 
-        // Clear the targeted-block highlight immediately when entering FreeCam
-        // so the wireframe does not linger until the raycast would next update.
+        // Clear state immediately when entering FreeCam so highlights and
+        // mining state don't linger until the next raycast update.
         app.add_systems(
             OnEnter(PlayerMode::FreeCam),
-            |mut targeted: ResMut<TargetedBlock>| {
+            |mut targeted: ResMut<TargetedBlock>, mut mining: ResMut<MiningState>| {
                 *targeted = TargetedBlock::default();
+                *mining = MiningState::Idle;
             },
         );
 
-        // apply_placed_blocks runs in PostUpdate and is NOT gated on PlayerMode:
-        // it processes incoming network confirmations and must keep the chunk
-        // cache consistent regardless of the current camera mode.
+        // apply_placed_blocks runs in PostUpdate and is NOT gated on PlayerMode.
         let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
         app.add_systems(PostUpdate, apply_placed_blocks.run_if(playing_and_running));
+
+        // apply_removed_blocks runs in PostUpdate gated only on AppState::Playing —
+        // NOT on GameState::Running — so that block removals from other players
+        // are applied even while the local game is paused.
+        let playing = in_state(AppState::Playing);
+        app.add_systems(PostUpdate, apply_removed_blocks.run_if(playing));
     }
 }

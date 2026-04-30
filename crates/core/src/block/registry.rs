@@ -7,6 +7,7 @@ use bevy::{
 use serde::{Deserialize, Serialize};
 
 use crate::character::physics::CollisionShape;
+use crate::tools::ToolKindId;
 
 /// System set for block registration systems.
 /// All block registrations should run in this set during Startup.
@@ -45,6 +46,29 @@ pub struct BlockDefinition {
     /// stairs, and lecterns — all coordinates are in cell-local space
     /// (`[0, 1]` range).
     pub collision_shape: CollisionShape,
+    /// Base time in seconds a player with bare hands takes to mine this block.
+    ///
+    /// Set to `0.0` for instant-mine blocks (tall grass, flowers).
+    /// The actual mining duration is computed by
+    /// [`mining_duration`][crate::tools::mining_duration], which applies the
+    /// equipped tool's speed multiplier when the tool kind matches
+    /// [`preferred_tool`][Self::preferred_tool].
+    pub toughness: f32,
+    /// The tool kind that gives a speed bonus when mining this block.
+    ///
+    /// `None` means no tool kind provides a bonus — only the bare-hands speed
+    /// applies.  Set to `Some(kind_id)` (e.g. `VanillaToolKinds::PICKAXE`) to
+    /// let players with that tool kind mine faster according to their tier's
+    /// `speed_multiplier`.
+    pub preferred_tool: Option<ToolKindId>,
+    /// Whether this block can be mined at all.
+    ///
+    /// Set to `false` for blocks that should never be removable regardless of
+    /// tool or toughness (e.g. bedrock).  The mining system and network
+    /// validation both respect this flag and will refuse to remove the block.
+    ///
+    /// Defaults to `true`.
+    pub is_destructible: bool,
 }
 
 impl BlockDefinition {
@@ -57,6 +81,9 @@ impl BlockDefinition {
     /// | `color`            | [`Color::WHITE`]               |
     /// | `is_replaceable`   | `false`                        |
     /// | `collision_shape`  | [`CollisionShape::FullCube`]   |
+    /// | `toughness`        | `1.0`                          |
+    /// | `preferred_tool`   | `None`                         |
+    /// | `is_destructible`  | `true`                         |
     pub fn new(id: BlockId, name: impl Into<String>) -> Self {
         Self {
             id,
@@ -66,6 +93,9 @@ impl BlockDefinition {
             color: Color::WHITE,
             is_replaceable: false,
             collision_shape: CollisionShape::FullCube,
+            toughness: 1.0,
+            preferred_tool: None,
+            is_destructible: true,
         }
     }
 
@@ -118,6 +148,35 @@ impl BlockDefinition {
         self.collision_shape = shape;
         self
     }
+
+    /// Sets the base mining time in seconds for bare hands against this block.
+    ///
+    /// Use `0.0` for instant-mine blocks (tall grass, flowers).
+    /// The actual time is reduced by the equipped tool's `speed_multiplier`
+    /// when the tool kind matches [`preferred_tool`][Self::preferred_tool].
+    pub fn with_toughness(mut self, toughness: f32) -> Self {
+        self.toughness = toughness;
+        self
+    }
+
+    /// Sets the tool kind that gives a speed bonus when mining this block.
+    ///
+    /// Passing a [`ToolKindId`] here means players equipped with that kind will
+    /// mine faster according to their tier's `speed_multiplier`.  `None` (the
+    /// default) means no tool kind provides a bonus.
+    pub fn with_preferred_tool(mut self, kind: ToolKindId) -> Self {
+        self.preferred_tool = Some(kind);
+        self
+    }
+
+    /// Sets whether this block can be mined.
+    ///
+    /// Set to `false` for blocks like bedrock that must never be removed
+    /// regardless of tool or toughness.
+    pub fn with_destructible(mut self, is_destructible: bool) -> Self {
+        self.is_destructible = is_destructible;
+        self
+    }
 }
 
 /// Registry that stores all registered block types.
@@ -133,13 +192,17 @@ impl BlockRegistry {
 
         // Always register Air as the first block (ID 0).
         // Air has no collision, is not solid, and is not rendered.
+        // Air is replaceable (you can place blocks in air).
+        // Air is not destructible — you cannot "mine" air.
         registry.insert_definition(
             BlockDefinition::new(BlockId::AIR, "air")
                 .with_solid(false)
                 .with_renderable(false)
                 .with_color(Color::srgba(0.0, 0.0, 0.0, 0.0))
                 .with_replaceable(true)
-                .with_collision_shape(CollisionShape::None),
+                .with_collision_shape(CollisionShape::None)
+                .with_toughness(0.0)
+                .with_destructible(false),
         );
 
         registry
@@ -251,6 +314,16 @@ impl BlockRegistry {
         self.get(block.block_id)
             .map(|def| def.collision_shape.clone())
             .unwrap_or(CollisionShape::None)
+    }
+
+    /// Returns `true` if the block can be mined.
+    ///
+    /// Returns `false` for unregistered block IDs (treat unknowns as indestructible
+    /// for safety).
+    pub fn is_destructible(&self, block: &super::Block) -> bool {
+        self.get(block.block_id)
+            .map(|def| def.is_destructible)
+            .unwrap_or(false)
     }
 }
 

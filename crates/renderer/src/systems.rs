@@ -103,6 +103,26 @@ pub fn mark_dirty_on_block_change(
     }
 }
 
+/// Reads incoming [`BlockRemoved`] messages and marks the corresponding chunk
+/// dirty in [`ChunkRenderState`] so that exposed faces are rebuilt.
+///
+/// Runs in `PreUpdate` alongside [`mark_dirty_on_block_change`].
+///
+/// [`BlockRemoved`]: dd40_core::block::events::BlockRemoved
+pub fn mark_dirty_on_block_removed(
+    mut reader: MessageReader<dd40_core::block::events::BlockRemoved>,
+    mut render_state: ResMut<ChunkRenderState>,
+) {
+    for msg in reader.read() {
+        let pos = msg.pos.chunk_pos();
+        render_state.mark_dirty(pos);
+        trace!(
+            "Renderer: marked chunk {:?} dirty (BlockRemoved at {})",
+            pos, msg.pos
+        );
+    }
+}
+
 /// Iterates over every chunk tracked by [`ChunkRenderState`] and updates its
 /// [`LodLevel`] based on the player's current chunk position.
 ///

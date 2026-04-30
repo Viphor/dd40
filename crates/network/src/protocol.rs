@@ -7,6 +7,7 @@
 use bevy::math::Curve;
 use bevy::prelude::*;
 pub use dd40_core::prelude::PlaceBlockRequest;
+pub use dd40_core::block::events::{AbortMiningRequest, MineBlockRequest, StartMiningRequest};
 use dd40_core::{character::Character, prelude::*};
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -273,6 +274,15 @@ impl Plugin for ProtocolPlugin {
         app.register_message::<PlaceBlockRequest>()
             .add_direction(NetworkDirection::ClientToServer);
 
+        app.register_message::<StartMiningRequest>()
+            .add_direction(NetworkDirection::ClientToServer);
+
+        app.register_message::<AbortMiningRequest>()
+            .add_direction(NetworkDirection::ClientToServer);
+
+        app.register_message::<MineBlockRequest>()
+            .add_direction(NetworkDirection::ClientToServer);
+
         app.register_message::<RequestSpawn>()
             .add_direction(NetworkDirection::ClientToServer);
 
@@ -284,6 +294,9 @@ impl Plugin for ProtocolPlugin {
             .add_direction(NetworkDirection::ServerToClient);
 
         app.register_message::<BlockPlaced>()
+            .add_direction(NetworkDirection::ServerToClient);
+
+        app.register_message::<BlockRemoved>()
             .add_direction(NetworkDirection::ServerToClient);
 
         app.register_message::<PlayerJoinedMessage>()

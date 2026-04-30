@@ -6,7 +6,8 @@ use dd40_network::{
     server::connection::{DDServer, LinkConditionerConfig, RecvLinkConditioner},
     shared::connection::SHARED_SETTINGS,
 };
-use dd40_world::{WorldPlugin, generators::flat::FlatWorldGenerator};
+use dd40_vanilla_palette::{VanillaPalettePlugin, VanillaBlocks};
+use dd40_world::{WorldPlugin, generators::flat::{FlatWorldGenerator, Layer}};
 
 fn main() {
     App::new()
@@ -16,8 +17,13 @@ fn main() {
         .add_plugins(DiagnosticsPlugin)
         .add_plugins((
             CorePlugin,
+            VanillaPalettePlugin,
             DiskStoragePlugin::new("world_data/chunks"),
-            WorldPlugin::new(FlatWorldGenerator::default()),
+            WorldPlugin::new(FlatWorldGenerator(vec![
+                Layer { block_id: VanillaBlocks::STONE, height_range: 0..58 },
+                Layer { block_id: VanillaBlocks::DIRT,  height_range: 58..62 },
+                Layer { block_id: VanillaBlocks::GRASS, height_range: 62..63 },
+            ])),
             ServerNetworkPlugin(DDServer {
                 conditioner: Some(RecvLinkConditioner::new(
                     LinkConditionerConfig::average_condition(),

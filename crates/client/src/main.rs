@@ -6,6 +6,7 @@ use dd40_gui::plugin::GuiPlugin;
 use dd40_network::ClientNetworkPlugin;
 use dd40_player::PlayerInputPlugin;
 use dd40_renderer::RendererPlugin;
+use dd40_vanilla_palette::VanillaPalettePlugin;
 
 fn main() {
     let mut app = App::new();
@@ -23,6 +24,7 @@ fn main() {
     )
     .add_plugins((
         CorePlugin,
+        VanillaPalettePlugin,
         PlayerInputPlugin,
         DebugUiPlugin,
         ClientNetworkPlugin,
