@@ -15,9 +15,9 @@ description: >
 
 dd40 is an open-source, Minecraft-inspired voxel game built with Bevy 0.18.
 The guiding design goal is **modularity**: anyone should be able to swap out any
-subsystem — chunk storage, world generation, UI, player controller, renderer —
-by writing their own crate that only talks to `dd40_core`, without touching the
-rest of the codebase.
+subsystem — chunk storage, world generation, UI, player controller, renderer,
+physics — by writing a single replacement crate that depends only on the
+relevant foundation crates, without touching the rest of the codebase.
 
 ## Where to look things up
 
@@ -27,6 +27,7 @@ rest of the codebase.
 - **Public events, messages, resources, and components**: the `docs/` folder at
   the repo root, organized by system.
 - **Known deviations from these rules and planned fixes**: `INCONSISTENCIES.md`.
+- **Planned architectural work**: `SPEC.md` at the repo root.
 
 Always read the relevant `README.md` and `STRUCTURE.md` before planning work that
 touches more than one file.
@@ -35,42 +36,100 @@ touches more than one file.
 
 ## The architectural rules
 
-### 1. One shared foundation
+### Three-tier dependency model
 
-Every non-core dd40 crate may depend only on `dd40_core` and external libraries.
-No non-core crate may import another dd40 crate. This keeps each feature crate
-independently swappable — you can replace any one of them without touching the
-others.
+Crates are organised into three tiers. Each tier has strict rules about what it
+may depend on.
 
-### 2. Core is vocabulary, not logic
+#### Tier 0 — Foundation crates
+`dd40_core`, `dd40_physics_core`, `dd40_character_core`
 
-`dd40_core` contains types, components, events, messages, system sets, and
-shared resources. It enforces no game behaviour beyond the physics engine, which
-is an intentional exception (see `STRUCTURE.md` for the reasoning).
+- Contain **types, components, system sets, resources, and messages only** —
+  no concrete game behaviour.
+- May depend on other foundation crates (acyclically) and external libraries.
+- Every plugin struct must derive `Default` so it can be auto-added.
 
-### 3. Client and server are configurations
+#### Tier 1 — Implementation crates
+`dd40_physics`, `dd40_vanilla_palette`, `dd40_world`, `dd40_chunk_storage`,
+`dd40_renderer`, `dd40_character_interaction`, `dd40_player_movement`,
+`dd40_player`, `dd40_network`, `dd40_debug_ui`, `dd40_gui`
 
-`dd40_client` and `dd40_server` are the only crates allowed to depend on
-multiple dd40 crates at once. Their job is to wire together the right set of
-plugins for the default game experience, nothing more.
+- Contain **systems, asset loading, and concrete behaviour**.
+- May depend on **any** foundation crates and external libraries.
+- Must **not** depend on other implementation crates.
+- Must use `ensure_plugins!` at the top of every `Plugin::build` to
+  auto-satisfy direct runtime dependencies (see below).
 
-### 4. BlockDefinition is the single source of truth
+#### Tier 2 — Binary crates
+`dd40_client`, `dd40_server`
+
+- May depend on any dd40 crate.
+- Wire together the chosen implementation plugins.
+- The ideal binary `main.rs` is a flat list of implementation plugins — no
+  foundation plugins needed, because `ensure_plugins!` handles them.
+
+### Rule 2 — BlockDefinition is the single source of truth
 
 All block properties — rendering, physics, gameplay — live on `BlockDefinition`.
 Never store block-related data in a separate resource that must be kept in sync
 with `BlockRegistry`.
 
+### Rule 3 — `CollisionShape` stays in `dd40_core`
+
+`CollisionShape` is part of `BlockDefinition`. Moving it would make `dd40_core`
+depend on `dd40_physics_core`, creating a circular foundation dependency.
+
+---
+
+## The `ensure_plugins!` auto-plugin pattern
+
+Every implementation (and foundation) plugin must satisfy its direct runtime
+dependencies automatically, never assuming the caller added them. Use the
+`ensure_plugins!` macro from `dd40_core`:
+
+```rust
+impl Plugin for PhysicsPlugin {
+    fn build(&self, app: &mut App) {
+        // Satisfy every direct runtime dependency, in any order.
+        dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
+
+        app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, CharacterCollisionPlugin));
+    }
+}
+```
+
+Foundation plugins apply the same rule:
+
+```rust
+impl Plugin for PhysicsCorePlugin {
+    fn build(&self, app: &mut App) {
+        dd40_core::ensure_plugins!(app, CorePlugin);
+        // register types, configure system sets ...
+    }
+}
+```
+
+**Rules:**
+- List every plugin your `build` method **directly** reads resources or system
+  sets from — not just the Cargo dependency, not just what you know the dep
+  transitively checks.
+- Never write `if !app.is_plugin_added` by hand; always use `ensure_plugins!`.
+- `CorePlugin` itself is exempt (it is the root — nothing to check).
+- Binary crates are exempt (they manage their plugin list explicitly).
+
 ---
 
 ## Code placement
 
-When you are unsure which crate a piece of code belongs in, ask: "Can this be
-implemented with only `dd40_core` and external libraries?" If yes, it is a
-candidate for that feature crate. If it inherently needs two non-core crates, it
-belongs in client/server or in a new abstraction in `dd40_core`.
+Ask: "What does this code need to read or write?"
 
-Consult `STRUCTURE.md` for the current role of each crate and use those roles as
-the deciding factor.
+- Needs only its own types and bevy → stays in the same crate.
+- Needs types from one foundation crate → belongs in an implementation crate
+  that depends on that foundation crate.
+- Needs types from two implementation crates → belongs in a binary, or requires
+  a new abstraction in a foundation crate.
+
+Consult `STRUCTURE.md` for the current role of each crate.
 
 ---
 
