@@ -5,7 +5,7 @@ use crate::{
     components::PhysicsConfig,
     components::{
         Aabb, CharacterCollider, CharacterPosition, GravityScale, Grounded, Impulse, PhysicsBody,
-        TentativePosition, Velocity,
+        Velocity,
     },
     system_sets::PhysicsSet,
 };

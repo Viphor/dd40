@@ -2790,6 +2790,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_physics"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "dd40_physics_core",
+]
+
+[[package]]
+name = "dd40_physics_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "serde",
+]
+
+[[package]]
 name = "dd40_player"
 version = "0.1.0"
 dependencies = [
