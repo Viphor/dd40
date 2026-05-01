@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/core",
+    "crates/physics_core",
     "crates/gui",
     "crates/world",
     "crates/player",
@@ -17,6 +18,7 @@ resolver = "2"
 [workspace.dependencies]
 bevy = { version = "0.18", default-features = false }
 dd40_core = { path = "crates/core" }
+dd40_physics_core = { path = "crates/physics_core" }
 dd40_gui = { path = "crates/gui" }
 dd40_world = { path = "crates/world" }
 dd40_player = { path = "crates/player" }

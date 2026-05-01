@@ -9,6 +9,7 @@ use crate::{
 };
 
 /// Bevy plugin that registers core types with the reflection system.
+#[derive(Default)]
 pub struct CorePlugin;
 
 impl Plugin for CorePlugin {
