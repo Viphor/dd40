@@ -213,16 +213,6 @@ impl CharacterPosition {
 
 // ---------------------------------------------------------------------------
 
-/// Internal scratch component: the **tentative** world position produced by
-/// [`PhysicsSet::Integrate`] and refined by the collision stages before being
-/// written back in [`PhysicsSet::Finalise`].
-///
-/// Managed entirely by the physics pipeline; do not read or write from outside.
-#[derive(Debug, Default, Clone, Copy, Component)]
-pub struct TentativePosition(pub Vec3);
-
-// ---------------------------------------------------------------------------
-
 /// Accumulates instantaneous velocity changes to be flushed at the start of
 /// the next [`PhysicsSet::Integrate`] tick.
 ///
@@ -251,7 +241,7 @@ pub struct Impulse(pub Vec3);
 /// [`CharacterCollider`].
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
-#[require(Velocity, GravityScale, Grounded, TentativePosition, Impulse, CharacterPosition)]
+#[require(Velocity, GravityScale, Grounded, Impulse, CharacterPosition)]
 pub struct PhysicsBody;
 
 // ---------------------------------------------------------------------------

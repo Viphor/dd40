@@ -15,7 +15,7 @@ pub enum PhysicsSet {
     /// sees up-to-date intent before translating it into physics impulses.
     InputSync,
     /// Apply external forces (gravity, impulses) and integrate velocity into
-    /// a **tentative** new position stored in [`TentativePosition`].
+    /// a **tentative** new position refined by the collision stages.
     Integrate,
     /// Resolve the tentative position against the solid block grid.
     BlockCollision,

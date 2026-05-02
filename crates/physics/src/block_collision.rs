@@ -31,6 +31,8 @@ use dd40_core::{
 };
 use dd40_physics_core::prelude::*;
 
+use crate::integration::TentativePosition;
+
 // ---------------------------------------------------------------------------
 // Collision shape resolution
 // ---------------------------------------------------------------------------

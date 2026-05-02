@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use dd40_core::plugin::CorePlugin;
-use dd40_physics_core::plugin::PhysicsCorePlugin;
+use dd40_physics_core::{components::PhysicsBody, plugin::PhysicsCorePlugin};
 
 use crate::{
     block_collision::BlockCollisionPlugin,
     character_collision::CharacterCollisionPlugin,
-    integration::IntegrationPlugin,
+    integration::{IntegrationPlugin, TentativePosition},
 };
 
 /// Registers all physics simulation systems.
@@ -24,7 +24,20 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
         app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, CharacterCollisionPlugin));
+        app.add_observer(on_physics_body_added);
     }
+}
+
+/// Inserts [`TentativePosition`] whenever a [`PhysicsBody`] is added to an entity.
+///
+/// [`TentativePosition`] is an implementation detail of `dd40_physics` and
+/// therefore cannot be declared in `dd40_physics_core` alongside [`PhysicsBody`].
+/// This observer bridges that gap without requiring callers to know about the
+/// internal component.
+fn on_physics_body_added(trigger: On<Add, PhysicsBody>, mut commands: Commands) {
+    commands
+        .entity(trigger.event_target())
+        .insert(TentativePosition::default());
 }
 
 #[cfg(test)]

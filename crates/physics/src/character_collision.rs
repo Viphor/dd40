@@ -35,6 +35,7 @@ use bevy::prelude::*;
 
 use dd40_physics_core::prelude::*;
 
+use crate::integration::TentativePosition;
 use crate::spatial_cache::{CharacterSpatialCache, update_character_spatial_cache};
 
 // ---------------------------------------------------------------------------

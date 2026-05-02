@@ -47,6 +47,8 @@ use dd40_core::block::BlockPos;
 use dd40_core::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
 use dd40_physics_core::prelude::*;
 
+use crate::integration::TentativePosition;
+
 // ---------------------------------------------------------------------------
 // Resource
 // ---------------------------------------------------------------------------

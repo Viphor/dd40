@@ -17,6 +17,18 @@ use bevy::prelude::*;
 use dd40_physics_core::prelude::*;
 
 // ---------------------------------------------------------------------------
+
+/// Scratch component: the **tentative** world position produced by
+/// [`PhysicsSet::Integrate`] and refined by the collision stages before being
+/// written back to [`CharacterPosition`] in [`PhysicsSet::Finalise`].
+///
+/// Inserted automatically by [`crate::plugin::PhysicsPlugin`] on any entity
+/// that gains a [`PhysicsBody`]. External code must not read or write this —
+/// use [`CharacterPosition`] for the authoritative position.
+#[derive(Debug, Default, Clone, Copy, Component)]
+pub(crate) struct TentativePosition(pub(crate) Vec3);
+
+// ---------------------------------------------------------------------------
 // Systems
 // ---------------------------------------------------------------------------
 
