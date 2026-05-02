@@ -36,9 +36,7 @@ pub struct ServerNetworkPlugin(pub DDServer);
 
 impl Plugin for ServerNetworkPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<CorePlugin>() {
-            panic!("ServerNetworkPlugin requires CorePlugin to be added to the app");
-        }
+        dd40_core::ensure_plugins!(app, CorePlugin);
 
         app.add_plugins(ServerPlugins {
             tick_duration: tick_duration(),

@@ -1,6 +1,6 @@
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
-use dd40_core::chunk;
+use dd40_core::{chunk, plugin::CorePlugin};
 
 use crate::custom::{DebugUiElementRoot, spawn_custom_debug_ui, update_custom_debug_ui};
 use crate::orientation_gizmo::OrientationGizmoPlugin;
@@ -20,6 +20,8 @@ pub struct DebugUiPlugin;
 
 impl Plugin for DebugUiPlugin {
     fn build(&self, app: &mut App) {
+        dd40_core::ensure_plugins!(app, CorePlugin);
+
         app.add_plugins(FrameTimeDiagnosticsPlugin::default())
             .add_plugins(OrientationGizmoPlugin)
             .add_systems(Startup, setup_debug_ui)

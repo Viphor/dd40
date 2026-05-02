@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use dd40_core::plugin::CorePlugin;
 
 use crate::{
     ChunkResponse, ChunkResponseReceiver, ChunkResponseSender, collect_chunk_responses,
@@ -33,6 +34,8 @@ impl DiskStoragePlugin {
 
 impl Plugin for DiskStoragePlugin {
     fn build(&self, app: &mut App) {
+        dd40_core::ensure_plugins!(app, CorePlugin);
+
         let (tx, rx) = crossbeam_channel::unbounded::<ChunkResponse>();
         app.insert_resource(ChunkResponseSender(tx));
         app.insert_resource(ChunkResponseReceiver(rx));
