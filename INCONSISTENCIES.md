@@ -8,103 +8,38 @@ Active architectural work is planned in `SPEC.md`.
 
 ---
 
-## Inconsistencies
+## Open Inconsistencies
 
-### 1. `dd40_renderer` depends on `dd40_player`
+### 1. `dd40_player` depends on other implementation crates
 
 **Rule violated:** Implementation crates must not depend on other implementation
 crates.
 
-**Current state:** `dd40_renderer` imports `dd40_player` to read the player
-world position for LOD (level-of-detail) distance calculations.
+**Current state:** `dd40_player` depends on `dd40_player_movement` and
+`dd40_character_interaction`, both of which are Tier 1 implementation crates.
 
-**Fix (planned in SPEC.md Task 5.1):** Use `CharacterPosition` from
-`dd40_physics_core` as the LOD anchor instead of querying `With<Player>`.
-The renderer then depends only on foundation crates.
+**Rationale for keeping:** `dd40_player` is an intentional convenience wrapper
+that composes the two movement/interaction plugins plus the local player spawn
+and debug-info systems. It holds the only code that needs *both* physics types
+(`Velocity`, `Impulse`) and interaction types (`MiningState`) simultaneously —
+specifically the `update_debug_info` system. Splitting that system further would
+create more coupling, not less.
 
----
-
-### 2. `PlayerLocations` is keyed by lightyear `PeerId`
-
-**Rule violated:** Core game concepts should not be coupled to network identity.
-
-**Current state:** `dd40_network::server::spawn::PlayerLocations` stores last-known
-spawn positions keyed by `lightyear::prelude::PeerId`. This couples spawn
-management to the transport layer, making it impossible to reuse for NPCs,
-animals, or alternative transports.
-
-**Fix (planned in SPEC.md Task 5.2):** Introduce `PlayerId(u64)` in
-`dd40_character_core` and key `PlayerLocations` by that type. The network layer
-maps `PeerId -> PlayerId` at connection time.
+**Planned resolution:** If `update_debug_info` is moved to a HUD crate that
+depends on both interaction and physics foundation crates directly, `dd40_player`
+could be deleted and callers would compose the plugins themselves.
 
 ---
 
-### 3. `MiningState` lives in `dd40_player`, not a foundation crate
-
-**Rule violated (partial):** `MiningState` is a resource that the HUD and
-renderer will eventually need to read. If they read it directly, they'd need to
-depend on `dd40_player`, violating the implementation-crate rule.
-
-**Current state:** `MiningState` is defined in
-`dd40_player::block_interaction::mining` and is publicly exported.
-
-**Fix (planned in SPEC.md Task 3.2 / 5.3):** Move `MiningState` to
-`dd40_character_core` so any foundation or implementation crate can read it
-without depending on `dd40_player`.
-
----
-
-### 4. Block crack animation is unimplemented
+### 2. Block crack animation is unimplemented
 
 **Current state:** The mining system tracks `progress` in `MiningState` (range
-`0.0–1.0`) but no renderer or HUD currently visualises it.
+`0.0–1.0`) but no renderer or HUD currently visualises it. `MiningState` now
+lives in `dd40_character_core` so the renderer can depend on it without
+depending on `dd40_character_interaction`.
 
-**Fix (planned in SPEC.md Task 5.3):** Once `MiningState` is in
-`dd40_character_core`, the renderer can read `progress` and overlay a crack
-texture on the targeted block.
-
----
-
-### 5. Physics systems live in `dd40_core` (should be `dd40_physics`)
-
-**Rule violated:** Foundation crates should contain types and system sets only,
-not concrete game systems.
-
-**Current state:** `dd40_core::character::physics` contains `IntegrationPlugin`,
-`BlockCollisionPlugin`, and `CharacterCollisionPlugin` — concrete systems that
-implement game behaviour.
-
-**Fix (planned in SPEC.md Phase 1):** Extract vocabulary to `dd40_physics_core`
-and systems to `dd40_physics`.
-
----
-
-### 6. Character types live in `dd40_core` (should be `dd40_character_core`)
-
-**Rule violated:** `dd40_core` should be pure infrastructure; character
-vocabulary belongs in its own foundation crate.
-
-**Current state:** `Player`, `Character`, `CharacterInput`, `MovementSpeed`,
-`JumpImpulse`, `CharacterBundle`, `CharacterRenderSet`, and
-`CharacterController` are all in `dd40_core::character`.
-
-**Fix (planned in SPEC.md Phase 2):** Move all character vocabulary to a new
-`dd40_character_core` foundation crate.
-
----
-
-### 7. Block interaction and movement systems are player-gated
-
-**Rule violated:** Generic character capabilities (mining, block placement,
-movement) should work for any entity with the `Character` marker, not only
-entities with `Player`.
-
-**Current state:** Systems in `dd40_player::block_interaction` query
-`With<Player>`, preventing NPCs or other characters from using them.
-
-**Fix (planned in SPEC.md Phase 3):** Extract systems to
-`dd40_character_interaction` and `dd40_player_movement`; change filters to
-`With<Character>` where applicable.
+**Fix needed:** The renderer reads `MiningState` and overlays a crack texture on
+the targeted block. No architectural blocker remains.
 
 ---
 
@@ -129,3 +64,23 @@ easier to write and test alternative backends.
 `LoadingTracker` in `dd40_core` tracks async initialisation but there is no
 crate that renders a loading screen against it. A `dd40_loading_screen` crate
 would complete the loop without adding game-logic dependencies to core.
+
+### D. Key `PlayerLocations` by `PlayerId` instead of `PeerId`
+
+`dd40_network::server::spawn::PlayerLocations` stores last-known spawn positions
+keyed by lightyear's `PeerId`, coupling spawn management to the transport layer.
+`PlayerId(u64)` now exists in `dd40_character_core`. Migrating the key type
+would let the spawn system be reused for NPCs or alternative transports.
+
+---
+
+## Resolved (archived)
+
+| # | Description | Resolved in |
+|---|---|---|
+| — | `dd40_renderer` depended on `dd40_player` for LOD anchor | SPEC.md Task 5.1 — renderer now uses `CharacterPosition` from `dd40_physics_core` |
+| — | `MiningState` lived in `dd40_player` | SPEC.md Task 5.3 — moved to `dd40_character_core::mining_state` |
+| — | Physics systems lived in `dd40_core` | SPEC.md Phase 1 — extracted to `dd40_physics_core` + `dd40_physics` |
+| — | Character types lived in `dd40_core` | SPEC.md Phase 2 — extracted to `dd40_character_core` |
+| — | Block interaction and movement systems were player-gated | SPEC.md Phase 3 — `dd40_character_interaction` and `dd40_player_movement` created, filters changed to `With<Character>` |
+| — | `PlayerId(u64)` did not exist | SPEC.md Task 5.2 — added to `dd40_character_core::components` |

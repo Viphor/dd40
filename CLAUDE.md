@@ -56,23 +56,21 @@ Never write `if !app.is_plugin_added` by hand — always use `ensure_plugins!`.
 | Tier | Crate | Role |
 |---|---|---|
 | Foundation | `dd40_core` | Block registry, chunk pipeline messages, app state |
-| Foundation | `dd40_physics_core` | Physics types, components, system sets *(planned)* |
-| Foundation | `dd40_character_core` | Character types, input bridge, render sets *(planned)* |
-| Implementation | `dd40_physics` | Integration, block collision, character collision systems *(planned)* |
+| Foundation | `dd40_physics_core` | Physics types, components, system sets |
+| Foundation | `dd40_character_core` | Character types, input bridge, `MiningState`, `PlayerId`, render sets |
+| Implementation | `dd40_physics` | Integration, block collision, character collision systems |
 | Implementation | `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999) |
 | Implementation | `dd40_world` | World generation (generic over `WorldGenerator` trait) |
 | Implementation | `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) |
-| Implementation | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD |
-| Implementation | `dd40_player` | Convenience wrapper: movement + interaction + spawn |
-| Implementation | `dd40_player_movement` | Keyboard/mouse → CharacterInput, first-person camera *(planned)* |
-| Implementation | `dd40_character_interaction` | Block targeting, mining, placement for any Character *(planned)* |
+| Implementation | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD anchored on `CharacterPosition` |
+| Implementation | `dd40_player_movement` | Keyboard/mouse → CharacterInput, first-person camera, `PlayerMode` state |
+| Implementation | `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity |
+| Implementation | `dd40_player` | Convenience wrapper composing `PlayerMovementPlugin` + `CharacterInteractionPlugin`; exception to Tier 1 isolation — see `INCONSISTENCIES.md` |
 | Implementation | `dd40_network` | lightyear client-server networking (feature-gated) |
 | Implementation | `dd40_debug_ui` | FPS overlay, orientation gizmo |
 | Implementation | `dd40_gui` | In-game HUD (crosshair) |
 | Binary | `dd40_client` | Playable client binary |
 | Binary | `dd40_server` | Headless server binary (port 6969) |
-
-*Crates marked (planned) do not exist yet — see `SPEC.md` Phase 1–3.*
 
 ### Chunk pipeline
 

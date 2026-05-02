@@ -52,13 +52,19 @@ may depend on.
 #### Tier 1 — Implementation crates
 `dd40_physics`, `dd40_vanilla_palette`, `dd40_world`, `dd40_chunk_storage`,
 `dd40_renderer`, `dd40_character_interaction`, `dd40_player_movement`,
-`dd40_player`, `dd40_network`, `dd40_debug_ui`, `dd40_gui`
+`dd40_network`, `dd40_debug_ui`, `dd40_gui`
 
 - Contain **systems, asset loading, and concrete behaviour**.
 - May depend on **any** foundation crates and external libraries.
 - Must **not** depend on other implementation crates.
 - Must use `ensure_plugins!` at the top of every `Plugin::build` to
   auto-satisfy direct runtime dependencies (see below).
+
+**Exception — `dd40_player`:** This crate is a convenience wrapper that
+composes `dd40_player_movement` + `dd40_character_interaction` and is the only
+place that needs both physics types and interaction types simultaneously (for
+`update_debug_info`). It intentionally depends on two Tier 1 crates and is
+tracked in `INCONSISTENCIES.md`.
 
 #### Tier 2 — Binary crates
 `dd40_client`, `dd40_server`
