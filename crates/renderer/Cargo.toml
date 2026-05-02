@@ -14,5 +14,4 @@ bevy = { workspace = true, default-features = false, features = [
     "bevy_mesh",
 ] }
 dd40_core = { workspace = true }
-dd40_character_core = { workspace = true }
-dd40_player = { workspace = true }
+dd40_physics_core = { workspace = true }

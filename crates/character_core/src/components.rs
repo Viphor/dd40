@@ -54,3 +54,13 @@ impl Default for JumpImpulse {
 /// should be spawned (or re-spawned after death).
 #[derive(Resource)]
 pub struct SpawnPosition(pub Vec3);
+
+/// Stable network identity for a character entity.
+///
+/// Assigned by the server at connection time and mapped to an ECS entity on
+/// both client and server. Systems that need to correlate an ECS entity with a
+/// peer or session ID should read this component instead of depending on
+/// lightyear's internal `ClientId` or `PeerId`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component, Reflect)]
+#[reflect(Component)]
+pub struct PlayerId(pub u64);

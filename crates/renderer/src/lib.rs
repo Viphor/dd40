@@ -86,6 +86,7 @@ pub mod systems;
 
 use bevy::prelude::*;
 use dd40_core::{plugin::CorePlugin, prelude::AppState};
+use dd40_physics_core::plugin::PhysicsCorePlugin;
 
 use lod::LodConfig;
 use mesh_task::PendingMeshTasks;
@@ -147,7 +148,7 @@ pub struct RendererPlugin;
 
 impl Plugin for RendererPlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin);
+        dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
 
         // Insert resources only if they haven't been added already so the
         // caller can override them before adding the plugin.

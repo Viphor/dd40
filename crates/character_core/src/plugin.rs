@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::{Character, JumpImpulse, MovementSpeed, Player},
+    components::{Character, JumpImpulse, MovementSpeed, PlayerId, Player},
     controller::{CharacterController, CharacterControllerPlugin, CharacterInput},
+    mining_state::MiningState,
     system_sets::CharacterRenderSet,
 };
 
@@ -21,8 +22,10 @@ impl Plugin for CharacterCorePlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Character>()
             .register_type::<Player>()
+            .register_type::<PlayerId>()
             .register_type::<MovementSpeed>()
             .register_type::<JumpImpulse>()
+            .register_type::<MiningState>()
             .register_type::<CharacterInput>()
             .register_type::<CharacterController>()
             .configure_sets(

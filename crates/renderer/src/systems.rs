@@ -42,12 +42,12 @@ use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, block_on, futures_lite::future},
 };
-use dd40_character_core::components::Player;
 use dd40_core::{
     block::{BlockId, BlockRegistry},
     chunk::events::ChunkReady,
     chunk::{ChunkPos, cache::ChunkCache},
 };
+use dd40_physics_core::prelude::CharacterPosition;
 
 use crate::{
     chunk_mesh::build_chunk_quads,
@@ -124,23 +124,24 @@ pub fn mark_dirty_on_block_removed(
 }
 
 /// Iterates over every chunk tracked by [`ChunkRenderState`] and updates its
-/// [`LodLevel`] based on the player's current chunk position.
+/// [`LodLevel`] based on the nearest physics body's current chunk position.
 ///
 /// When a chunk's LOD level changes the entry is automatically marked dirty by
 /// [`ChunkRenderState::update_lod`], so the mesh will be rebuilt this frame.
 ///
-/// If no player entity exists the system is a no-op.
+/// If no [`CharacterPosition`] entity exists the system is a no-op.
 pub fn update_lod_levels(
-    player_query: Query<&Transform, With<Player>>,
+    anchor_query: Query<&CharacterPosition>,
     mut render_state: ResMut<ChunkRenderState>,
     lod_config: Res<LodConfig>,
     chunk_cache: Res<ChunkCache>,
 ) {
-    let Ok(player_transform) = player_query.single() else {
+    let Ok(anchor) = anchor_query.single() else {
         return;
     };
 
-    let player_chunk = chunk_pos_from_transform(player_transform);
+    let anchor_transform = Transform::from_translation(anchor.0);
+    let player_chunk = chunk_pos_from_transform(&anchor_transform);
 
     // Collect the chunk positions we need to update.  We cannot iterate and
     // mutate `render_state` simultaneously, so we snapshot the positions first.

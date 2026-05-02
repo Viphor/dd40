@@ -9,28 +9,7 @@ use dd40_core::{
 
 use crate::targeting::TargetedBlock;
 
-/// The current state of a character's mining action.
-///
-/// Read this resource to render a progress bar or block-crack animation.
-#[derive(Resource, Debug, Clone, Reflect)]
-#[reflect(Resource)]
-pub enum MiningState {
-    /// No mining in progress.
-    Idle,
-    /// Actively mining a block.
-    Mining {
-        pos: BlockPos,
-        /// Mining progress in `[0.0, 1.0]`.
-        progress: f32,
-        required_duration: f32,
-    },
-}
-
-impl Default for MiningState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
+pub use dd40_character_core::mining_state::MiningState;
 
 /// Updates mining state each frame and emits mining request messages.
 ///

@@ -15,7 +15,7 @@ pub mod placement;
 pub mod plugin;
 pub mod targeting;
 
-pub use mining::MiningState;
+pub use dd40_character_core::mining_state::MiningState;
 pub use placement::HeldBlock;
 pub use plugin::CharacterInteractionPlugin;
 pub use targeting::{BlockFace, BlockInteractionConfig, TargetedBlock};

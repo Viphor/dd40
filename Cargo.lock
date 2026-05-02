@@ -2858,9 +2858,8 @@ name = "dd40_renderer"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "dd40_character_core",
  "dd40_core",
- "dd40_player",
+ "dd40_physics_core",
 ]
 
 [[package]]

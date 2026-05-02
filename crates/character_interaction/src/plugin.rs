@@ -68,8 +68,7 @@ impl Plugin for CharacterInteractionPlugin {
             .insert_resource(MiningState::default())
             .register_type::<BlockInteractionConfig>()
             .register_type::<TargetedBlock>()
-            .register_type::<HeldBlock>()
-            .register_type::<MiningState>();
+            .register_type::<HeldBlock>();
 
         // ── Messages ──────────────────────────────────────────────────────
         app.add_message::<PlaceBlockRequest>();
