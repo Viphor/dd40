@@ -262,8 +262,10 @@ impl Plugin for ProtocolPlugin {
         app.register_component::<Velocity>()
             .add_prediction();
 
+        // Rotation is NOT predicted — the controlling client writes it locally
+        // each PostUpdate frame from the camera, so it is always perfectly
+        // smooth.  Other clients receive it with linear interpolation.
         app.register_component::<PlayerRotation>()
-            .add_prediction()
             .add_linear_interpolation();
 
         app.register_component::<PlayerSpeed>();

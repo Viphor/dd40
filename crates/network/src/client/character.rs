@@ -44,7 +44,7 @@ use lightyear::prelude::{
 };
 
 use crate::{
-    protocol::{NetworkCharacter, PlayerInput, PlayerPosition},
+    protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation},
     shared::character::{apply_input_to_controller, character_bundle},
 };
 
@@ -316,6 +316,44 @@ fn sync_interpolated_position_to_transform(
     }
 }
 
+/// Applies the interpolated [`PlayerRotation`] to remote players' [`Transform`]
+/// each render frame so other clients see smooth head rotation.
+///
+/// Runs only for [`Interpolated`] entities — the controlling client's predicted
+/// entity has its camera rotation driven directly by `mouse_look`, not by
+/// `PlayerRotation`.
+fn apply_interpolated_rotation(
+    mut query: Query<
+        (&PlayerRotation, &mut Transform),
+        (With<NetworkCharacter>, With<Interpolated>),
+    >,
+) {
+    for (rot, mut transform) in &mut query {
+        transform.rotation = Quat::from_euler(EulerRot::YXZ, rot.yaw, rot.pitch, 0.0);
+    }
+}
+
+/// Writes the local player's current camera orientation into [`PlayerRotation`]
+/// so the server can replicate it to other clients.
+///
+/// Runs in `PostUpdate` — after `player_input` (Update) has already copied the
+/// latest `CameraRotation` into `CharacterInput`, and after lightyear's
+/// replication receive (PreUpdate) may have overwritten the component with a
+/// stale server-confirmed value.  Running here guarantees the render pass
+/// always sees the locally-driven, zero-lag rotation rather than a rolled-back
+/// one.
+fn sync_local_rotation(
+    mut query: Query<
+        (&CharacterInput, &mut PlayerRotation),
+        (With<NetworkCharacter>, With<Predicted>),
+    >,
+) {
+    for (char_input, mut player_rot) in &mut query {
+        player_rot.pitch = char_input.pitch;
+        player_rot.yaw = char_input.yaw;
+    }
+}
+
 // ============================================================================
 // PLUGIN
 // ============================================================================
@@ -358,7 +396,13 @@ impl Plugin for ClientCharacterPlugin {
             (
                 apply_frame_interpolation.in_set(CharacterRenderSet::FrameInterpolation),
                 sync_interpolated_position_to_transform,
+                apply_interpolated_rotation,
             ),
         );
+
+        // Write the current camera orientation into PlayerRotation every frame,
+        // after player_input (Update) has refreshed CharacterInput and after
+        // lightyear's replication receive (PreUpdate) may have overwritten it.
+        app.add_systems(PostUpdate, sync_local_rotation);
     }
 }
