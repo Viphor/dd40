@@ -2,13 +2,16 @@ use bevy::color::palettes::basic::YELLOW;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
-use dd40_core::character::{
-    JumpImpulse, MovementSpeed, Player, SpawnPosition, builder::CharacterBuilder,
-    controller::CharacterInput,
+use dd40_character_core::{
+    builder::CharacterBuilder,
+    components::{JumpImpulse, MovementSpeed, Player, SpawnPosition},
+    controller::{CharacterController, CharacterInput},
+    system_sets::CharacterRenderSet,
 };
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
+use dd40_physics_core::prelude::{Aabb, CharacterCollider, Impulse, PhysicsBody, Velocity};
 
 pub mod block_interaction;
 

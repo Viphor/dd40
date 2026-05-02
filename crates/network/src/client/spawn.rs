@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use bevy::{platform::collections::HashSet, prelude::*};
-use dd40_core::{character::Player, prelude::*};
+use dd40_character_core::components::Player;
+use dd40_core::prelude::*;
 
 use crate::{
     PlayerPosition,

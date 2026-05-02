@@ -1,7 +1,6 @@
-use dd40_core::{
-    character::controller::CharacterInput,
-    prelude::{Aabb, CharacterCollider, CharacterController, JumpImpulse, PhysicsBody},
-};
+use dd40_character_core::controller::{CharacterController, CharacterInput};
+use dd40_character_core::components::JumpImpulse;
+use dd40_physics_core::prelude::{Aabb, CharacterCollider, PhysicsBody};
 use lightyear::prelude::input::native::ActionState;
 
 use crate::protocol::PlayerInput;

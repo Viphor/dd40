@@ -1,7 +1,6 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
 
 use crate::{
-    character::plugin::CharacterPlugin,
     chunk::cache::ChunkCachePlugin,
     loading::LoadingPlugin,
     prelude::*,
@@ -18,7 +17,7 @@ impl Plugin for CorePlugin {
             app.add_plugins(StatesPlugin);
         }
 
-        app.add_plugins((CharacterPlugin, LoadingPlugin))
+        app.add_plugins(LoadingPlugin)
             .init_state::<AppState>()
             .init_state::<GameState>()
             .insert_resource(BlockRegistry::new())

@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use dd40_core::{
-    block::{Block, events::BlockPlaced},
-    character::physics::{Aabb, CharacterPosition, CollisionShape},
+    block::{Block, CollisionShape, events::BlockPlaced},
     chunk::cache::ChunkCache,
     prelude::*,
 };
+use dd40_physics_core::prelude::{Aabb, CharacterPosition};
 use dd40_physics::CharacterSpatialCache;
 use lightyear::prelude::{MessageReceiver, MessageSender};
 

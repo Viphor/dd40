@@ -35,12 +35,12 @@
 //! [`mining_duration`]: dd40_core::tools::mining_duration
 
 use bevy::prelude::*;
+use dd40_character_core::components::Player;
 use dd40_core::{
     block::{
         Block, BlockId,
         events::{AbortMiningRequest, BlockRemoved, MineBlockRequest, StartMiningRequest},
     },
-    character::Player,
     chunk::cache::ChunkCache,
     prelude::*,
     tools::{EquippedTool, mining_duration},

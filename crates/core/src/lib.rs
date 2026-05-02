@@ -1,6 +1,5 @@
 pub mod macros;
 pub mod block;
-pub mod character;
 pub mod chunk;
 pub mod common;
 pub mod debug;
@@ -15,16 +14,6 @@ pub mod prelude {
         block::{
             Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, CollisionShape, events::*,
             registry::BlockRegistrySet,
-        },
-        character::{
-            CharacterRenderSet,
-            JumpImpulse,
-            controller::{CharacterController, CharacterInput},
-            physics::{
-                Aabb, CharacterCollider, CharacterPosition,
-                GravityScale, Grounded, Impulse, PhysicsBody, PhysicsConfig,
-                PhysicsSet, Velocity,
-            },
         },
         chunk::{
             CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos,

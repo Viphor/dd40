@@ -7,3 +7,6 @@ edition = "2024"
 dd40_core = { workspace = true }
 dd40_physics_core = { workspace = true }
 bevy = { workspace = true, default-features = false }
+
+[dev-dependencies]
+dd40_character_core = { workspace = true }

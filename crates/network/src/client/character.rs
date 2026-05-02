@@ -29,13 +29,13 @@
 //!   [`VisualCorrectionOffset`].
 
 use bevy::{prelude::*, time::Fixed};
-use dd40_core::{
-    character::{
-        CharacterRenderSet, Player, builder::CharacterBuilder, controller::CharacterInput,
-        physics::PhysicsSet,
-    },
-    prelude::CharacterPosition,
+use dd40_character_core::{
+    builder::CharacterBuilder,
+    components::Player,
+    controller::CharacterInput,
+    system_sets::CharacterRenderSet,
 };
+use dd40_physics_core::prelude::{CharacterPosition, PhysicsSet};
 use lightyear::prelude::{
     Interpolated, Predicted,
     client::input::InputSystems,

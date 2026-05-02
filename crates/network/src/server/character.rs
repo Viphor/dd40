@@ -4,10 +4,8 @@
 //! when the `server` feature is active.
 
 use bevy::prelude::*;
-use dd40_core::character::{
-    builder::CharacterBuilder, controller::CharacterInput, physics::PhysicsSet,
-};
-use dd40_core::prelude::CharacterPosition;
+use dd40_character_core::{builder::CharacterBuilder, controller::CharacterInput};
+use dd40_physics_core::prelude::{CharacterPosition, PhysicsSet};
 use lightyear::prelude::{
     Connected, ControlledBy, InterpolationTarget, NetworkTarget, PredictionTarget, RemoteId,
     Replicate, input::native::ActionState, server::ClientOf,

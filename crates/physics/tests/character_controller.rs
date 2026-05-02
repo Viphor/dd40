@@ -15,13 +15,12 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy::time::{Fixed, TimeUpdateStrategy};
-use dd40_core::{
-    character::{
-        JumpImpulse, MovementSpeed,
-        controller::{CharacterController, CharacterInput},
-    },
-    chunk::cache::ChunkCache,
+use dd40_character_core::{
+    components::{JumpImpulse, MovementSpeed},
+    controller::{CharacterController, CharacterInput},
+    plugin::CharacterCorePlugin,
 };
+use dd40_core::chunk::cache::ChunkCache;
 use dd40_physics::plugin::PhysicsPlugin;
 use dd40_physics_core::prelude::{Aabb, GravityScale, Grounded, PhysicsBody, Velocity};
 
@@ -29,7 +28,7 @@ fn make_app(dt_secs: f32) -> App {
     let duration = Duration::from_secs_f32(dt_secs);
     let mut app = App::new();
     app.add_plugins(bevy::MinimalPlugins)
-        .add_plugins(PhysicsPlugin)
+        .add_plugins((PhysicsPlugin, CharacterCorePlugin))
         .insert_resource(TimeUpdateStrategy::ManualDuration(duration))
         .init_resource::<ChunkCache>();
     app.world_mut()

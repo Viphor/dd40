@@ -42,9 +42,9 @@ use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, block_on, futures_lite::future},
 };
+use dd40_character_core::components::Player;
 use dd40_core::{
     block::{BlockId, BlockRegistry},
-    character::Player,
     chunk::events::ChunkReady,
     chunk::{ChunkPos, cache::ChunkCache},
 };

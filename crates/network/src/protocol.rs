@@ -8,7 +8,9 @@ use bevy::math::Curve;
 use bevy::prelude::*;
 pub use dd40_core::prelude::PlaceBlockRequest;
 pub use dd40_core::block::events::{AbortMiningRequest, MineBlockRequest, StartMiningRequest};
-use dd40_core::{character::Character, prelude::*};
+use dd40_character_core::components::Character;
+use dd40_core::prelude::*;
+use dd40_physics_core::prelude::Velocity;
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
 
