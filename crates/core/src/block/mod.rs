@@ -1,4 +1,4 @@
-use bevy::{ecs::component::Component, reflect::Reflect, transform::components::Transform};
+use bevy::{ecs::component::Component, math::Vec3, reflect::Reflect, transform::components::Transform};
 use serde::{Deserialize, Serialize};
 
 pub mod events;
@@ -8,6 +8,52 @@ pub mod registry;
 pub use registry::{BlockDefinition, BlockRegistry};
 
 use crate::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
+
+// ---------------------------------------------------------------------------
+// Collision shape
+// ---------------------------------------------------------------------------
+
+/// Collision shape for a block type.
+///
+/// All variants must stay **within** the 1×1×1 block cell.  The physics
+/// solver reads this directly from [`BlockDefinition::collision_shape`] via
+/// [`BlockRegistry`] — it is part of the block definition rather than a
+/// separate resource.
+///
+/// This is the extensibility point for stairs, slabs, lecterns, etc.
+///
+/// # Example
+///
+/// ```
+/// use bevy::math::Vec3;
+/// use dd40_core::block::CollisionShape;
+/// let slab = CollisionShape::Box { min: Vec3::ZERO, max: Vec3::new(1.0, 0.5, 1.0) };
+/// ```
+///
+/// [`BlockDefinition::collision_shape`]: crate::block::registry::BlockDefinition::collision_shape
+/// [`BlockRegistry`]: crate::block::registry::BlockRegistry
+#[derive(Debug, Clone, Reflect)]
+pub enum CollisionShape {
+    /// Solid unit cube — the default for all opaque blocks.
+    FullCube,
+    /// No collision at all (air, torches, etc.).
+    None,
+    /// An AABB within the cell, specified as min/max in **cell-local** space
+    /// (i.e. each component in `[0, 1]`).  The cell origin is the
+    /// block's minimum corner.
+    Box {
+        /// Minimum corner in cell-local coordinates (`[0, 1]` range).
+        min: Vec3,
+        /// Maximum corner in cell-local coordinates (`[0, 1]` range).
+        max: Vec3,
+    },
+}
+
+impl Default for CollisionShape {
+    fn default() -> Self {
+        Self::FullCube
+    }
+}
 
 pub type BlockCoord = i32;
 

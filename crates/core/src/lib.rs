@@ -13,7 +13,7 @@ pub mod world;
 pub mod prelude {
     pub use crate::{
         block::{
-            Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, events::*,
+            Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, CollisionShape, events::*,
             registry::BlockRegistrySet,
         },
         character::{
@@ -21,8 +21,8 @@ pub mod prelude {
             JumpImpulse,
             controller::{CharacterController, CharacterInput},
             physics::{
-                Aabb, CharacterCollider, CharacterPosition, CharacterSpatialCache, CollisionShape,
-                GravityScale, Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsPlugin,
+                Aabb, CharacterCollider, CharacterPosition,
+                GravityScale, Grounded, Impulse, PhysicsBody, PhysicsConfig,
                 PhysicsSet, Velocity,
             },
         },

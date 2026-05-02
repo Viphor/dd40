@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use dd40_core::plugin::CorePlugin;
 
 use crate::{
     components::PhysicsConfig,
@@ -17,14 +16,12 @@ use crate::{
 /// [`dd40_physics::PhysicsPlugin`] (or a custom alternative) to add the actual
 /// simulation systems on top of this vocabulary.
 ///
-/// Added automatically by `PhysicsPlugin` via [`dd40_core::ensure_plugins!`].
+/// Added automatically by `dd40_physics::PhysicsPlugin`.
 #[derive(Default)]
 pub struct PhysicsCorePlugin;
 
 impl Plugin for PhysicsCorePlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin);
-
         app.register_type::<Aabb>()
             .register_type::<CharacterPosition>()
             .register_type::<Velocity>()
@@ -55,7 +52,6 @@ impl Plugin for PhysicsCorePlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dd40_core::block::BlockRegistry;
 
     #[test]
     fn physics_core_plugin_initialises_config() {
@@ -68,25 +64,18 @@ mod tests {
     }
 
     #[test]
-    fn physics_core_plugin_auto_adds_core() {
-        // CorePlugin is NOT added manually — ensure_plugins! must add it.
+    fn physics_core_plugin_registers_physics_body() {
         let mut app = App::new();
         app.add_plugins(PhysicsCorePlugin);
-        // BlockRegistry is inserted by CorePlugin, so its presence proves
-        // CorePlugin was auto-added.
-        assert!(
-            app.world().contains_resource::<BlockRegistry>(),
-            "CorePlugin must be auto-added by PhysicsCorePlugin"
-        );
+        assert!(app.world().contains_resource::<PhysicsConfig>());
     }
 
     #[test]
-    fn physics_core_plugin_is_idempotent() {
-        // Adding PhysicsCorePlugin twice (once manually, once via ensure_plugins!)
-        // must not panic with a duplicate-plugin error.
+    fn physics_core_plugin_sets_default_config() {
         let mut app = App::new();
-        app.add_plugins(CorePlugin);
         app.add_plugins(PhysicsCorePlugin);
-        assert!(app.world().contains_resource::<PhysicsConfig>());
+        let cfg = app.world().resource::<PhysicsConfig>();
+        assert!(cfg.gravity > 0.0);
+        assert!(cfg.terminal_velocity > 0.0);
     }
 }

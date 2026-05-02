@@ -1,9 +1,10 @@
 use bevy::prelude::*;
-use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::FilterQueryInspectorPlugin};
-use dd40_core::{character::Character, common::log_plugin, plugin::CorePlugin};
+//use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::FilterQueryInspectorPlugin};
+use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
 use dd40_gui::plugin::GuiPlugin;
 use dd40_network::ClientNetworkPlugin;
+use dd40_physics::PhysicsPlugin;
 use dd40_player::PlayerInputPlugin;
 use dd40_renderer::RendererPlugin;
 use dd40_vanilla_palette::VanillaPalettePlugin;
@@ -24,6 +25,7 @@ fn main() {
     )
     .add_plugins((
         CorePlugin,
+        PhysicsPlugin,
         VanillaPalettePlugin,
         PlayerInputPlugin,
         DebugUiPlugin,
@@ -31,8 +33,8 @@ fn main() {
         RendererPlugin,
         GuiPlugin,
     ))
-    .add_plugins(EguiPlugin::default())
-    .add_plugins(FilterQueryInspectorPlugin::<With<Character>>::default())
+    //.add_plugins(EguiPlugin::default())
+    //.add_plugins(FilterQueryInspectorPlugin::<With<Character>>::default())
     .add_systems(Startup, setup);
 
     #[cfg(feature = "debug_network")]

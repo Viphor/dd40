@@ -26,6 +26,7 @@ impl Plugin for CorePlugin {
             .register_type::<BlockId>()
             .register_type::<Block>()
             .register_type::<BlockRegistry>()
+            .register_type::<CollisionShape>()
             .register_type::<ToolRegistry>()
             .register_type::<ChunkPos>()
             .register_type::<BlockPos>()

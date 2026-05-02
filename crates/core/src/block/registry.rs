@@ -6,7 +6,7 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::character::physics::CollisionShape;
+use super::CollisionShape;
 use crate::tools::ToolKindId;
 
 /// System set for block registration systems.

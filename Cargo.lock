@@ -2742,6 +2742,7 @@ dependencies = [
  "dd40_debug_ui",
  "dd40_gui",
  "dd40_network",
+ "dd40_physics",
  "dd40_player",
  "dd40_renderer",
  "dd40_vanilla_palette",
@@ -2756,6 +2757,7 @@ dependencies = [
  "bevy",
  "bincode 1.3.3",
  "crossbeam-channel",
+ "dd40_physics_core",
  "serde",
  "tempfile",
 ]
@@ -2783,6 +2785,7 @@ dependencies = [
  "bevy",
  "crossbeam-channel",
  "dd40_core",
+ "dd40_physics",
  "lightyear",
  "rand 0.8.5",
  "serde",
@@ -2803,7 +2806,6 @@ name = "dd40_physics_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "dd40_core",
  "serde",
 ]
 
@@ -2832,6 +2834,7 @@ dependencies = [
  "dd40_chunk_storage",
  "dd40_core",
  "dd40_network",
+ "dd40_physics",
  "dd40_vanilla_palette",
  "dd40_world",
 ]

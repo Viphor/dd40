@@ -6,4 +6,3 @@ pub use crate::{
     plugin::PhysicsCorePlugin,
     system_sets::PhysicsSet,
 };
-pub use dd40_core::ensure_plugins;

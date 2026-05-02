@@ -142,6 +142,16 @@ Non-solid blocks require `.with_collision_shape(CollisionShape::None)`. Slabs/st
 
 Every `pub` item must have a `///` doc comment explaining what it does, why it exists, constraints, and panics. `cargo doc` is the authoritative documentation source — READMEs are secondary. Do not write doc comments for private items unless the logic is genuinely non-obvious.
 
+## Logging
+
+Use Bevy's structured log macros — `debug!`, `info!`, `warn!`, `error!` — for all diagnostic output. Never use `println!`, `eprintln!`, `print!`, or `dbg!` in production or test code. These produce unstructured output that bypasses the log filter and pollutes CI.
+
+## Circular Dev-Dependency Rule
+
+If crate A has `dd40_B` as a **dev-dependency** and `dd40_B` already depends on `dd40_A` at runtime, **do not write tests in A that use types from B**. Cargo compiles A twice (once as a library for B, once as the test binary), giving every type defined in A a different `TypeId`. ECS queries will find 0 entities even when the components are present.
+
+The correct fix is to write those integration tests in B (where A is a regular dep), so A is only compiled once and `TypeId`s are consistent.
+
 ## Adding New Functionality
 
 New features belong in a new crate or plugin, not bolted onto existing crates. When in doubt, create a new plugin. See `INCONSISTENCIES.md` for planned architectural clean-ups before introducing more coupling.
