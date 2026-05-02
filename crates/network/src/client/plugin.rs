@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use dd40_character_core::plugin::CharacterCorePlugin;
 use dd40_core::{plugin::CorePlugin, prelude::LoadingSet};
 use lightyear::prelude::client::ClientPlugins;
 
@@ -42,7 +43,7 @@ pub struct ClientNetworkPlugin;
 
 impl Plugin for ClientNetworkPlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin);
+        dd40_core::ensure_plugins!(app, CorePlugin, CharacterCorePlugin);
 
         app.add_plugins(ClientPlugins {
             tick_duration: tick_duration(),

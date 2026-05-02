@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use dd40_character_core::plugin::CharacterCorePlugin;
 use dd40_core::plugin::CorePlugin;
 use lightyear::prelude::server::ServerPlugins;
 
@@ -36,7 +37,7 @@ pub struct ServerNetworkPlugin(pub DDServer);
 
 impl Plugin for ServerNetworkPlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin);
+        dd40_core::ensure_plugins!(app, CorePlugin, CharacterCorePlugin);
 
         app.add_plugins(ServerPlugins {
             tick_duration: tick_duration(),
