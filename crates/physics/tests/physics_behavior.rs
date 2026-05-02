@@ -20,6 +20,12 @@ fn make_app(dt_secs: f32) -> App {
     app
 }
 
+/// Advance the app by one fixed-timestep tick.
+///
+/// Two [`App::update`] calls are required: the first lets Bevy's scheduler
+/// accumulate the manual duration into the `Time<Fixed>` bucket; the second
+/// actually drains that bucket and runs the `FixedUpdate` schedule where the
+/// physics systems live. With only one call the fixed schedule never fires.
 fn tick(app: &mut App) {
     app.update();
     app.update();
