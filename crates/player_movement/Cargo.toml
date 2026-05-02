@@ -1,0 +1,10 @@
+[package]
+name = "dd40_player_movement"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true, default-features = false, features = ["bevy_gizmos"] }
+dd40_core = { workspace = true }
+dd40_physics_core = { workspace = true }
+dd40_character_core = { workspace = true }

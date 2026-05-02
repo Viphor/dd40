@@ -2734,6 +2734,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_character_interaction"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_core",
+ "dd40_physics_core",
+]
+
+[[package]]
 name = "dd40_chunk_storage"
 version = "0.1.0"
 dependencies = [
@@ -2823,6 +2833,18 @@ dependencies = [
 
 [[package]]
 name = "dd40_player"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_character_interaction",
+ "dd40_core",
+ "dd40_physics_core",
+ "dd40_player_movement",
+]
+
+[[package]]
+name = "dd40_player_movement"
 version = "0.1.0"
 dependencies = [
  "bevy",

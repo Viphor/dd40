@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { workspace = true, default-features = false, features = ["bevy_gizmos"] }
+bevy = { workspace = true, default-features = false }
 dd40_core = { workspace = true }
 dd40_character_core = { workspace = true }
 dd40_physics_core = { workspace = true }
+dd40_player_movement = { workspace = true }
+dd40_character_interaction = { workspace = true }

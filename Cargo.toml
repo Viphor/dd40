@@ -4,6 +4,8 @@ members = [
     "crates/physics_core",
     "crates/physics",
     "crates/character_core",
+    "crates/player_movement",
+    "crates/character_interaction",
     "crates/gui",
     "crates/world",
     "crates/player",
@@ -23,6 +25,8 @@ dd40_core = { path = "crates/core" }
 dd40_physics_core = { path = "crates/physics_core" }
 dd40_physics = { path = "crates/physics" }
 dd40_character_core = { path = "crates/character_core" }
+dd40_player_movement = { path = "crates/player_movement" }
+dd40_character_interaction = { path = "crates/character_interaction" }
 dd40_gui = { path = "crates/gui" }
 dd40_world = { path = "crates/world" }
 dd40_player = { path = "crates/player" }
