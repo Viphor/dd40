@@ -2798,6 +2798,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_item_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "serde",
+]
+
+[[package]]
 name = "dd40_network"
 version = "0.1.0"
 dependencies = [

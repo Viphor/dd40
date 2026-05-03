@@ -16,6 +16,7 @@ members = [
     "crates/chunk_storage",
     "crates/renderer",
     "crates/vanilla_palette",
+    "crates/item_core",
 ]
 resolver = "2"
 
@@ -35,3 +36,4 @@ dd40_debug_ui = { path = "crates/debug_ui" }
 dd40_network = { path = "crates/network" }
 dd40_chunk_storage = { path = "crates/chunk_storage" }
 dd40_vanilla_palette = { path = "crates/vanilla_palette" }
+dd40_item_core = { path = "crates/item_core" }
