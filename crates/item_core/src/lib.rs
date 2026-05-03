@@ -16,8 +16,9 @@
 //! [`RequestActiveItem`][plugin::RequestActiveItem] to switch what is active.
 //! Replacing the inventory crate therefore requires no changes elsewhere.
 //!
-//! [`ActiveItem`]: crate::plugin::ActiveItem
+//! [`ActiveItem`]: crate::active_item::ActiveItem
 //! [`RequestActiveItem`]: crate::plugin::RequestActiveItem
 
+pub mod active_item;
 pub mod plugin;
 pub mod registry;

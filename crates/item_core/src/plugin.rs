@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use dd40_core::ensure_plugins;
 use dd40_core::plugin::CorePlugin;
 
+use crate::active_item::ActiveItem;
 use crate::registry::ItemRegistry;
 
 /// Registers the item-system vocabulary.
@@ -17,6 +18,7 @@ use crate::registry::ItemRegistry;
 ///
 /// - Inserts [`ItemRegistry`] as a resource (with the [`ItemId::EMPTY`]
 ///   sentinel pre-registered) and registers it for reflection.
+/// - Registers [`ActiveItem`] for reflection.
 /// - Configures the [`ItemRegistrySet`] system set.
 ///
 /// [`ItemId::EMPTY`]: crate::registry::ItemId::EMPTY
@@ -29,7 +31,8 @@ impl Plugin for ItemCorePlugin {
         ensure_plugins!(app, CorePlugin);
 
         app.insert_resource(ItemRegistry::new())
-            .register_type::<ItemRegistry>();
+            .register_type::<ItemRegistry>()
+            .register_type::<ActiveItem>();
     }
 }
 
