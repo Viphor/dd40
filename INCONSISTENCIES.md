@@ -80,6 +80,8 @@ would let the spawn system be reused for NPCs or alternative transports.
 |---|---|---|
 | — | `dd40_renderer` depended on `dd40_player` for LOD anchor | SPEC.md Task 5.1 — renderer now uses `CharacterPosition` from `dd40_physics_core` |
 | — | `MiningState` lived in `dd40_player` | SPEC.md Task 5.3 — moved to `dd40_character_core::mining_state` |
+| — | `MiningState` was a global `Resource` (singleton bug) | core-rewrite — converted to a `Component` on the `Character` entity, attached via `CharacterBundle` |
+| — | `TargetedBlock` was a global `Resource` in `dd40_character_interaction` (singleton bug) | core-rewrite — moved to `dd40_character_core::targeted_block` and converted to a `Component` |
 | — | Physics systems lived in `dd40_core` | SPEC.md Phase 1 — extracted to `dd40_physics_core` + `dd40_physics` |
 | — | Character types lived in `dd40_core` | SPEC.md Phase 2 — extracted to `dd40_character_core` |
 | — | Block interaction and movement systems were player-gated | SPEC.md Phase 3 — `dd40_character_interaction` and `dd40_player_movement` created, filters changed to `With<Character>` |

@@ -31,7 +31,7 @@ entry below.
 |---|---|---|
 | `dd40_core` | Block registry, chunk pipeline, app state, tools, messages | — |
 | `dd40_physics_core` | Physics types, components, system sets | `dd40_core` |
-| `dd40_character_core` | Character types, input bridge, `MiningState`, `PlayerId`, render sets | `dd40_core`, `dd40_physics_core` |
+| `dd40_character_core` | Character types, input bridge, `MiningState`, `TargetedBlock`, `PlayerId`, render sets | `dd40_core`, `dd40_physics_core` |
 | `dd40_item_core` | Item registry, `ActiveItem`, `RequestActiveItem`, `ActiveItemChanged` | `dd40_core` |
 
 ### Tier 1 — Implementation
@@ -121,7 +121,7 @@ src/
 ### `dd40_character_core`
 
 Foundation crate. Defines character-related types, the input bridge,
-`MiningState`, `PlayerId`, and the render-frame system set.
+`MiningState`, `TargetedBlock`, `PlayerId`, and the render-frame system set.
 
 ```
 src/
@@ -130,10 +130,11 @@ src/
 ├── prelude.rs         — re-exports of all stable public types
 ├── components.rs      — Character, Player, PlayerId, MovementSpeed, JumpImpulse,
 │                        SpawnPosition
-├── bundles.rs         — CharacterBundle
+├── bundles.rs         — CharacterBundle (incl. MiningState, TargetedBlock)
 ├── builder.rs         — CharacterBuilder
 ├── controller.rs      — CharacterController, CharacterControllerPlugin, CharacterInput
-├── mining_state.rs    — MiningState
+├── mining_state.rs    — MiningState (per-character Component)
+├── targeted_block.rs  — TargetedBlock (per-character Component), BlockFace
 └── system_sets.rs     — CharacterRenderSet (FrameInterpolation → CameraSync)
 ```
 
@@ -267,13 +268,14 @@ src/
 ### `dd40_character_interaction`
 
 Block targeting (DDA ray-cast), mining, and placement for any `Character`
-entity. Re-exports `MiningState` from `dd40_character_core`.
+entity. Re-exports `MiningState`, `TargetedBlock`, and `BlockFace` from
+`dd40_character_core` for backwards compatibility.
 
 ```
 src/
 ├── lib.rs             — CharacterInteractionPlugin, public re-exports
 ├── plugin.rs          — system wiring, ensure_plugins!
-├── targeting.rs       — TargetedBlock, BlockFace, DDA ray-cast
+├── targeting.rs       — DDA ray-cast, BlockInteractionConfig
 ├── placement.rs       — HeldBlock, block placement
 └── mining.rs          — mining state update, block removal
 ```
