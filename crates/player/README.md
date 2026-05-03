@@ -1,20 +1,30 @@
 # dd40_player
 
-Player input, camera, and block-interaction crate for dd40. Handles
-keyboard/mouse input, translates it into `CharacterInput` on the player entity,
-follows the player with a camera, and provides block targeting and placement.
+Convenience wrapper crate that composes `PlayerMovementPlugin` and
+`CharacterInteractionPlugin` into three focused plugins. This is a Tier 1
+implementation crate and a tracked architectural exception — it depends on
+other Tier 1 crates (`dd40_player_movement`, `dd40_character_interaction`).
+See `INCONSISTENCIES.md`.
 
-Depends only on `dd40_core`. Replacing this crate with a custom player
-controller (e.g., for a top-down game or an NPC-only server) requires only
-swapping the plugin in `dd40_client`.
+Replacing the player controller (e.g., for a top-down game) requires only
+swapping `PlayerInputPlugin` in `dd40_client`.
+
+## Plugins
+
+| Plugin | Role |
+|---|---|
+| `PlayerPlugin` | Composes movement + interaction; convenience entry point |
+| `PlayerInputPlugin` | Wires `PlayerMovementPlugin` + `CharacterInteractionPlugin` + debug info |
+| `PlayerSpawnPlugin` | Spawns the player entity with physics, collider, and input components |
 
 ## Module overview
 
 ```
 src/
-├── lib.rs                        — PlayerInputPlugin, player spawning, camera follow, input mapping
-└── block_interaction/
-    ├── mod.rs                    — BlockInteractionPlugin, BlockInteractionConfig, public re-exports
-    ├── targeting.rs              — Ray-cast block targeting; TargetedBlock resource, BlockFace enum
-    └── placement.rs              — Block placement and removal; HeldBlock resource
+└── lib.rs   — PlayerPlugin, PlayerInputPlugin, PlayerSpawnPlugin
 ```
+
+## Dependencies (dd40)
+
+`dd40_core`, `dd40_physics_core`, `dd40_character_core`,
+`dd40_player_movement`, `dd40_character_interaction`

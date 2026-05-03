@@ -1,13 +1,12 @@
 # dd40_core
 
-Foundation crate for the dd40 voxel game. Every other dd40 crate depends on
-this one and only this one among the dd40 family. It contains no game logic
-beyond the physics engine (an intentional exception — see below).
+Tier 0 foundation crate for the dd40 voxel game. Supplies the shared
+vocabulary that all other crates speak: block types and the registry, chunk
+data structures, the app/game state machine, the tool system, and all the
+messages and events that flow between subsystems.
 
-`dd40_core` supplies the shared vocabulary that all other crates speak:
-block types and the registry, chunk data structures, character components,
-the physics engine, the app/game state machine, the loading tracker, and
-all the messages and events that flow between subsystems.
+`dd40_core` contains no game logic. Physics types and character types were
+extracted to `dd40_physics_core` and `dd40_character_core` respectively.
 
 ## Module overview
 
@@ -19,36 +18,18 @@ src/
 ├── loading.rs         — LoadingPlugin, LoadingTracker, LoadingSet
 ├── common.rs          — log_plugin() helper
 ├── debug.rs           — DebugInfo component (hook for debug overlays)
-├── vanilla_blocks.rs  — VanillaBlocks constants and setup_vanilla_blocks system (planned: move to a separate crate)
-│
+├── macros.rs          — ensure_plugins! macro
+├── tools.rs           — ToolKindId, ToolTierId, ToolRegistry, ToolRegistrySet,
+│                        EquippedTool, mining_duration()
 ├── block/
-│   ├── mod.rs         — Block, BlockId, BlockPos, BlockCoord
+│   ├── mod.rs         — Block, BlockId, BlockPos, BlockCoord, CollisionShape
 │   ├── registry.rs    — BlockDefinition, BlockRegistry, BlockRegistrySet
-│   └── events.rs      — PlaceBlockRequest, BlockPlaced, BlockRemoved, BlockChanged
-│
+│   └── events.rs      — PlaceBlockRequest, BlockPlaced, BlockRemoved, BlockChanged,
+│                        StartMiningRequest, AbortMiningRequest, MineBlockRequest
 ├── chunk/
 │   ├── mod.rs         — Chunk, ChunkPos, CHUNK_SIZE_* constants
 │   ├── cache.rs       — ChunkCache resource, ChunkCachePlugin
 │   └── events.rs      — GenerateChunk, RequestChunk, ChunkReady
-│
-├── character/
-│   ├── mod.rs         — Character, Player, MovementSpeed, JumpImpulse, SpawnPosition, CharacterBundle, CharacterRenderSet
-│   ├── builder.rs     — CharacterBuilder helper
-│   ├── controller.rs  — CharacterController, CharacterInput
-│   ├── plugin.rs      — CharacterPlugin
-│   └── physics/
-│       ├── mod.rs            — PhysicsPlugin, PhysicsSet, CollisionShape, CharacterCollider, PhysicsBody, PhysicsConfig, Velocity, GravityScale, Grounded, Impulse, Aabb, CharacterPosition
-│       ├── integration.rs    — gravity and velocity integration
-│       ├── block_collision.rs — O(1) voxel AABB resolution
-│       ├── character_collision.rs — character-vs-character push-apart
-│       └── spatial_cache.rs  — CharacterSpatialCache
-│
 └── world/
     └── mod.rs         — WorldGenerationSet system set
 ```
-
-## Physics engine exception
-
-The physics engine lives here rather than in a separate crate because almost
-every character-related crate needs to understand collision shapes and movement.
-It is the single intentional piece of game logic in `dd40_core`.
