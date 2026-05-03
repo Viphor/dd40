@@ -4,7 +4,8 @@ use dd40_character_core::{
     components::{JumpImpulse, Player, SpawnPosition},
     controller::CharacterController,
 };
-use dd40_character_interaction::{CharacterInteractionPlugin, MiningState, TargetedBlock};
+use dd40_character_interaction::{CharacterInteractionPlugin, TargetedBlock};
+use dd40_character_core::mining_state::MiningState;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
 use dd40_physics_core::prelude::{Aabb, CharacterCollider, Impulse, PhysicsBody, Velocity};
@@ -58,10 +59,9 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
 /// both `dd40_physics_core` types and `dd40_character_interaction` types, so it
 /// lives in this wrapper crate.
 fn update_debug_info(
-    player_query: Single<(&Transform, &Velocity, &Impulse, &mut DebugInfo), With<Player>>,
-    mining: Res<MiningState>,
+    player_query: Single<(&Transform, &Velocity, &Impulse, &MiningState, &mut DebugInfo), With<Player>>,
 ) {
-    let (transform, velocity, impulse, mut debug_info) = player_query.into_inner();
+    let (transform, velocity, impulse, mining, mut debug_info) = player_query.into_inner();
     let pos = transform.translation;
     debug_info.set(
         "position",
@@ -78,7 +78,7 @@ fn update_debug_info(
     let chunk = BlockPos::from(transform).chunk_pos();
     debug_info.set("chunk", chunk.to_string());
 
-    let mining_text = match mining.as_ref() {
+    let mining_text = match mining {
         MiningState::Idle => "Idle".to_string(),
         MiningState::Mining { pos, progress, .. } => {
             format!("{} ({:.0}%)", pos, progress * 100.0)
@@ -111,9 +111,12 @@ impl Plugin for PlayerInputPlugin {
         // both PlayerMode (player_movement) and the interaction resources.
         app.add_systems(
             OnEnter(PlayerMode::FreeCam),
-            |mut targeted: ResMut<TargetedBlock>, mut mining: ResMut<MiningState>| {
+            |mut targeted: ResMut<TargetedBlock>,
+             mut mining_query: Query<&mut MiningState, With<Player>>| {
                 *targeted = TargetedBlock::default();
-                *mining = MiningState::Idle;
+                if let Ok(mut mining) = mining_query.single_mut() {
+                    *mining = MiningState::Idle;
+                }
             },
         );
 

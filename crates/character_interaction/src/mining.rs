@@ -13,28 +13,31 @@ pub use dd40_character_core::mining_state::MiningState;
 
 /// Updates mining state each frame and emits mining request messages.
 ///
-/// Runs for any entity with [`Character`] + [`EquippedTool`] (or bare-hands
-/// fallback). The gate for `Controller` vs `FreeCam` mode is the caller's
-/// responsibility (typically wired in the `dd40_player` wrapper).
+/// Runs for the single [`Character`] entity that owns its
+/// [`MiningState`] component.  When no character exists, the system is a
+/// no-op.  Multi-character clients are out of scope: gating "which character
+/// owns the local mouse" belongs to a wrapper plugin (currently `dd40_player`).
 pub(crate) fn update_mining(
     mouse: Res<ButtonInput<MouseButton>>,
     targeted: Res<TargetedBlock>,
-    equipped_query: Query<&EquippedTool, With<Character>>,
+    mut character_query: Query<(Option<&EquippedTool>, &mut MiningState), With<Character>>,
     registry: Res<BlockRegistry>,
     tool_registry: Res<ToolRegistry>,
     time: Res<Time>,
-    mut state: ResMut<MiningState>,
     mut start_writer: MessageWriter<StartMiningRequest>,
     mut abort_writer: MessageWriter<AbortMiningRequest>,
     mut mine_writer: MessageWriter<MineBlockRequest>,
 ) {
+    let Some((equipped, mut state)) = character_query.iter_mut().next() else {
+        return;
+    };
     let bare_hands = EquippedTool::default();
-    let tool = equipped_query.iter().next().copied().unwrap_or(bare_hands);
+    let tool = equipped.copied().unwrap_or(bare_hands);
 
     let left_held = mouse.pressed(MouseButton::Left);
     let left_just_pressed = mouse.just_pressed(MouseButton::Left);
 
-    match state.as_ref().clone() {
+    match state.clone() {
         MiningState::Idle => {
             if !left_just_pressed {
                 return;
