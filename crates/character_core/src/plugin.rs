@@ -6,6 +6,7 @@ use crate::{
     controller::{CharacterController, CharacterControllerPlugin, CharacterInput},
     mining_state::MiningState,
     system_sets::CharacterRenderSet,
+    targeted_block::{BlockFace, TargetedBlock},
 };
 
 /// Foundation plugin that registers all character vocabulary and wires the
@@ -29,6 +30,8 @@ impl Plugin for CharacterCorePlugin {
             .register_type::<MovementSpeed>()
             .register_type::<JumpImpulse>()
             .register_type::<MiningState>()
+            .register_type::<BlockFace>()
+            .register_type::<TargetedBlock>()
             .register_type::<CharacterInput>()
             .register_type::<CharacterController>()
             .configure_sets(

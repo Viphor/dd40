@@ -6,3 +6,4 @@ pub mod mining_state;
 pub mod plugin;
 pub mod prelude;
 pub mod system_sets;
+pub mod targeted_block;

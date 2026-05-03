@@ -111,10 +111,9 @@ impl Plugin for PlayerInputPlugin {
         // both PlayerMode (player_movement) and the interaction resources.
         app.add_systems(
             OnEnter(PlayerMode::FreeCam),
-            |mut targeted: ResMut<TargetedBlock>,
-             mut mining_query: Query<&mut MiningState, With<Player>>| {
-                *targeted = TargetedBlock::default();
-                if let Ok(mut mining) = mining_query.single_mut() {
+            |mut player_query: Query<(&mut TargetedBlock, &mut MiningState), With<Player>>| {
+                if let Ok((mut targeted, mut mining)) = player_query.single_mut() {
+                    *targeted = TargetedBlock::default();
                     *mining = MiningState::Idle;
                 }
             },

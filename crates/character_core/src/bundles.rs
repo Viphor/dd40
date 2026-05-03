@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use crate::{components::{Character, MovementSpeed}, mining_state::MiningState};
+use crate::{
+    components::{Character, MovementSpeed},
+    mining_state::MiningState,
+    targeted_block::TargetedBlock,
+};
 
 /// Convenience bundle that groups the components every character entity needs
 /// at spawn time.
@@ -19,6 +23,8 @@ pub struct CharacterBundle {
     pub name: Name,
     /// Per-character mining progress.  Starts as [`MiningState::Idle`].
     pub mining_state: MiningState,
+    /// Per-character "what block am I looking at" state.  Empty by default.
+    pub targeted_block: TargetedBlock,
 }
 
 impl CharacterBundle {
@@ -34,6 +40,7 @@ impl CharacterBundle {
             transform,
             name: Name::new(name.into()),
             mining_state: MiningState::Idle,
+            targeted_block: TargetedBlock::default(),
         }
     }
 }
@@ -46,6 +53,7 @@ impl Default for CharacterBundle {
             transform: Transform::default(),
             name: Name::new("Character"),
             mining_state: MiningState::Idle,
+            targeted_block: TargetedBlock::default(),
         }
     }
 }

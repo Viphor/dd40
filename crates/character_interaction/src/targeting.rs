@@ -1,8 +1,14 @@
 use bevy::color::palettes::basic::OLIVE;
 use bevy::prelude::*;
+use dd40_character_core::components::Character;
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
+
+// `BlockFace` and `TargetedBlock` were moved to `dd40_character_core` so that
+// any Tier-1 crate can read them without depending on `dd40_character_interaction`.
+// Re-export them here under their original paths for backwards compatibility.
+pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -23,69 +29,6 @@ impl Default for BlockInteractionConfig {
             highlight_color: Color::BLACK,
         }
     }
-}
-
-// ── Block face ────────────────────────────────────────────────────────────────
-
-/// The face of a block that the crosshair ray entered from.
-///
-/// # Placement offset
-///
-/// ```
-/// use dd40_character_interaction::targeting::BlockFace;
-/// use dd40_core::prelude::BlockPos;
-///
-/// let hit_pos = BlockPos::new(3, 64, 5);
-/// let face    = BlockFace::Top;
-/// let place_pos = BlockPos::new(
-///     hit_pos.x + face.normal().x,
-///     hit_pos.y + face.normal().y,
-///     hit_pos.z + face.normal().z,
-/// );
-/// assert_eq!(place_pos, BlockPos::new(3, 65, 5));
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
-pub enum BlockFace {
-    /// The +Y face (ray came from above).
-    Top,
-    /// The -Y face (ray came from below).
-    Bottom,
-    /// The +X face.
-    East,
-    /// The -X face.
-    West,
-    /// The +Z face.
-    South,
-    /// The -Z face.
-    North,
-}
-
-impl BlockFace {
-    /// Returns the unit offset to add to the hit block's [`BlockPos`] to get
-    /// the face-adjacent voxel (where a new block would be placed).
-    pub fn normal(self) -> BlockPos {
-        match self {
-            BlockFace::Top => BlockPos::new(0, 1, 0),
-            BlockFace::Bottom => BlockPos::new(0, -1, 0),
-            BlockFace::East => BlockPos::new(1, 0, 0),
-            BlockFace::West => BlockPos::new(-1, 0, 0),
-            BlockFace::South => BlockPos::new(0, 0, 1),
-            BlockFace::North => BlockPos::new(0, 0, -1),
-        }
-    }
-}
-
-// ── Targeted-block state ───────────────────────────────────────────────────────
-
-/// The block the character is currently looking at, if any.
-///
-/// Updated every frame by [`update_targeted_block`].
-#[derive(Resource, Debug, Default, Clone, Reflect)]
-#[reflect(Resource)]
-pub struct TargetedBlock {
-    pub pos: Option<BlockPos>,
-    pub face: Option<BlockFace>,
-    pub block_id: Option<BlockId>,
 }
 
 // ── DDA raycast ───────────────────────────────────────────────────────────────
@@ -194,14 +137,22 @@ fn dda_raycast(
 
 // ── Systems ───────────────────────────────────────────────────────────────────
 
-/// Casts a ray from the camera and writes the result into [`TargetedBlock`].
+/// Casts a ray from the camera and writes the result into the single
+/// [`Character`]'s [`TargetedBlock`] component.
+///
+/// The system is a no-op when no character entity exists (initial
+/// loading) or when no [`Camera3d`] is present.  Multi-character clients
+/// will need a wrapper system that decides which character owns the camera.
 pub(crate) fn update_targeted_block(
-    mut targeted: ResMut<TargetedBlock>,
     config: Res<BlockInteractionConfig>,
     camera_query: Query<&Transform, With<Camera3d>>,
+    mut character_query: Query<&mut TargetedBlock, With<Character>>,
     cache: Res<ChunkCache>,
     registry: Res<BlockRegistry>,
 ) {
+    let Some(mut targeted) = character_query.iter_mut().next() else {
+        return;
+    };
     let Ok(camera_transform) = camera_query.single() else {
         targeted.pos = None;
         targeted.face = None;
@@ -228,10 +179,11 @@ pub(crate) fn update_targeted_block(
 
 /// Draws a wireframe cuboid gizmo around the currently targeted block.
 pub(crate) fn draw_targeted_block_highlight(
-    targeted: Res<TargetedBlock>,
+    targeted_query: Query<&TargetedBlock, With<Character>>,
     config: Res<BlockInteractionConfig>,
     mut gizmos: Gizmos,
 ) {
+    let Some(targeted) = targeted_query.iter().next() else { return };
     let Some(pos) = targeted.pos else { return };
     let center = Vec3::new(pos.x as f32 + 0.5, pos.y as f32 + 0.5, pos.z as f32 + 0.5);
     const EPSILON: f32 = 0.0002;
@@ -253,10 +205,14 @@ pub(crate) fn spawn_debug_entity(mut commands: Commands) {
 }
 
 pub(crate) fn update_debug_info(
-    targeted: Res<TargetedBlock>,
+    targeted_query: Query<&TargetedBlock, With<Character>>,
     mut query: Query<&mut DebugInfo, With<TargetedBlockDebugInfo>>,
 ) {
     let Ok(mut debug_info) = query.single_mut() else { return };
+    let Some(targeted) = targeted_query.iter().next() else {
+        debug_info.set("targeted_block", "None".to_string());
+        return;
+    };
     if let Some(pos) = targeted.pos {
         debug_info.set("targeted_block", format!("{:?} at {pos}", targeted.face.unwrap()));
     } else {

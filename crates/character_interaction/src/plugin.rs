@@ -9,9 +9,10 @@ use dd40_core::prelude::*;
 
 use crate::mining::{apply_removed_blocks, update_mining};
 pub use dd40_character_core::mining_state::MiningState;
+pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
 use crate::placement::{HeldBlock, apply_placed_blocks, try_place_block};
 use crate::targeting::{
-    BlockInteractionConfig, TargetedBlock, draw_targeted_block_highlight, spawn_debug_entity,
+    BlockInteractionConfig, draw_targeted_block_highlight, spawn_debug_entity,
     update_debug_info, update_targeted_block,
 };
 
@@ -63,14 +64,11 @@ impl Plugin for CharacterInteractionPlugin {
         dd40_core::ensure_plugins!(app, CorePlugin, CharacterCorePlugin);
 
         // ── Resources ─────────────────────────────────────────────────────
-        // MiningState is now a per-character Component, attached via
-        // CharacterBundle in dd40_character_core; do not insert it as a
-        // resource here.
+        // MiningState and TargetedBlock are per-character Components, attached
+        // via CharacterBundle in dd40_character_core; do not insert as resources.
         app.insert_resource(BlockInteractionConfig::default())
-            .insert_resource(TargetedBlock::default())
             .insert_resource(HeldBlock::default())
             .register_type::<BlockInteractionConfig>()
-            .register_type::<TargetedBlock>()
             .register_type::<HeldBlock>();
 
         // ── Messages ──────────────────────────────────────────────────────
@@ -132,7 +130,6 @@ mod tests {
         app.add_plugins(CharacterInteractionPlugin);
         app.update();
         assert!(app.world().contains_resource::<BlockInteractionConfig>());
-        assert!(app.world().contains_resource::<TargetedBlock>());
         assert!(app.world().contains_resource::<HeldBlock>());
     }
 

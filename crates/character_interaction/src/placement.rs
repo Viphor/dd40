@@ -30,11 +30,11 @@
 //! what gets placed.
 
 use bevy::prelude::*;
+use dd40_character_core::components::Character;
+use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::block::events::{BlockPlaced, PlaceBlockRequest};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::prelude::*;
-
-use crate::targeting::TargetedBlock;
 
 // ── Held-block resource ───────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ impl Default for HeldBlock {
 /// layer applies that to the local cache.
 pub(crate) fn try_place_block(
     mouse: Res<ButtonInput<MouseButton>>,
-    targeted: Res<TargetedBlock>,
+    targeted_query: Query<&TargetedBlock, With<Character>>,
     held: Res<HeldBlock>,
     cache: Res<ChunkCache>,
     registry: Res<BlockRegistry>,
@@ -100,6 +100,7 @@ pub(crate) fn try_place_block(
         return;
     }
 
+    let Some(targeted) = targeted_query.iter().next() else { return };
     let (Some(hit_pos), Some(face)) = (targeted.pos, targeted.face) else {
         return;
     };

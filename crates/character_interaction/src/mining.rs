@@ -1,13 +1,12 @@
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
+use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::{
     block::{Block, BlockId, events::{AbortMiningRequest, BlockRemoved, MineBlockRequest, StartMiningRequest}},
     chunk::cache::ChunkCache,
     prelude::*,
     tools::{EquippedTool, mining_duration},
 };
-
-use crate::targeting::TargetedBlock;
 
 pub use dd40_character_core::mining_state::MiningState;
 
@@ -19,8 +18,7 @@ pub use dd40_character_core::mining_state::MiningState;
 /// owns the local mouse" belongs to a wrapper plugin (currently `dd40_player`).
 pub(crate) fn update_mining(
     mouse: Res<ButtonInput<MouseButton>>,
-    targeted: Res<TargetedBlock>,
-    mut character_query: Query<(Option<&EquippedTool>, &mut MiningState), With<Character>>,
+    mut character_query: Query<(Option<&EquippedTool>, &TargetedBlock, &mut MiningState), With<Character>>,
     registry: Res<BlockRegistry>,
     tool_registry: Res<ToolRegistry>,
     time: Res<Time>,
@@ -28,7 +26,7 @@ pub(crate) fn update_mining(
     mut abort_writer: MessageWriter<AbortMiningRequest>,
     mut mine_writer: MessageWriter<MineBlockRequest>,
 ) {
-    let Some((equipped, mut state)) = character_query.iter_mut().next() else {
+    let Some((equipped, targeted, mut state)) = character_query.iter_mut().next() else {
         return;
     };
     let bare_hands = EquippedTool::default();
