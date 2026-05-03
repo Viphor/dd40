@@ -15,7 +15,6 @@ single-page reference.
 | **Tier 0 — Foundation** | Types, components, system sets — no game behaviour | Other foundation crates, external libraries |
 | **Tier 1 — Implementation** | Systems and concrete game behaviour | Any foundation crates, external libraries. Must call `ensure_plugins!` |
 | **Tier 2 — Binary** | Client and server binaries | Any dd40 crate |
-
 **Tier 1 crates must not depend on other Tier 1 crates.** If two implementation
 crates need to share data, that data belongs in a foundation crate.
 
@@ -33,6 +32,7 @@ entry below.
 | `dd40_core` | Block registry, chunk pipeline, app state, tools, messages | — |
 | `dd40_physics_core` | Physics types, components, system sets | `dd40_core` |
 | `dd40_character_core` | Character types, input bridge, `MiningState`, `PlayerId`, render sets | `dd40_core`, `dd40_physics_core` |
+| `dd40_item_core` | Item registry, `ActiveItem`, `RequestActiveItem`, `ActiveItemChanged` | `dd40_core` |
 
 ### Tier 1 — Implementation
 
@@ -135,6 +135,28 @@ src/
 ├── controller.rs      — CharacterController, CharacterControllerPlugin, CharacterInput
 ├── mining_state.rs    — MiningState
 └── system_sets.rs     — CharacterRenderSet (FrameInterpolation → CameraSync)
+```
+
+---
+
+### `dd40_item_core`
+
+Foundation crate. Defines the item registry, the per-character
+`ActiveItem` component, and the inventory-facing messages
+(`RequestActiveItem`, `ActiveItemChanged`).  Contains no game logic and
+no inventory layout — implementation crates such as
+`dd40_vanilla_inventory` provide the storage and selection systems.
+
+```
+src/
+├── lib.rs
+├── plugin.rs        — ItemCorePlugin
+├── prelude.rs       — re-exports of all stable public types
+├── registry.rs      — ItemId, ItemDefinition, ItemRegistry, ItemRegistrySet,
+│                       ToolBehavior
+├── active_item.rs   — ActiveItem (per-character Component), ItemStack
+└── messages.rs      — RequestActiveItem (Message), ActiveItemChanged (Event),
+                        ItemSelector
 ```
 
 ---
