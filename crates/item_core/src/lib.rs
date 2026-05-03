@@ -22,4 +22,5 @@
 pub mod active_item;
 pub mod messages;
 pub mod plugin;
+pub mod prelude;
 pub mod registry;
