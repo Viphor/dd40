@@ -18,6 +18,11 @@ An FPS counter in the top-left corner that shows:
 - **Yellow text** = Moderate performance (30-59 FPS)
 - **Red text** = Low performance (<30 FPS)
 
+An orientation gizmo showing the X/Y/Z axes relative to the current camera.
+
+Custom `DebugInfo` elements from other crates (e.g. player position, velocity,
+and chunk coordinates from `dd40_player`).
+
 ## Run the Demo
 
 ```bash
@@ -26,14 +31,13 @@ cargo run --example debug_ui_demo
 
 ## That's It!
 
-The FPS counter appears automatically. No configuration needed.
+The FPS counter and orientation gizmo appear automatically.
+No configuration needed.
 
 ## Coming Soon
 
 Future debug UI features:
-- Player position/velocity
 - Block under cursor
-- Chunk coordinates
 - Memory usage
 - Entity count
 - Toggle with F3 key
