@@ -20,3 +20,4 @@
 //! [`RequestActiveItem`]: crate::plugin::RequestActiveItem
 
 pub mod plugin;
+pub mod registry;

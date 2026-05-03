@@ -9,25 +9,34 @@ use bevy::prelude::*;
 use dd40_core::ensure_plugins;
 use dd40_core::plugin::CorePlugin;
 
+use crate::registry::ItemRegistry;
+
 /// Registers the item-system vocabulary.
 ///
 /// ## What this plugin sets up
 ///
-/// Currently nothing — types and messages will be added in subsequent
-/// commits.  The empty `build` body is intentional: this commit only proves
-/// the crate scaffold compiles and integrates with the workspace.
+/// - Inserts [`ItemRegistry`] as a resource (with the [`ItemId::EMPTY`]
+///   sentinel pre-registered) and registers it for reflection.
+/// - Configures the [`ItemRegistrySet`] system set.
+///
+/// [`ItemId::EMPTY`]: crate::registry::ItemId::EMPTY
+/// [`ItemRegistrySet`]: crate::registry::ItemRegistrySet
 #[derive(Default)]
 pub struct ItemCorePlugin;
 
 impl Plugin for ItemCorePlugin {
     fn build(&self, app: &mut App) {
         ensure_plugins!(app, CorePlugin);
+
+        app.insert_resource(ItemRegistry::new())
+            .register_type::<ItemRegistry>();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::registry::ItemId;
 
     #[test]
     fn item_core_plugin_auto_adds_core() {
@@ -37,5 +46,16 @@ mod tests {
             app.is_plugin_added::<CorePlugin>(),
             "CorePlugin must be auto-added by ItemCorePlugin"
         );
+    }
+
+    #[test]
+    fn item_core_plugin_inserts_registry_with_empty_sentinel() {
+        let mut app = App::new();
+        app.add_plugins(ItemCorePlugin);
+        let registry = app
+            .world()
+            .get_resource::<ItemRegistry>()
+            .expect("ItemRegistry inserted");
+        assert!(registry.get(ItemId::EMPTY).is_some());
     }
 }
