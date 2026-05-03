@@ -10,6 +10,7 @@ use dd40_core::ensure_plugins;
 use dd40_core::plugin::CorePlugin;
 
 use crate::active_item::ActiveItem;
+use crate::messages::RequestActiveItem;
 use crate::registry::ItemRegistry;
 
 /// Registers the item-system vocabulary.
@@ -19,7 +20,12 @@ use crate::registry::ItemRegistry;
 /// - Inserts [`ItemRegistry`] as a resource (with the [`ItemId::EMPTY`]
 ///   sentinel pre-registered) and registers it for reflection.
 /// - Registers [`ActiveItem`] for reflection.
+/// - Registers the [`RequestActiveItem`] message.
 /// - Configures the [`ItemRegistrySet`] system set.
+///
+/// [`ActiveItemChanged`][crate::messages::ActiveItemChanged] is an `Event`,
+/// not a `Message`, so it does not need explicit registration — observers
+/// register themselves with `app.add_observer(...)`.
 ///
 /// [`ItemId::EMPTY`]: crate::registry::ItemId::EMPTY
 /// [`ItemRegistrySet`]: crate::registry::ItemRegistrySet
@@ -32,7 +38,8 @@ impl Plugin for ItemCorePlugin {
 
         app.insert_resource(ItemRegistry::new())
             .register_type::<ItemRegistry>()
-            .register_type::<ActiveItem>();
+            .register_type::<ActiveItem>()
+            .add_message::<RequestActiveItem>();
     }
 }
 

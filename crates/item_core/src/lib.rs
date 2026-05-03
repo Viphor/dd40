@@ -20,5 +20,6 @@
 //! [`RequestActiveItem`]: crate::plugin::RequestActiveItem
 
 pub mod active_item;
+pub mod messages;
 pub mod plugin;
 pub mod registry;
