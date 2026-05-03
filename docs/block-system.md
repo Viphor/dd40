@@ -1,7 +1,7 @@
 # Block System
 
-The block system is defined in `dd40_core::block` and `dd40_core::vanilla_blocks`.
-It is the extensibility backbone of the game — any crate can register new block
+The block system is defined in `dd40_core::block`. Vanilla block and tool
+definitions live in `dd40_vanilla_palette`. Any crate can register new block
 types by adding a system to `BlockRegistrySet`.
 
 ---
@@ -124,7 +124,6 @@ pub struct BlockChanged {
 ```rust
 use bevy::prelude::*;
 use dd40_core::prelude::*;
-use dd40_core::character::physics::CollisionShape;
 
 pub const MY_BLOCK: BlockId = BlockId(1000);
 pub const MY_SLAB:  BlockId = BlockId(1001);
@@ -157,5 +156,5 @@ impl Plugin for MyBlocksPlugin {
 }
 ```
 
-See also `crates/core/src/vanilla_blocks.rs` for the full vanilla block
+See also `crates/vanilla_palette/src/blocks.rs` for the full vanilla block
 registration as a worked example.
