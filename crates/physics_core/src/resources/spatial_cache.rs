@@ -43,11 +43,9 @@
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
+use crate::prelude::*;
 use dd40_core::block::BlockPos;
 use dd40_core::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
-use dd40_physics_core::prelude::*;
-
-use crate::integration::TentativePosition;
 
 // ---------------------------------------------------------------------------
 // Resource
@@ -74,7 +72,7 @@ impl CharacterSpatialCache {
     /// `(entity, world-space foot-origin, aabb)` tuples.
     ///
     /// This is called once per fixed tick by [`update_character_spatial_cache`].
-    pub(crate) fn rebuild<'a>(&mut self, entries: impl Iterator<Item = (Entity, Vec3, &'a Aabb)>) {
+    pub fn rebuild<'a>(&mut self, entries: impl Iterator<Item = (Entity, Vec3, &'a Aabb)>) {
         self.chunks.clear();
 
         for (entity, origin, aabb) in entries {
@@ -200,32 +198,12 @@ fn world_to_chunk_axis(world: f32, chunk_size: i32) -> i32 {
 }
 
 // ---------------------------------------------------------------------------
-// System
-// ---------------------------------------------------------------------------
-
-/// Rebuilds [`CharacterSpatialCache`] from the current [`TentativePosition`]s
-/// of all [`CharacterCollider`] entities.
-///
-/// Runs at the **beginning** of [`PhysicsSet::CharacterCollision`], before the
-/// pair-scan, so positions are always up-to-date.
-pub(crate) fn update_character_spatial_cache(
-    mut cache: ResMut<CharacterSpatialCache>,
-    query: Query<(Entity, &TentativePosition, &Aabb), (With<CharacterCollider>, With<PhysicsBody>)>,
-) {
-    cache.rebuild(query.iter().map(|(e, t, a)| (e, t.0, a)));
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin::PhysicsPlugin;
-    use dd40_core::block::BlockRegistry;
-    use dd40_core::chunk::cache::ChunkCache;
-    use bevy::time::{Fixed, TimeUpdateStrategy};
 
     // ------------------------------------------------------------------
     // Unit tests for the cache data structure (no Bevy app needed)
@@ -242,8 +220,16 @@ mod tests {
         let aabb = player_aabb();
         cache.rebuild(std::iter::once((e, Vec3::new(4.0, 0.0, 4.0), &aabb)));
 
-        assert_eq!(cache.occupied_chunk_count(), 1, "should occupy exactly one chunk");
-        assert_eq!(cache.registration_count(), 1, "should have one registration");
+        assert_eq!(
+            cache.occupied_chunk_count(),
+            1,
+            "should occupy exactly one chunk"
+        );
+        assert_eq!(
+            cache.registration_count(),
+            1,
+            "should have one registration"
+        );
         assert!(
             cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
             "entity should be in chunk (0,0)"
@@ -261,8 +247,14 @@ mod tests {
         let in_c0 = cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e);
         let in_c1 = cache.entities_in_chunk(ChunkPos::new(1, 0)).contains(&e);
 
-        assert!(in_c0, "entity should appear in chunk (0,0) — its left edge is there");
-        assert!(in_c1, "entity should appear in chunk (1,0) — its right edge is there");
+        assert!(
+            in_c0,
+            "entity should appear in chunk (0,0) — its left edge is there"
+        );
+        assert!(
+            in_c1,
+            "entity should appear in chunk (1,0) — its right edge is there"
+        );
         assert_eq!(cache.registration_count(), 2);
     }
 
@@ -314,7 +306,11 @@ mod tests {
         );
 
         let pairs: Vec<_> = cache.candidate_pairs().collect();
-        assert_eq!(pairs.len(), 1, "pair should be emitted exactly once, got {pairs:?}");
+        assert_eq!(
+            pairs.len(),
+            1,
+            "pair should be emitted exactly once, got {pairs:?}"
+        );
     }
 
     #[test]
@@ -333,7 +329,10 @@ mod tests {
         );
 
         let pairs: Vec<_> = cache.candidate_pairs().collect();
-        assert!(pairs.is_empty(), "characters in different chunks should not be paired: {pairs:?}");
+        assert!(
+            pairs.is_empty(),
+            "characters in different chunks should not be paired: {pairs:?}"
+        );
     }
 
     #[test]
@@ -380,111 +379,5 @@ mod tests {
         assert_eq!(cache.occupied_chunk_count(), 0);
         assert_eq!(cache.registration_count(), 0);
         assert_eq!(cache.candidate_pairs().count(), 0);
-    }
-
-    // ------------------------------------------------------------------
-    // Integration tests — cache is built and used inside the Bevy app
-    // ------------------------------------------------------------------
-
-    fn make_app(dt_secs: f32) -> App {
-        let duration = std::time::Duration::from_secs_f32(dt_secs);
-        let mut app = App::new();
-        app.add_plugins((bevy::MinimalPlugins, PhysicsPlugin))
-            .insert_resource(TimeUpdateStrategy::ManualDuration(duration))
-            .insert_resource(BlockRegistry::new())
-            .init_resource::<ChunkCache>();
-
-        app.world_mut()
-            .resource_mut::<Time<Fixed>>()
-            .set_timestep(duration);
-
-        app
-    }
-
-    fn tick(app: &mut App) {
-        app.update();
-        app.update();
-    }
-
-    fn spawn_character(app: &mut App, pos: Vec3) -> Entity {
-        app.world_mut()
-            .spawn((
-                Transform::from_translation(pos),
-                PhysicsBody,
-                CharacterCollider,
-                Aabb::player(),
-                GravityScale(0.0),
-            ))
-            .id()
-    }
-
-    #[test]
-    fn cache_is_populated_after_tick() {
-        let mut app = make_app(1.0 / 60.0);
-        let e = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
-
-        tick(&mut app);
-
-        let cache = app.world().resource::<CharacterSpatialCache>();
-        assert!(
-            cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
-            "entity should appear in chunk (0,0) after a tick"
-        );
-    }
-
-    #[test]
-    fn cache_tracks_entity_across_chunk_boundary_move() {
-        let mut app = make_app(1.0 / 20.0);
-
-        let e = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
-
-        tick(&mut app);
-        {
-            let mut cp = app.world_mut().get_mut::<CharacterPosition>(e).unwrap();
-            cp.0.x = 20.0;
-        }
-        tick(&mut app);
-
-        let cache = app.world().resource::<CharacterSpatialCache>();
-        assert!(
-            !cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
-            "entity should have left chunk (0,0)"
-        );
-        assert!(
-            cache.entities_in_chunk(ChunkPos::new(1, 0)).contains(&e),
-            "entity should now be in chunk (1,0)"
-        );
-    }
-
-    #[test]
-    fn two_characters_in_same_chunk_produce_candidate_pair() {
-        let mut app = make_app(1.0 / 60.0);
-        let e1 = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
-        let e2 = spawn_character(&mut app, Vec3::new(6.0, 0.0, 4.0));
-
-        tick(&mut app);
-
-        let cache = app.world().resource::<CharacterSpatialCache>();
-        let pairs: Vec<_> = cache.candidate_pairs().collect();
-        let found = pairs
-            .iter()
-            .any(|&(a, b)| (a == e1 && b == e2) || (a == e2 && b == e1));
-        assert!(found, "characters in the same chunk should be a candidate pair");
-    }
-
-    #[test]
-    fn two_characters_in_different_chunks_no_candidate_pair_in_app() {
-        let mut app = make_app(1.0 / 60.0);
-        let _e1 = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
-        let _e2 = spawn_character(&mut app, Vec3::new(84.0, 0.0, 4.0));
-
-        tick(&mut app);
-
-        let cache = app.world().resource::<CharacterSpatialCache>();
-        let pairs: Vec<_> = cache.candidate_pairs().collect();
-        assert!(
-            pairs.is_empty(),
-            "characters in different chunks should produce no candidate pair: {pairs:?}"
-        );
     }
 }

@@ -4,8 +4,7 @@ use dd40_core::{
     chunk::cache::ChunkCache,
     prelude::*,
 };
-use dd40_physics_core::prelude::{Aabb, CharacterPosition};
-use dd40_physics::CharacterSpatialCache;
+use dd40_physics_core::prelude::{Aabb, CharacterPosition, CharacterSpatialCache};
 use lightyear::prelude::{MessageReceiver, MessageSender};
 
 use crate::{
@@ -101,14 +100,14 @@ pub(crate) fn receive_place_requests(
                 // share a chunk with the target cell, then run a precise AABB
                 // test only on those candidates.
                 let overlaps_character =
-                    spatial_cache
-                        .candidates_for_block(req.pos)
-                        .any(|entity| match characters.get(entity) {
+                    spatial_cache.candidates_for_block(req.pos).any(|entity| {
+                        match characters.get(entity) {
                             Ok((char_pos, char_aabb)) => {
                                 char_aabb.overlaps(char_pos.0, &block_aabb, block_origin)
                             }
                             Err(_) => false,
-                        });
+                        }
+                    });
 
                 if overlaps_character {
                     debug!(

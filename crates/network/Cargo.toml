@@ -12,7 +12,6 @@ debug_ui = ["lightyear/debug"]
 [dependencies]
 bevy = { workspace = true, features = ["bevy_log", "bevy_state", "async_executor", "multi_threaded"] }
 dd40_core = { path = "../core" }
-dd40_physics = { workspace = true }
 dd40_physics_core = { workspace = true }
 dd40_character_core = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }

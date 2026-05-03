@@ -35,7 +35,11 @@ pub struct Aabb {
 impl Aabb {
     /// Creates a new AABB with the given half-extents.
     pub fn new(half_x: f32, half_y: f32, half_z: f32) -> Self {
-        Self { half_x, half_y, half_z }
+        Self {
+            half_x,
+            half_y,
+            half_z,
+        }
     }
 
     /// Returns a player-shaped AABB (0.3 × 0.9 × 0.3 half-extents).
@@ -79,12 +83,7 @@ impl Aabb {
     ///
     /// The returned vector points **from `other` toward `self`** — adding it
     /// to `self_origin` resolves the overlap.
-    pub fn penetration(
-        &self,
-        self_origin: Vec3,
-        other: &Aabb,
-        other_origin: Vec3,
-    ) -> Option<Vec3> {
+    pub fn penetration(&self, self_origin: Vec3, other: &Aabb, other_origin: Vec3) -> Option<Vec3> {
         let a_min = self.min(self_origin);
         let a_max = self.max(self_origin);
         let b_min = other.min(other_origin);
@@ -99,13 +98,25 @@ impl Aabb {
         }
 
         if overlap_x <= overlap_y && overlap_x <= overlap_z {
-            let sign = if self_origin.x > other_origin.x { 1.0 } else { -1.0 };
+            let sign = if self_origin.x > other_origin.x {
+                1.0
+            } else {
+                -1.0
+            };
             Some(Vec3::new(overlap_x * sign, 0.0, 0.0))
         } else if overlap_z <= overlap_x && overlap_z <= overlap_y {
-            let sign = if self_origin.z > other_origin.z { 1.0 } else { -1.0 };
+            let sign = if self_origin.z > other_origin.z {
+                1.0
+            } else {
+                -1.0
+            };
             Some(Vec3::new(0.0, 0.0, overlap_z * sign))
         } else {
-            let sign = if self_origin.y > other_origin.y { 1.0 } else { -1.0 };
+            let sign = if self_origin.y > other_origin.y {
+                1.0
+            } else {
+                -1.0
+            };
             Some(Vec3::new(0.0, overlap_y * sign, 0.0))
         }
     }
@@ -122,7 +133,16 @@ impl Aabb {
 /// restoring only position but not velocity causes re-simulation to diverge on
 /// gravity-affected or collision-affected entities.
 #[derive(
-    Debug, Default, Clone, Copy, Component, Reflect, Deref, DerefMut, PartialEq, Serialize,
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    Component,
+    Reflect,
+    Deref,
+    DerefMut,
+    PartialEq,
+    Serialize,
     Deserialize,
 )]
 #[reflect(Component)]
@@ -253,34 +273,3 @@ pub struct PhysicsBody;
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
 pub struct CharacterCollider;
-
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-
-/// Global physics configuration resource.
-#[derive(Resource, Debug, Clone, Reflect)]
-#[reflect(Resource)]
-pub struct PhysicsConfig {
-    /// Gravitational acceleration in world units/s². Positive pulls downward.
-    /// Default: `20.0`.
-    pub gravity: f32,
-    /// Horizontal velocity damping applied per second when grounded (0 = none,
-    /// 1 = instant stop).
-    pub ground_friction: f32,
-    /// Horizontal velocity damping applied per second when airborne.
-    pub air_friction: f32,
-    /// Maximum downward speed, in world units/s.
-    pub terminal_velocity: f32,
-}
-
-impl Default for PhysicsConfig {
-    fn default() -> Self {
-        Self {
-            gravity: 20.0,
-            ground_friction: 1.0,
-            air_friction: 0.0002,
-            terminal_velocity: 60.0,
-        }
-    }
-}

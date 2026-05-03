@@ -1,7 +1,8 @@
 use bevy::prelude::*;
+use dd40_physics_core::plugin::PhysicsCorePlugin;
 
 use crate::{
-    components::{Character, JumpImpulse, MovementSpeed, PlayerId, Player},
+    components::{Character, JumpImpulse, MovementSpeed, Player, PlayerId},
     controller::{CharacterController, CharacterControllerPlugin, CharacterInput},
     mining_state::MiningState,
     system_sets::CharacterRenderSet,
@@ -20,6 +21,8 @@ pub struct CharacterCorePlugin;
 
 impl Plugin for CharacterCorePlugin {
     fn build(&self, app: &mut App) {
+        dd40_core::ensure_plugins!(app, PhysicsCorePlugin);
+
         app.register_type::<Character>()
             .register_type::<Player>()
             .register_type::<PlayerId>()

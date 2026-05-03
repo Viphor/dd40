@@ -1,8 +1,9 @@
 pub use crate::{
     components::{
         Aabb, CharacterCollider, CharacterPosition, GravityScale, Grounded, Impulse, PhysicsBody,
-        PhysicsConfig, Velocity,
+        Velocity,
     },
     plugin::PhysicsCorePlugin,
+    resources::{CharacterSpatialCache, PhysicsConfig},
     system_sets::PhysicsSet,
 };

@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::PhysicsConfig,
     components::{
         Aabb, CharacterCollider, CharacterPosition, GravityScale, Grounded, Impulse, PhysicsBody,
         Velocity,
     },
+    resources::{CharacterSpatialCache, PhysicsConfig},
     system_sets::PhysicsSet,
 };
 
@@ -32,6 +32,7 @@ impl Plugin for PhysicsCorePlugin {
             .register_type::<CharacterCollider>()
             .register_type::<PhysicsConfig>()
             .init_resource::<PhysicsConfig>()
+            .init_resource::<CharacterSpatialCache>()
             .configure_sets(
                 FixedUpdate,
                 PhysicsSet::InputSync.before(PhysicsSet::Integrate),

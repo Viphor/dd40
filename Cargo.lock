@@ -2805,7 +2805,6 @@ dependencies = [
  "crossbeam-channel",
  "dd40_character_core",
  "dd40_core",
- "dd40_physics",
  "dd40_physics_core",
  "lightyear",
  "rand 0.8.5",
@@ -2828,6 +2827,7 @@ name = "dd40_physics_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "dd40_core",
  "serde",
 ]
 

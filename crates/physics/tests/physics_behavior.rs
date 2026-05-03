@@ -48,7 +48,11 @@ fn physics_body_falls_under_gravity() {
         tick(&mut app);
     }
 
-    let pos = *app.world().entity(entity).get::<CharacterPosition>().unwrap();
+    let pos = *app
+        .world()
+        .entity(entity)
+        .get::<CharacterPosition>()
+        .unwrap();
     assert!(
         pos.0.y < 100.0,
         "gravity should have moved entity downward, y={:.3}",
@@ -60,9 +64,13 @@ fn physics_body_falls_under_gravity() {
 fn physics_plugin_auto_adds_dependencies() {
     // Neither CorePlugin nor PhysicsCorePlugin is added manually.
     let mut app = App::new();
-    app.add_plugins(bevy::MinimalPlugins).add_plugins(PhysicsPlugin);
+    app.add_plugins(bevy::MinimalPlugins)
+        .add_plugins(PhysicsPlugin);
     // BlockRegistry is inserted by CorePlugin — proves ensure_plugins! ran.
     assert!(app.world().contains_resource::<BlockRegistry>());
     // PhysicsConfig is inserted by PhysicsCorePlugin.
-    assert!(app.world().contains_resource::<dd40_physics_core::components::PhysicsConfig>());
+    assert!(
+        app.world()
+            .contains_resource::<dd40_physics_core::resources::PhysicsConfig>()
+    );
 }

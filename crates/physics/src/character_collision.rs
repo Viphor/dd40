@@ -36,11 +36,22 @@ use bevy::prelude::*;
 use dd40_physics_core::prelude::*;
 
 use crate::integration::TentativePosition;
-use crate::spatial_cache::{CharacterSpatialCache, update_character_spatial_cache};
 
 // ---------------------------------------------------------------------------
 // Collision system
 // ---------------------------------------------------------------------------
+
+/// Rebuilds [`CharacterSpatialCache`] from the current [`TentativePosition`]s
+/// of all [`CharacterCollider`] entities.
+///
+/// Runs at the **beginning** of [`PhysicsSet::CharacterCollision`], before the
+/// pair-scan, so positions are always up-to-date.
+pub(crate) fn update_character_spatial_cache(
+    mut cache: ResMut<CharacterSpatialCache>,
+    query: Query<(Entity, &TentativePosition, &Aabb), (With<CharacterCollider>, With<PhysicsBody>)>,
+) {
+    cache.rebuild(query.iter().map(|(e, t, a)| (e, t.0, a)));
+}
 
 /// Resolves overlaps between candidate-pair [`CharacterCollider`] entities by
 /// adjusting their [`TentativePosition`]s.
@@ -129,13 +140,12 @@ pub(crate) struct CharacterCollisionPlugin;
 
 impl Plugin for CharacterCollisionPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CharacterSpatialCache>()
-            .add_systems(
-                FixedUpdate,
-                (update_character_spatial_cache, resolve_character_collisions)
-                    .chain()
-                    .in_set(PhysicsSet::CharacterCollision),
-            );
+        app.init_resource::<CharacterSpatialCache>().add_systems(
+            FixedUpdate,
+            (update_character_spatial_cache, resolve_character_collisions)
+                .chain()
+                .in_set(PhysicsSet::CharacterCollision),
+        );
     }
 }
 
@@ -147,9 +157,8 @@ impl Plugin for CharacterCollisionPlugin {
 mod tests {
     use super::*;
     use crate::plugin::PhysicsPlugin;
-    use dd40_core::block::BlockRegistry;
-    use dd40_core::chunk::cache::ChunkCache;
     use bevy::time::{Fixed, TimeUpdateStrategy};
+    use dd40_core::chunk::ChunkPos;
 
     // ------------------------------------------------------------------
     // Helpers
@@ -159,9 +168,7 @@ mod tests {
         let duration = std::time::Duration::from_secs_f32(dt_secs);
         let mut app = App::new();
         app.add_plugins((bevy::MinimalPlugins, PhysicsPlugin))
-            .insert_resource(TimeUpdateStrategy::ManualDuration(duration))
-            .insert_resource(BlockRegistry::new())
-            .init_resource::<ChunkCache>();
+            .insert_resource(TimeUpdateStrategy::ManualDuration(duration));
 
         app.world_mut()
             .resource_mut::<Time<Fixed>>()
@@ -222,7 +229,10 @@ mod tests {
         let pos_b = app.world().get::<Transform>(b).unwrap().translation;
 
         assert!(pos_a.x.abs() < 1e-3, "a should not have moved: {pos_a:?}");
-        assert!((pos_b.x - 10.0).abs() < 1e-3, "b should not have moved: {pos_b:?}");
+        assert!(
+            (pos_b.x - 10.0).abs() < 1e-3,
+            "b should not have moved: {pos_b:?}"
+        );
     }
 
     #[test]
@@ -238,12 +248,17 @@ mod tests {
         let pos_b = app.world().get::<Transform>(b).unwrap().translation;
 
         assert!(
-            (pos_a.x - pos_b.x).abs() > f32::EPSILON
-                || (pos_a.z - pos_b.z).abs() > f32::EPSILON,
+            (pos_a.x - pos_b.x).abs() > f32::EPSILON || (pos_a.z - pos_b.z).abs() > f32::EPSILON,
             "same-position characters should be separated: a={pos_a:?}, b={pos_b:?}"
         );
-        assert!(((pos_a.x + pos_b.x) * 0.5).abs() < 0.1, "midpoint X should stay near origin");
-        assert!(((pos_a.z + pos_b.z) * 0.5).abs() < 0.1, "midpoint Z should stay near origin");
+        assert!(
+            ((pos_a.x + pos_b.x) * 0.5).abs() < 0.1,
+            "midpoint X should stay near origin"
+        );
+        assert!(
+            ((pos_a.z + pos_b.z) * 0.5).abs() < 0.1,
+            "midpoint Z should stay near origin"
+        );
     }
 
     #[test]
@@ -258,8 +273,16 @@ mod tests {
         let pos_a = app.world().get::<Transform>(a).unwrap().translation;
         let pos_b = app.world().get::<Transform>(b).unwrap().translation;
 
-        assert!((pos_a.y).abs() < 0.1, "Y of a should be unchanged: {}", pos_a.y);
-        assert!((pos_b.y - 0.5).abs() < 0.1, "Y of b should be unchanged: {}", pos_b.y);
+        assert!(
+            (pos_a.y).abs() < 0.1,
+            "Y of a should be unchanged: {}",
+            pos_a.y
+        );
+        assert!(
+            (pos_b.y - 0.5).abs() < 0.1,
+            "Y of b should be unchanged: {}",
+            pos_b.y
+        );
     }
 
     #[test]
@@ -276,8 +299,16 @@ mod tests {
 
         let vel_a = app.world().get::<Velocity>(a).unwrap();
         let vel_b = app.world().get::<Velocity>(b).unwrap();
-        assert!(vel_a.0.x.abs() < 1e-3, "a X vel should be zeroed, got {}", vel_a.0.x);
-        assert!(vel_b.0.x.abs() < 1e-3, "b X vel should be zeroed, got {}", vel_b.0.x);
+        assert!(
+            vel_a.0.x.abs() < 1e-3,
+            "a X vel should be zeroed, got {}",
+            vel_a.0.x
+        );
+        assert!(
+            vel_b.0.x.abs() < 1e-3,
+            "b X vel should be zeroed, got {}",
+            vel_b.0.x
+        );
     }
 
     #[test]
@@ -297,9 +328,18 @@ mod tests {
         let pos_c = app.world().get::<Transform>(c).unwrap().translation;
         let aabb = Aabb::player();
 
-        assert!(!aabb.overlaps(pos_a, &aabb, pos_b), "a-b overlap: {pos_a:?} {pos_b:?}");
-        assert!(!aabb.overlaps(pos_b, &aabb, pos_c), "b-c overlap: {pos_b:?} {pos_c:?}");
-        assert!(!aabb.overlaps(pos_a, &aabb, pos_c), "a-c overlap: {pos_a:?} {pos_c:?}");
+        assert!(
+            !aabb.overlaps(pos_a, &aabb, pos_b),
+            "a-b overlap: {pos_a:?} {pos_b:?}"
+        );
+        assert!(
+            !aabb.overlaps(pos_b, &aabb, pos_c),
+            "b-c overlap: {pos_b:?} {pos_c:?}"
+        );
+        assert!(
+            !aabb.overlaps(pos_a, &aabb, pos_c),
+            "a-c overlap: {pos_a:?} {pos_c:?}"
+        );
     }
 
     // ------------------------------------------------------------------
@@ -366,7 +406,11 @@ mod tests {
             );
         }
 
-        app.world_mut().get_mut::<Transform>(e1).unwrap().translation.x = 20.1;
+        app.world_mut()
+            .get_mut::<Transform>(e1)
+            .unwrap()
+            .translation
+            .x = 20.1;
 
         tick(&mut app);
 
@@ -415,6 +459,83 @@ mod tests {
         assert!(
             !aabb.overlaps(dyn_after, &aabb, obs_after),
             "dynamic char must be pushed clear: dyn={dyn_after:?}, obs={obs_after:?}"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Spatial cache behaviour
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn cache_is_populated_after_tick() {
+        let mut app = make_app(1.0 / 60.0);
+        let e = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
+
+        tick(&mut app);
+
+        let cache = app.world().resource::<CharacterSpatialCache>();
+        assert!(
+            cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
+            "entity should appear in chunk (0,0) after a tick"
+        );
+    }
+
+    #[test]
+    fn cache_tracks_entity_across_chunk_boundary_move() {
+        let mut app = make_app(1.0 / 20.0);
+
+        let e = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
+
+        tick(&mut app);
+        {
+            let mut cp = app.world_mut().get_mut::<CharacterPosition>(e).unwrap();
+            cp.0.x = 20.0;
+        }
+        tick(&mut app);
+
+        let cache = app.world().resource::<CharacterSpatialCache>();
+        assert!(
+            !cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
+            "entity should have left chunk (0,0)"
+        );
+        assert!(
+            cache.entities_in_chunk(ChunkPos::new(1, 0)).contains(&e),
+            "entity should now be in chunk (1,0)"
+        );
+    }
+
+    #[test]
+    fn two_characters_in_same_chunk_produce_candidate_pair() {
+        let mut app = make_app(1.0 / 60.0);
+        let e1 = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
+        let e2 = spawn_character(&mut app, Vec3::new(6.0, 0.0, 4.0));
+
+        tick(&mut app);
+
+        let cache = app.world().resource::<CharacterSpatialCache>();
+        let pairs: Vec<_> = cache.candidate_pairs().collect();
+        let found = pairs
+            .iter()
+            .any(|&(a, b)| (a == e1 && b == e2) || (a == e2 && b == e1));
+        assert!(
+            found,
+            "characters in the same chunk should be a candidate pair"
+        );
+    }
+
+    #[test]
+    fn two_characters_in_different_chunks_no_candidate_pair_in_app() {
+        let mut app = make_app(1.0 / 60.0);
+        let _e1 = spawn_character(&mut app, Vec3::new(4.0, 0.0, 4.0));
+        let _e2 = spawn_character(&mut app, Vec3::new(84.0, 0.0, 4.0));
+
+        tick(&mut app);
+
+        let cache = app.world().resource::<CharacterSpatialCache>();
+        let pairs: Vec<_> = cache.candidate_pairs().collect();
+        assert!(
+            pairs.is_empty(),
+            "characters in different chunks should produce no candidate pair: {pairs:?}"
         );
     }
 }
