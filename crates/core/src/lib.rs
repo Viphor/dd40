@@ -1,13 +1,12 @@
-pub mod macros;
 pub mod block;
 pub mod chunk;
 pub mod common;
 pub mod debug;
 pub mod loading;
+pub mod macros;
 pub mod plugin;
 pub mod state;
 pub mod tools;
-pub mod world;
 
 pub mod prelude {
     pub use crate::{
@@ -22,9 +21,8 @@ pub mod prelude {
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
         tools::{
-            EquippedTool, ToolKindId, ToolKindDefinition, ToolRegistry, ToolRegistrySet,
-            ToolTierId, ToolTierDefinition, mining_duration,
+            EquippedTool, ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet,
+            ToolTierDefinition, ToolTierId, mining_duration,
         },
-        world::WorldGenerationSet,
     };
 }

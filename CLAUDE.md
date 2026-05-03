@@ -11,6 +11,7 @@ cargo run --bin dd40_server      # Run the headless server
 cargo test --workspace           # Run all tests
 cargo test -p dd40_core          # Run tests for a single crate
 cargo doc --workspace --open     # Build and open API docs
+cargo fmt --workspace            # Format workspace (should be done before commits)
 ```
 
 The client has an optional `debug_network` feature flag that enables lightyear's network diagnostics UI:

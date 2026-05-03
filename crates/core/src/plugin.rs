@@ -1,10 +1,7 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
 
 use crate::{
-    chunk::cache::ChunkCachePlugin,
-    loading::LoadingPlugin,
-    prelude::*,
-    tools::{ToolRegistry, configure_tool_registry_ordering},
+    chunk::cache::ChunkCachePlugin, loading::LoadingPlugin, prelude::*, tools::ToolRegistry,
 };
 
 /// Bevy plugin that registers core types with the reflection system.
@@ -39,14 +36,7 @@ impl Plugin for CorePlugin {
             .add_message::<AbortMiningRequest>()
             .add_message::<MineBlockRequest>();
 
-        // System set ordering: tools must be registered before blocks (block
-        // definitions may reference ToolKindId), and both must finish before
-        // world generation reads the registry.
-        configure_tool_registry_ordering(app);
-        app.configure_sets(
-            Startup,
-            (BlockRegistrySet, WorldGenerationSet.after(BlockRegistrySet)),
-        );
+        app.configure_sets(Startup, (ToolRegistrySet, BlockRegistrySet).chain());
 
         app.add_plugins(ChunkCachePlugin);
     }

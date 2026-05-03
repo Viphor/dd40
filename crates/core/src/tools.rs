@@ -30,7 +30,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::block::{BlockDefinition, registry::BlockRegistrySet};
+use crate::block::BlockDefinition;
 
 // ── System set ────────────────────────────────────────────────────────────────
 
@@ -52,9 +52,7 @@ pub struct ToolRegistrySet;
 /// Vanilla kinds start at `1` (registered by `dd40_vanilla_palette`).
 /// Custom modded kinds should start at `64` or higher to leave room for future
 /// vanilla additions.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Serialize, Deserialize, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Serialize, Deserialize, Default)]
 pub struct ToolKindId(pub u16);
 
 impl ToolKindId {
@@ -75,9 +73,7 @@ impl std::fmt::Display for ToolKindId {
 /// ID `0` is the engine invariant default tier ([`ToolTierId::DEFAULT`]),
 /// with `speed_multiplier = 1.0`.  Vanilla tiers are registered by
 /// `dd40_vanilla_palette`.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Serialize, Deserialize, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Serialize, Deserialize, Default)]
 pub struct ToolTierId(pub u16);
 
 impl ToolTierId {
@@ -332,21 +328,6 @@ pub fn mining_duration(
     Some(block_def.toughness / multiplier)
 }
 
-// ── System set configuration helper ──────────────────────────────────────────
-
-/// Configures [`ToolRegistrySet`] to run before [`BlockRegistrySet`] in
-/// `Startup`.
-///
-/// Called once inside [`CorePlugin`].
-///
-/// [`CorePlugin`]: crate::plugin::CorePlugin
-pub(crate) fn configure_tool_registry_ordering(app: &mut App) {
-    app.configure_sets(
-        Startup,
-        ToolRegistrySet.before(BlockRegistrySet),
-    );
-}
-
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -384,7 +365,10 @@ mod tests {
         let block = BlockDefinition::new(BlockId(1), "stone")
             .with_toughness(1.5)
             .with_preferred_tool(pickaxe);
-        let tool = EquippedTool { kind: pickaxe, tier: iron };
+        let tool = EquippedTool {
+            kind: pickaxe,
+            tier: iron,
+        };
         // 1.5 / 6.0 = 0.25 s
         assert!((mining_duration(&block, &tool, &registry).unwrap() - 0.25).abs() < 1e-6);
     }
@@ -398,16 +382,21 @@ mod tests {
             .with_toughness(1.5)
             .with_preferred_tool(pickaxe);
         // Equip axe (kind 2 — unregistered, treated as none) with iron tier
-        let tool = EquippedTool { kind: ToolKindId(2), tier: iron };
+        let tool = EquippedTool {
+            kind: ToolKindId(2),
+            tier: iron,
+        };
         assert_eq!(mining_duration(&block, &tool, &registry), Some(1.5));
     }
 
     #[test]
     fn indestructible_returns_none() {
         let (registry, _, iron) = make_registry_with_iron_pickaxe();
-        let block = BlockDefinition::new(BlockId(99), "bedrock")
-            .with_destructible(false);
-        let tool = EquippedTool { kind: ToolKindId(1), tier: iron };
+        let block = BlockDefinition::new(BlockId(99), "bedrock").with_destructible(false);
+        let tool = EquippedTool {
+            kind: ToolKindId(1),
+            tier: iron,
+        };
         assert_eq!(mining_duration(&block, &tool, &registry), None);
     }
 
