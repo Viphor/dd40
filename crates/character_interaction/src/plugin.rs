@@ -97,8 +97,7 @@ impl Plugin for CharacterInteractionPlugin {
                 .run_if(playing_running.clone()),
         );
 
-        let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
-        app.add_systems(PostUpdate, apply_placed_blocks.run_if(playing_and_running));
+        app.add_systems(PostUpdate, apply_placed_blocks.run_if(playing_running));
 
         let playing = in_state(AppState::Playing);
         app.add_systems(PostUpdate, apply_removed_blocks.run_if(playing));
