@@ -31,24 +31,27 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
         .unwrap_or(Vec3::new(0.0, 84.0, 0.0));
 
     debug!("Spawning player at position {:?}", position);
-    commands.spawn((
-        Player,
-        CharacterBuilder::new("Player")
-            .transform(Transform::from_translation(position))
-            .build(),
-        PhysicsBody,
-        CharacterCollider,
-        Aabb::player(),
-        CharacterController::default(),
-        JumpImpulse::default(),
-        DebugInfo::new("Player Info")
-            .with_color(bevy::color::palettes::basic::YELLOW.into())
-            .add("position", "Player position")
-            .add("velocity", "Player velocity")
-            .add("impulse", "Player impulse")
-            .add("chunk", "Player chunk")
-            .add("mining", "Idle"),
-    ));
+    let entity = commands
+        .spawn((
+            Player,
+            PhysicsBody,
+            CharacterCollider,
+            Aabb::player(),
+            CharacterController::default(),
+            JumpImpulse::default(),
+            DebugInfo::new("Player Info")
+                .with_color(bevy::color::palettes::basic::YELLOW.into())
+                .add("position", "Player position")
+                .add("velocity", "Player velocity")
+                .add("impulse", "Player impulse")
+                .add("chunk", "Player chunk")
+                .add("mining", "Idle"),
+        ))
+        .id();
+    let mut entity_cmds = commands.entity(entity);
+    CharacterBuilder::new("Player")
+        .transform(Transform::from_translation(position))
+        .attach(&mut entity_cmds);
 }
 
 // ── Per-frame systems ─────────────────────────────────────────────────────────

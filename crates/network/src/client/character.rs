@@ -115,10 +115,10 @@ fn on_predicted_character_added(
         .map(|p| p.to_vec3())
         .unwrap_or(Vec3::ZERO);
 
-    commands.entity(trigger.entity).insert((
+    let mut entity_cmds = commands.entity(trigger.entity);
+    entity_cmds.insert((
         InputMarker::<PlayerInput>::default(),
         Player,
-        CharacterBuilder::new("ThePlayer").build(),
         character_bundle(),
         // Override the on_add-initialised CharacterPosition with the actual
         // server-confirmed spawn position.
@@ -128,6 +128,7 @@ fn on_predicted_character_added(
             current: initial_pos,
         },
     ));
+    CharacterBuilder::new("ThePlayer").attach(&mut entity_cmds);
 
     info!(
         "Attached InputMarker + Player to predicted character {:?}",

@@ -74,29 +74,35 @@ fn server_spawn_character(
         client_id, spawn_pos
     );
 
-    commands.spawn((
-        // ── Identity ─────────────────────────────────────────────────────
-        NetworkCharacter,
-        CharacterBuilder::new(user.name)
-            .transform(Transform::from_translation(spawn_pos))
-            .build(),
-        // ── Physics ──────────────────────────────────────────────────────
-        character_bundle(),
-        // ── Networked state ───────────────────────────────────────────────
-        // Lightyear reads ActionState from this component and populates it
-        // with the inputs buffered by the controlling client.
-        ActionState::<PlayerInput>::default(),
-        PlayerPosition::from_vec3(spawn_pos),
-        PlayerRotation::new(0.0, 0.0),
-        // ── Replication config ────────────────────────────────────────────
-        Replicate::to_clients(NetworkTarget::All),
-        PredictionTarget::to_clients(NetworkTarget::Single(client_id)),
-        InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(client_id)),
-        ControlledBy {
-            owner: trigger.entity,
-            lifetime: Default::default(),
-        },
-    ));
+    let entity = commands
+        .spawn((
+            // ── Identity ─────────────────────────────────────────────────────
+            NetworkCharacter,
+            // ── Physics ──────────────────────────────────────────────────────
+            character_bundle(),
+            // ── Networked state ───────────────────────────────────────────────
+            // Lightyear reads ActionState from this component and populates it
+            // with the inputs buffered by the controlling client.
+            ActionState::<PlayerInput>::default(),
+            PlayerPosition::from_vec3(spawn_pos),
+            PlayerRotation::new(0.0, 0.0),
+            // ── Replication config ────────────────────────────────────────────
+            Replicate::to_clients(NetworkTarget::All),
+            PredictionTarget::to_clients(NetworkTarget::Single(client_id)),
+            InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(client_id)),
+            ControlledBy {
+                owner: trigger.entity,
+                lifetime: Default::default(),
+            },
+        ))
+        .id();
+
+    // Attach the character body bundle + face child via the builder so the
+    // face entity is wired correctly (eye height, CameraRotation).
+    let mut entity_cmds = commands.entity(entity);
+    CharacterBuilder::new(user.name)
+        .transform(Transform::from_translation(spawn_pos))
+        .attach(&mut entity_cmds);
 }
 
 // ============================================================================
