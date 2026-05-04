@@ -12,6 +12,7 @@ path = "src/main.rs"
 bevy = { version = "0.18", default-features = false, features = ["multi_threaded"] }
 dd40_core = { workspace = true, features = ["debug_logging"] }
 dd40_physics = { workspace = true }
+dd40_integration_character_physics = { workspace = true }
 dd40_world = { workspace = true }
 dd40_network = { workspace = true, features = ["server"] }
 dd40_chunk_storage = { workspace = true }

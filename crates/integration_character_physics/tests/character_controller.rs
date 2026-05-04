@@ -1,15 +1,9 @@
-//! Integration tests for [`CharacterController`] + physics pipeline.
+//! End-to-end integration tests for [`IntegrationCharacterPhysicsPlugin`]
+//! against the real [`PhysicsPlugin`].
 //!
-//! These tests live in `dd40_physics` (not `dd40_core`) to avoid the circular
-//! dev-dependency that would cause type-identity mismatches at runtime:
-//!
-//! ```text
-//! dd40_core (test binary) → dd40_physics (dev-dep) → dd40_core (library)
-//! ```
-//!
-//! That cycle makes Cargo compile `dd40_core` twice, giving every type a
-//! different `TypeId`.  By hosting the tests here, `dd40_core` is only ever
-//! one compilation and all `TypeId`s are consistent.
+//! The unit tests in `src/plugin.rs` exercise the controller system in
+//! isolation; this file exercises it together with gravity, integration,
+//! and grounded detection — the full character-locomotion pipeline.
 
 use std::time::Duration;
 
@@ -18,9 +12,9 @@ use bevy::time::{Fixed, TimeUpdateStrategy};
 use dd40_character_core::{
     components::{JumpImpulse, MovementSpeed},
     controller::{CharacterController, CharacterInput},
-    plugin::CharacterCorePlugin,
 };
 use dd40_core::chunk::cache::ChunkCache;
+use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
 use dd40_physics::plugin::PhysicsPlugin;
 use dd40_physics_core::prelude::{Aabb, GravityScale, Grounded, PhysicsBody, Velocity};
 
@@ -28,7 +22,7 @@ fn make_app(dt_secs: f32) -> App {
     let duration = Duration::from_secs_f32(dt_secs);
     let mut app = App::new();
     app.add_plugins(bevy::MinimalPlugins)
-        .add_plugins((PhysicsPlugin, CharacterCorePlugin))
+        .add_plugins((PhysicsPlugin, IntegrationCharacterPhysicsPlugin))
         .insert_resource(TimeUpdateStrategy::ManualDuration(duration))
         .init_resource::<ChunkCache>();
     app.world_mut()

@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
 use dd40_gui::plugin::GuiPlugin;
+use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
 use dd40_network::ClientNetworkPlugin;
 use dd40_physics::PhysicsPlugin;
 use dd40_player::PlayerInputPlugin;
@@ -26,6 +27,7 @@ fn main() {
     .add_plugins((
         CorePlugin,
         PhysicsPlugin,
+        IntegrationCharacterPhysicsPlugin,
         VanillaPalettePlugin,
         PlayerInputPlugin,
         DebugUiPlugin,

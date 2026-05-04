@@ -31,7 +31,7 @@ entry below.
 |---|---|---|
 | `dd40_core` | Block registry, chunk pipeline, app state, tools, messages | — |
 | `dd40_physics_core` | Physics types, components, system sets | `dd40_core` |
-| `dd40_character_core` | Character types, input bridge, `MiningState`, `TargetedBlock`, `PlayerId`, render sets | `dd40_core`, `dd40_physics_core` |
+| `dd40_character_core` | Character types, input bridge, `MiningState`, `TargetedBlock`, `PlayerId`, render sets | `dd40_core` |
 | `dd40_item_core` | Item registry, `ActiveItem`, `RequestActiveItem`, `ActiveItemChanged` | `dd40_core` |
 
 ### Tier 1 — Implementation
@@ -133,7 +133,9 @@ src/
 │                        SpawnPosition
 ├── bundles.rs         — CharacterBundle (incl. MiningState, TargetedBlock)
 ├── builder.rs         — CharacterBuilder
-├── controller.rs      — CharacterController, CharacterControllerPlugin, CharacterInput
+├── controller.rs      — CharacterController, CharacterInput (types only;
+│                        the apply_character_controller system lives in
+│                        dd40_integration_character_physics)
 ├── mining_state.rs    — MiningState (per-character Component)
 ├── targeted_block.rs  — TargetedBlock (per-character Component), BlockFace
 └── system_sets.rs     — CharacterRenderSet (FrameInterpolation → CameraSync)

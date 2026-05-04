@@ -2729,7 +2729,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "dd40_core",
- "dd40_physics_core",
  "serde",
 ]
 
@@ -2762,6 +2761,7 @@ dependencies = [
  "dd40_core",
  "dd40_debug_ui",
  "dd40_gui",
+ "dd40_integration_character_physics",
  "dd40_network",
  "dd40_physics",
  "dd40_player",
@@ -2805,6 +2805,7 @@ dependencies = [
  "bevy",
  "dd40_character_core",
  "dd40_core",
+ "dd40_physics",
  "dd40_physics_core",
 ]
 
@@ -2837,7 +2838,6 @@ name = "dd40_physics"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "dd40_character_core",
  "dd40_core",
  "dd40_physics_core",
 ]
@@ -2889,6 +2889,7 @@ dependencies = [
  "bevy",
  "dd40_chunk_storage",
  "dd40_core",
+ "dd40_integration_character_physics",
  "dd40_network",
  "dd40_physics",
  "dd40_vanilla_palette",

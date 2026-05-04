@@ -1,6 +1,7 @@
 use bevy::{diagnostic::DiagnosticsPlugin, prelude::*};
 use dd40_chunk_storage::plugin::DiskStoragePlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
+use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
 use dd40_physics::PhysicsPlugin;
 use dd40_network::{
     ServerNetworkPlugin,
@@ -19,6 +20,7 @@ fn main() {
         .add_plugins((
             CorePlugin,
             PhysicsPlugin,
+            IntegrationCharacterPhysicsPlugin,
             VanillaPalettePlugin,
             DiskStoragePlugin::new("world_data/chunks"),
             WorldPlugin::new(FlatWorldGenerator(vec![

@@ -31,6 +31,7 @@
 //!     .run();
 //! ```
 
+pub mod controller;
 pub mod plugin;
 
 pub use plugin::IntegrationCharacterPhysicsPlugin;
