@@ -35,6 +35,12 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
     let entity = commands
         .spawn((
             Player,
+            // Transform must be in the initial spawn tuple so that
+            // `CharacterPosition::on_add` (auto-required by `PhysicsBody`)
+            // sees the spawn position. Inserting `Transform` later via the
+            // `CharacterBuilder` would leave `CharacterPosition` at
+            // `Vec3::ZERO` and the player would fall from the world origin.
+            Transform::from_translation(position),
             PhysicsBody,
             CharacterCollider,
             Aabb::player(),

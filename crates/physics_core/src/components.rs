@@ -273,3 +273,50 @@ pub struct PhysicsBody;
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
 pub struct CharacterCollider;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `CharacterPosition::on_add` reads the entity's `Transform.translation`
+    /// at component-insertion time. When `Transform` is part of the same
+    /// spawn tuple as `PhysicsBody` (which auto-requires `CharacterPosition`),
+    /// the hook sees the spawn position and the physics solver starts there.
+    #[test]
+    fn character_position_picks_up_transform_present_in_spawn_tuple() {
+        let mut app = App::new();
+        let entity = app
+            .world_mut()
+            .spawn((Transform::from_xyz(0.0, 74.0, 0.0), PhysicsBody))
+            .id();
+        let cp = app.world().get::<CharacterPosition>(entity).unwrap();
+        assert_eq!(cp.0, Vec3::new(0.0, 74.0, 0.0));
+    }
+
+    /// Regression test for the player-stuck-at-bottom-of-world bug.
+    ///
+    /// If `PhysicsBody` is inserted **before** `Transform` is on the entity,
+    /// `CharacterPosition::on_add` reads no Transform and falls back to
+    /// `Vec3::ZERO`. Inserting `Transform` afterwards does **not** retro-fix
+    /// `CharacterPosition`. Spawn flows must include `Transform` (or another
+    /// initial `CharacterPosition`) in the same tuple as `PhysicsBody`.
+    #[test]
+    fn character_position_is_zero_when_transform_is_inserted_after_physics_body() {
+        let mut app = App::new();
+        let entity = app.world_mut().spawn(PhysicsBody).id();
+        // CharacterPosition was initialised to ZERO at on_add time.
+        let cp_before = *app.world().get::<CharacterPosition>(entity).unwrap();
+        assert_eq!(cp_before.0, Vec3::ZERO);
+
+        // Inserting Transform afterwards does NOT update CharacterPosition.
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(Transform::from_xyz(0.0, 74.0, 0.0));
+        let cp_after = *app.world().get::<CharacterPosition>(entity).unwrap();
+        assert_eq!(
+            cp_after.0,
+            Vec3::ZERO,
+            "documents the contract: CharacterPosition::on_add only fires once"
+        );
+    }
+}

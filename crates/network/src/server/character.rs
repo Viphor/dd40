@@ -78,6 +78,12 @@ fn server_spawn_character(
         .spawn((
             // ── Identity ─────────────────────────────────────────────────────
             NetworkCharacter,
+            // Transform must be in the initial spawn tuple so that
+            // `CharacterPosition::on_add` (auto-required by `PhysicsBody`)
+            // sees the spawn position. Inserting `Transform` after
+            // `PhysicsBody` would leave `CharacterPosition` at `Vec3::ZERO`,
+            // and the player would fall from the world origin.
+            Transform::from_translation(spawn_pos),
             // ── Physics ──────────────────────────────────────────────────────
             character_bundle(),
             // ── Networked state ───────────────────────────────────────────────
