@@ -10,6 +10,7 @@
 //!
 //! [`Character`]: dd40_character_core::components::Character
 
+pub mod interact;
 pub mod mining;
 pub mod placement;
 pub mod plugin;

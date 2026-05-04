@@ -8,6 +8,7 @@ use dd40_core::plugin::CorePlugin;
 use dd40_core::prelude::*;
 use dd40_item_core::plugin::ItemCorePlugin;
 
+use crate::interact::try_interact;
 use crate::mining::{apply_removed_blocks, update_mining};
 pub use dd40_character_core::mining_state::MiningState;
 pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
@@ -98,6 +99,7 @@ impl Plugin for CharacterInteractionPlugin {
                 draw_targeted_block_highlight,
                 update_debug_info,
                 try_place_block,
+                try_interact,
                 update_mining,
             )
                 .chain()
