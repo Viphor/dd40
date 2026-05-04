@@ -1,4 +1,5 @@
 use bevy::{diagnostic::DiagnosticsPlugin, prelude::*};
+use dd40_character_interaction::CharacterInteractionPlugin;
 use dd40_chunk_storage::plugin::DiskStoragePlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
@@ -28,6 +29,10 @@ fn main() {
                 Layer { block_id: VanillaBlocks::DIRT,  height_range: 58..62 },
                 Layer { block_id: VanillaBlocks::GRASS, height_range: 62..63 },
             ])),
+            // Authoritative block-targeting, mining, and placement for every
+            // connected character.  The server owns the truth; clients render
+            // the result that comes back over the wire.
+            CharacterInteractionPlugin,
             ServerNetworkPlugin(DDServer {
                 conditioner: Some(RecvLinkConditioner::new(
                     LinkConditionerConfig::average_condition(),

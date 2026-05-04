@@ -17,3 +17,4 @@ dd40_world = { workspace = true }
 dd40_network = { workspace = true, features = ["server"] }
 dd40_chunk_storage = { workspace = true }
 dd40_vanilla_palette = { workspace = true }
+dd40_character_interaction = { workspace = true }
