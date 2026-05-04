@@ -138,53 +138,44 @@ fn dda_raycast(
 
 // ── Systems ───────────────────────────────────────────────────────────────────
 
-/// Casts a ray from the local player's [`CharacterFace`] and writes the
-/// result into the parent [`Character`]'s [`TargetedBlock`] component.
+/// Casts a ray from every [`CharacterFace`] and writes the result into the
+/// parent [`Character`]'s [`TargetedBlock`] component.
 ///
-/// The system finds the face whose parent has the [`Player`] marker (the
-/// local player) and uses its world-space transform as the ray's origin
-/// and forward direction.  This decouples targeting from the rendering
-/// [`Camera3d`] so headless servers can run the same code path against
-/// any character.
+/// Runs for **every** character — local players, remote players, NPCs.
+/// Each character's face is its own ray origin; the result is written to
+/// that character's own `TargetedBlock`.  This lets the same system work
+/// on the headless server (which has no [`Player`] marker — that's a
+/// local-only concept) for authoritative interaction handling.
 ///
-/// The system is a no-op when no local player exists yet (initial loading
-/// or before the network has spawned a character).
+/// Local-display systems ([`draw_targeted_block_highlight`],
+/// [`update_debug_info`]) still filter on [`Player`] to render only the
+/// local character's target.
 pub(crate) fn update_targeted_block(
     config: Res<BlockInteractionConfig>,
     face_query: Query<(&GlobalTransform, &ChildOf), With<CharacterFace>>,
-    player_query: Query<(), With<Player>>,
     mut character_query: Query<&mut TargetedBlock, With<Character>>,
     cache: Res<ChunkCache>,
     registry: Res<BlockRegistry>,
 ) {
-    let Some((face_transform, character_entity)) =
-        face_query
-            .iter()
-            .find_map(|(gt, child_of)| {
-                let parent = child_of.parent();
-                player_query.get(parent).ok().map(|_| (gt, parent))
-            })
-    else {
-        return;
-    };
+    for (face_transform, child_of) in face_query.iter() {
+        let Ok(mut targeted) = character_query.get_mut(child_of.parent()) else {
+            continue;
+        };
 
-    let Ok(mut targeted) = character_query.get_mut(character_entity) else {
-        return;
-    };
+        let origin = face_transform.translation();
+        let direction = face_transform.forward().as_vec3();
 
-    let origin = face_transform.translation();
-    let direction = face_transform.forward().as_vec3();
-
-    match dda_raycast(origin, direction, config.max_distance, &cache, &registry) {
-        Some((pos, face, block_id)) => {
-            targeted.pos = Some(pos);
-            targeted.face = Some(face);
-            targeted.block_id = Some(block_id);
-        }
-        None => {
-            targeted.pos = None;
-            targeted.face = None;
-            targeted.block_id = None;
+        match dda_raycast(origin, direction, config.max_distance, &cache, &registry) {
+            Some((pos, face, block_id)) => {
+                targeted.pos = Some(pos);
+                targeted.face = Some(face);
+                targeted.block_id = Some(block_id);
+            }
+            None => {
+                targeted.pos = None;
+                targeted.face = None;
+                targeted.block_id = None;
+            }
         }
     }
 }
@@ -412,5 +403,60 @@ mod tests {
         assert_eq!(BlockFace::West.normal(), BlockPos::new(-1, 0, 0));
         assert_eq!(BlockFace::South.normal(), BlockPos::new(0, 0, 1));
         assert_eq!(BlockFace::North.normal(), BlockPos::new(0, 0, -1));
+    }
+
+    /// Server-side scenario: two characters, neither has the (local-only)
+    /// `Player` marker. `update_targeted_block` must still write a
+    /// per-character `TargetedBlock` for both based on each one's face.
+    #[test]
+    fn update_targeted_block_runs_for_every_character_without_player_marker() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut app = App::new();
+        app.insert_resource(BlockInteractionConfig::default());
+        let mut registry = BlockRegistry::new();
+        registry.register_without_event(
+            BlockDefinition::new(BlockId(1), "stone").with_solid(true).with_renderable(true),
+        );
+        app.insert_resource(registry);
+
+        let mut cache = ChunkCache::new();
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        chunk.set(3, 64, 0, Block::new(BlockId(1)));
+        chunk.set(0, 64, 3, Block::new(BlockId(1)));
+        cache.insert(chunk);
+        app.insert_resource(cache);
+
+        // Character A — looks +X toward block (3, 64, 0).
+        let a = app
+            .world_mut()
+            .spawn((Character, TargetedBlock::default()))
+            .id();
+        let face_a_xform = Transform::from_xyz(0.5, 64.0, 0.5).looking_to(Vec3::X, Vec3::Y);
+        app.world_mut().spawn((
+            CharacterFace::default(),
+            face_a_xform,
+            GlobalTransform::from(face_a_xform),
+            ChildOf(a),
+        ));
+
+        // Character B — looks +Z toward block (0, 64, 3).
+        let b = app
+            .world_mut()
+            .spawn((Character, TargetedBlock::default()))
+            .id();
+        let face_b_xform = Transform::from_xyz(0.5, 64.0, 0.5).looking_to(Vec3::Z, Vec3::Y);
+        app.world_mut().spawn((
+            CharacterFace::default(),
+            face_b_xform,
+            GlobalTransform::from(face_b_xform),
+            ChildOf(b),
+        ));
+
+        app.world_mut().run_system_once(update_targeted_block).unwrap();
+
+        let a_target = app.world().get::<TargetedBlock>(a).unwrap();
+        let b_target = app.world().get::<TargetedBlock>(b).unwrap();
+        assert_eq!(a_target.pos, Some(BlockPos::new(3, 64, 0)), "A targets +X block");
+        assert_eq!(b_target.pos, Some(BlockPos::new(0, 64, 3)), "B targets +Z block");
     }
 }
