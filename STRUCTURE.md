@@ -122,7 +122,8 @@ src/
 ### `dd40_character_core`
 
 Foundation crate. Defines character-related types, the input bridge,
-`MiningState`, `TargetedBlock`, `PlayerId`, and the render-frame system set.
+`MiningState`, `TargetedBlock`, `PlayerId`, the per-character face anchor,
+and the render-frame system set.
 
 ```
 src/
@@ -132,10 +133,13 @@ src/
 ├── components.rs      — Character, Player, PlayerId, MovementSpeed, JumpImpulse,
 │                        SpawnPosition
 ├── bundles.rs         — CharacterBundle (incl. MiningState, TargetedBlock)
-├── builder.rs         — CharacterBuilder
+├── builder.rs         — CharacterBuilder (spawn / attach attach a face child)
 ├── controller.rs      — CharacterController, CharacterInput (types only;
 │                        the apply_character_controller system lives in
 │                        dd40_integration_character_physics)
+├── face.rs            — CharacterFace, CameraRotation, MouseSensitivity,
+│                        DEFAULT_FACE_OFFSET — eye/head anchor that lives on
+│                        a child entity of every Character
 ├── mining_state.rs    — MiningState (per-character Component)
 ├── targeted_block.rs  — TargetedBlock (per-character Component), BlockFace
 └── system_sets.rs     — CharacterRenderSet (FrameInterpolation → CameraSync)
