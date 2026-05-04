@@ -2,7 +2,7 @@ use bevy::ecs::{entity::Entity, message::Message};
 use serde::{Deserialize, Serialize};
 
 use crate::block::{BlockId, BlockPos};
-use crate::tools::EquippedTool;
+use crate::tools::{ToolKindId, ToolTierId};
 
 /// Sent by a player system to request placing a block at a given world position.
 ///
@@ -95,11 +95,13 @@ pub struct BlockChanged {
 pub struct StartMiningRequest {
     /// World-space position of the block being mined.
     pub pos: BlockPos,
-    /// The tool the player has equipped when mining starts.
+    /// The kind of tool the player has equipped when mining starts.
     ///
     /// Sent so the server can independently compute the required duration using
     /// the same [`mining_duration`][crate::tools::mining_duration] formula.
-    pub tool: EquippedTool,
+    pub tool_kind: ToolKindId,
+    /// The tier of tool the player has equipped when mining starts.
+    pub tool_tier: ToolTierId,
 }
 
 /// Sent by the player when they stop mining before completing (button released,
@@ -127,9 +129,11 @@ pub struct AbortMiningRequest {
 pub struct MineBlockRequest {
     /// World-space position of the block to remove.
     pub pos: BlockPos,
-    /// The tool equipped when the mining completed.
+    /// The kind of tool equipped when the mining completed.
     ///
-    /// Must match the `tool` from the corresponding [`StartMiningRequest`];
+    /// Must match the `tool_kind` from the corresponding [`StartMiningRequest`];
     /// the server recomputes the required duration from this value.
-    pub tool: EquippedTool,
+    pub tool_kind: ToolKindId,
+    /// The tier of tool equipped when the mining completed.
+    pub tool_tier: ToolTierId,
 }

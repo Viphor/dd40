@@ -109,7 +109,7 @@ pub(crate) fn receive_start_mining(
                 continue;
             }
 
-            let Some(required_duration) = mining_duration(block_def, &req.tool, &tool_registry) else {
+            let Some(required_duration) = mining_duration(block_def, req.tool_kind, req.tool_tier, &tool_registry) else {
                 continue;
             };
 

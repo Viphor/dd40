@@ -21,7 +21,7 @@ pub mod prelude {
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
         tools::{
-            EquippedTool, ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet,
+            ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet,
             ToolTierDefinition, ToolTierId, mining_duration,
         },
     };

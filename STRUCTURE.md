@@ -80,7 +80,7 @@ src/
 ├── debug.rs           — DebugInfo component
 ├── macros.rs          — ensure_plugins! macro
 ├── tools.rs           — ToolKindId, ToolTierId, ToolRegistry, ToolRegistrySet,
-│                        EquippedTool, mining_duration()
+│                        mining_duration()
 ├── block/
 │   ├── mod.rs         — Block, BlockId, BlockPos, BlockCoord, CollisionShape
 │   ├── registry.rs    — BlockDefinition, BlockRegistry, BlockRegistrySet

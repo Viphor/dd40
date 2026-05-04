@@ -5,7 +5,7 @@ use dd40_core::{
     block::{Block, BlockId, events::{AbortMiningRequest, BlockRemoved, MineBlockRequest, StartMiningRequest}},
     chunk::cache::ChunkCache,
     prelude::*,
-    tools::{EquippedTool, mining_duration},
+    tools::{ToolKindId, ToolTierId, mining_duration},
 };
 
 pub use dd40_character_core::mining_state::MiningState;
@@ -16,9 +16,16 @@ pub use dd40_character_core::mining_state::MiningState;
 /// [`MiningState`] component.  When no character exists, the system is a
 /// no-op.  Multi-character clients are out of scope: gating "which character
 /// owns the local mouse" belongs to a wrapper plugin (currently `dd40_player`).
+///
+/// # Tool source
+///
+/// This system currently uses bare hands ([`ToolKindId::NONE`] /
+/// [`ToolTierId::DEFAULT`]) for every character.  The next refactor
+/// (`interaction-uses-active-item`) will read the kind and tier from the
+/// character's `ActiveItem` via the item registry.
 pub(crate) fn update_mining(
     mouse: Res<ButtonInput<MouseButton>>,
-    mut character_query: Query<(Option<&EquippedTool>, &TargetedBlock, &mut MiningState), With<Character>>,
+    mut character_query: Query<(&TargetedBlock, &mut MiningState), With<Character>>,
     registry: Res<BlockRegistry>,
     tool_registry: Res<ToolRegistry>,
     time: Res<Time>,
@@ -26,11 +33,12 @@ pub(crate) fn update_mining(
     mut abort_writer: MessageWriter<AbortMiningRequest>,
     mut mine_writer: MessageWriter<MineBlockRequest>,
 ) {
-    let Some((equipped, targeted, mut state)) = character_query.iter_mut().next() else {
+    let Some((targeted, mut state)) = character_query.iter_mut().next() else {
         return;
     };
-    let bare_hands = EquippedTool::default();
-    let tool = equipped.copied().unwrap_or(bare_hands);
+    // Bare-hands placeholder until ActiveItem → tool lookup lands.
+    let tool_kind = ToolKindId::NONE;
+    let tool_tier = ToolTierId::DEFAULT;
 
     let left_held = mouse.pressed(MouseButton::Left);
     let left_just_pressed = mouse.just_pressed(MouseButton::Left);
@@ -51,14 +59,14 @@ pub(crate) fn update_mining(
             if !block_def.is_destructible {
                 return;
             }
-            let Some(duration) = mining_duration(block_def, &tool, &tool_registry) else { return };
+            let Some(duration) = mining_duration(block_def, tool_kind, tool_tier, &tool_registry) else { return };
 
             if duration <= 0.0 {
-                mine_writer.write(MineBlockRequest { pos, tool });
+                mine_writer.write(MineBlockRequest { pos, tool_kind, tool_tier });
                 return;
             }
 
-            start_writer.write(StartMiningRequest { pos, tool });
+            start_writer.write(StartMiningRequest { pos, tool_kind, tool_tier });
             *state = MiningState::Mining { pos, progress: 0.0, required_duration: duration };
         }
 
@@ -72,7 +80,7 @@ pub(crate) fn update_mining(
 
             let new_progress = (progress + time.delta_secs() / required_duration).clamp(0.0, 1.0);
             if new_progress >= 1.0 {
-                mine_writer.write(MineBlockRequest { pos: mining_pos, tool });
+                mine_writer.write(MineBlockRequest { pos: mining_pos, tool_kind, tool_tier });
                 *state = MiningState::Idle;
             } else {
                 *state = MiningState::Mining { pos: mining_pos, progress: new_progress, required_duration };
