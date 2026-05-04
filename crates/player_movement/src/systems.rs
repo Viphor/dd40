@@ -5,7 +5,9 @@ use dd40_character_core::components::Player;
 use dd40_character_core::controller::CharacterInput;
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
-use dd40_core::prelude::{BlockPos, ChunkPos, GameState};
+use dd40_core::prelude::{BlockId, BlockPos, ChunkPos, GameState};
+use dd40_item_core::active_item::ActiveItem;
+use dd40_item_core::registry::ItemRegistry;
 
 use crate::components::{CameraRotation, MouseSensitivity};
 use crate::state::PlayerMode;
@@ -124,6 +126,226 @@ pub(crate) fn player_input(
     char_input.sprint = keyboard.pressed(KeyCode::ControlLeft);
     char_input.pitch = camera_rotation.pitch;
     char_input.yaw = camera_rotation.yaw;
+}
+
+// ---------------------------------------------------------------------------
+// Controller mode — mouse → CharacterInput action triple
+// ---------------------------------------------------------------------------
+
+/// Translates the local player's mouse buttons into the
+/// [`CharacterInput`] action triple (`attack` / `interact` / `place`).
+///
+/// ## Translation policy
+///
+/// - **Left mouse button** held → `attack = true` (continuous; the mining
+///   state machine in `dd40_character_interaction` decides what to do with
+///   it). Released → `attack = false`.
+/// - **Right mouse button** *just pressed* → one of:
+///   - `place = true` if the player's [`ActiveItem`] holds a
+///     [`placeable`][dd40_item_core::registry::ItemDefinition::placeable]
+///     item.
+///   - `interact = true` otherwise (empty hand, or a tool item with no
+///     `placeable` field). This is the empty-hand fallback (decision B2).
+///
+/// `interact` and `place` are one-shot intents — they are reset to `false`
+/// by their respective systems in `dd40_character_interaction` after one
+/// tick, so this system only needs to set them.
+///
+/// Runs only in [`PlayerMode::Controller`] while playing+running. No-op when
+/// no [`Player`] entity exists.
+///
+/// **Future work:** when blocks gain "interactive" behaviours (levers,
+/// buttons), this system will check the [`TargetedBlock`] first and prefer
+/// `interact` over `place` when the target is interactive. The
+/// `target`-based branch is intentionally left unimplemented until that
+/// concept exists in `dd40_core`.
+pub(crate) fn update_local_player_action(
+    mouse: Res<ButtonInput<MouseButton>>,
+    items: Res<ItemRegistry>,
+    mut player_query: Query<(&mut CharacterInput, Option<&ActiveItem>), With<Player>>,
+) {
+    let Ok((mut input, active)) = player_query.single_mut() else {
+        return;
+    };
+
+    input.attack = mouse.pressed(MouseButton::Left);
+
+    if mouse.just_pressed(MouseButton::Right) {
+        if has_placeable(active, &items) {
+            input.place = true;
+        } else {
+            input.interact = true;
+        }
+    }
+}
+
+/// Returns `true` if the character's [`ActiveItem`] holds an item whose
+/// [`ItemDefinition::placeable`][dd40_item_core::registry::ItemDefinition::placeable]
+/// is `Some(block_id)` and `block_id != BlockId::AIR`.
+fn has_placeable(active: Option<&ActiveItem>, items: &ItemRegistry) -> bool {
+    let Some(stack) = active.and_then(|a| a.0) else {
+        return false;
+    };
+    let Some(def) = items.get(stack.item) else {
+        return false;
+    };
+    matches!(def.placeable, Some(b) if b != BlockId::AIR)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dd40_character_core::components::Character;
+    use dd40_item_core::active_item::{ActiveItem, ItemStack};
+    use dd40_item_core::registry::{ItemDefinition, ItemId, ItemRegistry};
+
+    fn make_app() -> App {
+        let mut app = App::new();
+        app.insert_resource(ButtonInput::<MouseButton>::default())
+            .insert_resource(ItemRegistry::default())
+            .add_systems(Update, update_local_player_action);
+        app
+    }
+
+    fn spawn_player(app: &mut App, active: Option<ActiveItem>) -> Entity {
+        let mut e = app
+            .world_mut()
+            .spawn((Character, Player, CharacterInput::default()));
+        if let Some(a) = active {
+            e.insert(a);
+        }
+        e.id()
+    }
+
+    fn press(app: &mut App, btn: MouseButton) {
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(btn);
+    }
+
+    fn release(app: &mut App, btn: MouseButton) {
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .release(btn);
+    }
+
+    #[test]
+    fn left_held_sets_attack_true() {
+        let mut app = make_app();
+        let e = spawn_player(&mut app, None);
+        press(&mut app, MouseButton::Left);
+        app.update();
+        assert!(app.world().get::<CharacterInput>(e).unwrap().attack);
+    }
+
+    #[test]
+    fn left_released_sets_attack_false() {
+        let mut app = make_app();
+        let e = spawn_player(&mut app, None);
+        // Tick 1: pressed
+        press(&mut app, MouseButton::Left);
+        app.update();
+        // Tick 2: released — must clear the prior `pressed` state.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+        release(&mut app, MouseButton::Left);
+        app.update();
+        assert!(!app.world().get::<CharacterInput>(e).unwrap().attack);
+    }
+
+    #[test]
+    fn right_just_pressed_with_no_active_item_sets_interact() {
+        let mut app = make_app();
+        let e = spawn_player(&mut app, None);
+        press(&mut app, MouseButton::Right);
+        app.update();
+        let input = app.world().get::<CharacterInput>(e).unwrap();
+        assert!(input.interact, "empty-hand right-click → interact");
+        assert!(!input.place);
+    }
+
+    #[test]
+    fn right_just_pressed_with_active_item_none_sets_interact() {
+        let mut app = make_app();
+        let e = spawn_player(&mut app, Some(ActiveItem(None)));
+        press(&mut app, MouseButton::Right);
+        app.update();
+        let input = app.world().get::<CharacterInput>(e).unwrap();
+        assert!(input.interact);
+        assert!(!input.place);
+    }
+
+    #[test]
+    fn right_just_pressed_with_non_placeable_item_sets_interact() {
+        let mut app = make_app();
+        // Register a non-placeable item (e.g. a tool).
+        {
+            let mut registry = app.world_mut().resource_mut::<ItemRegistry>();
+            registry.register(ItemDefinition::new(ItemId(1), "test_tool"));
+        }
+
+        let e = spawn_player(
+            &mut app,
+            Some(ActiveItem(Some(ItemStack::new(ItemId(1), 1)))),
+        );
+        press(&mut app, MouseButton::Right);
+        app.update();
+        let input = app.world().get::<CharacterInput>(e).unwrap();
+        assert!(input.interact);
+        assert!(!input.place);
+    }
+
+    #[test]
+    fn right_just_pressed_with_placeable_item_sets_place() {
+        let mut app = make_app();
+        {
+            let mut registry = app.world_mut().resource_mut::<ItemRegistry>();
+            registry.register(
+                ItemDefinition::new(ItemId(2), "test_block").with_placeable(BlockId(42)),
+            );
+        }
+
+        let e = spawn_player(
+            &mut app,
+            Some(ActiveItem(Some(ItemStack::new(ItemId(2), 1)))),
+        );
+        press(&mut app, MouseButton::Right);
+        app.update();
+        let input = app.world().get::<CharacterInput>(e).unwrap();
+        assert!(input.place);
+        assert!(!input.interact);
+    }
+
+    #[test]
+    fn right_held_only_fires_once() {
+        let mut app = make_app();
+        let e = spawn_player(&mut app, None);
+        // Tick 1: just_pressed → interact = true.
+        press(&mut app, MouseButton::Right);
+        app.update();
+        // Reset interact (the interaction layer would normally do this).
+        app.world_mut().get_mut::<CharacterInput>(e).unwrap().interact = false;
+        // Tick 2: still pressed but no longer just_pressed → no fire.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+        press(&mut app, MouseButton::Right);
+        // press() also marks just_pressed; clear_just_pressed simulates a held button.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear_just_pressed(MouseButton::Right);
+        app.update();
+        assert!(!app.world().get::<CharacterInput>(e).unwrap().interact);
+    }
+
+    #[test]
+    fn no_player_is_a_noop() {
+        let mut app = make_app();
+        press(&mut app, MouseButton::Left);
+        // No panic — single_mut() returns Err and the system bails.
+        app.update();
+    }
 }
 
 // ---------------------------------------------------------------------------

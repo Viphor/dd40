@@ -8,9 +8,11 @@ use crate::state::PlayerMode;
 use crate::systems::{
     add_debug_info, free_cam_movement, load_nearby_chunks, mouse_look, on_pause, on_resume,
     pause_on_escape, player_input, setup_camera, sync_camera_to_player, toggle_player_mode,
+    update_local_player_action,
 };
 use dd40_character_core::system_sets::CharacterRenderSet;
 use dd40_core::prelude::{AppState, GameState};
+use dd40_item_core::plugin::ItemCorePlugin;
 
 /// Plugin that handles the locally-controlled player's camera and keyboard/mouse
 /// input.
@@ -26,7 +28,13 @@ pub struct PlayerMovementPlugin;
 
 impl Plugin for PlayerMovementPlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin, CharacterCorePlugin);
+        dd40_core::ensure_plugins!(
+            app,
+            CorePlugin,
+            PhysicsCorePlugin,
+            CharacterCorePlugin,
+            ItemCorePlugin
+        );
 
         let playing_and_running =
             in_state(AppState::Playing).and(in_state(GameState::Running));
@@ -58,6 +66,7 @@ impl Plugin for PlayerMovementPlugin {
                 Update,
                 (
                     player_input,
+                    update_local_player_action,
                     sync_camera_to_player.in_set(CharacterRenderSet::CameraSync),
                 )
                     .run_if(
