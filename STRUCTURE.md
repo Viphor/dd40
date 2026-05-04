@@ -48,7 +48,8 @@ entry below.
 | `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
 | `dd40_network` | lightyear client-server networking (feature-gated) | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
 | `dd40_debug_ui` | FPS overlay, orientation gizmo, custom debug elements | `dd40_core` |
-| `dd40_gui` | In-game HUD (crosshair) | `dd40_core` |
+| `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
+| `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
 | `dd40_player` ¹ | Convenience wrapper: `PlayerMovementPlugin` + `CharacterInteractionPlugin` | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_player_movement`, `dd40_character_interaction` |
 
 ¹ `dd40_player` depends on other Tier 1 crates — an intentional tracked exception.
@@ -355,13 +356,31 @@ src/
 
 ### `dd40_gui`
 
-In-game HUD.
+In-game HUD with no character coupling. Visuals that depend on
+character vocabulary (e.g. the targeted-block highlight) live in
+`dd40_character_gui` instead.
 
 ```
 src/
 ├── lib.rs
 ├── plugin.rs  — GuiPlugin
 └── crosshair.rs
+```
+
+---
+
+### `dd40_character_gui`
+
+Gizmo and HUD rendering for character-related state: the targeted-block
+highlight and the mining break overlay. Wired into `dd40_client` only
+— never the headless server.
+
+```
+src/
+├── lib.rs
+├── plugin.rs           — CharacterGuiPlugin
+└── block_highlight.rs  — BlockHighlightConfig + draw_targeted_block_highlight
+                          (outline + mining break animation)
 ```
 
 ---
@@ -374,7 +393,7 @@ Default client binary. Configuration only.
 src/
 └── main.rs   — DefaultPlugins + CorePlugin + PhysicsPlugin + VanillaPalettePlugin
                + PlayerInputPlugin + RendererPlugin + ClientNetworkPlugin
-               + DebugUiPlugin + GuiPlugin
+               + DebugUiPlugin + GuiPlugin + CharacterGuiPlugin
 ```
 
 ---

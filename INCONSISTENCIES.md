@@ -31,15 +31,14 @@ could be deleted and callers would compose the plugins themselves.
 
 ---
 
-### 2. Block crack animation is unimplemented
+### 2. ~~Block crack animation is unimplemented~~ — resolved
 
-**Current state:** The mining system tracks `progress` in `MiningState` (range
-`0.0–1.0`) but no renderer or HUD currently visualises it. `MiningState` now
-lives in `dd40_character_core` so the renderer can depend on it without
-depending on `dd40_character_interaction`.
-
-**Fix needed:** The renderer reads `MiningState` and overlays a crack texture on
-the targeted block. No architectural blocker remains.
+**Resolution:** `dd40_character_gui::block_highlight::draw_targeted_block_highlight`
+now draws a gizmo break overlay whose scale and colour interpolate with
+`MiningState::Mining { progress, .. }`. The pure helper
+`break_overlay_for_progress` makes the easing curve unit-testable. A
+textured crack overlay is still future work, but the previous "no
+visualisation at all" gap is closed.
 
 ---
 
