@@ -2733,6 +2733,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_character_gui"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_core",
+]
+
+[[package]]
 name = "dd40_character_interaction"
 version = "0.1.0"
 dependencies = [
@@ -2888,6 +2897,7 @@ name = "dd40_server"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "dd40_character_interaction",
  "dd40_chunk_storage",
  "dd40_core",
  "dd40_integration_character_physics",

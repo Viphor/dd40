@@ -7,6 +7,7 @@ members = [
     "crates/player_movement",
     "crates/character_interaction",
     "crates/gui",
+    "crates/character_gui",
     "crates/world",
     "crates/player",
     "crates/client",
@@ -30,6 +31,7 @@ dd40_character_core = { path = "crates/character_core" }
 dd40_player_movement = { path = "crates/player_movement" }
 dd40_character_interaction = { path = "crates/character_interaction" }
 dd40_gui = { path = "crates/gui" }
+dd40_character_gui = { path = "crates/character_gui" }
 dd40_world = { path = "crates/world" }
 dd40_player = { path = "crates/player" }
 dd40_renderer = { path = "crates/renderer" }
