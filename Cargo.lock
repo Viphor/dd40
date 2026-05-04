@@ -2799,6 +2799,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_integration_character_physics"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_core",
+ "dd40_physics_core",
+]
+
+[[package]]
 name = "dd40_item_core"
 version = "0.1.0"
 dependencies = [

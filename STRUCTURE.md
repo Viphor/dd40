@@ -39,6 +39,7 @@ entry below.
 | Crate | Role | Depends on (dd40) |
 |---|---|---|
 | `dd40_physics` | Gravity integration, block collision, character collision | `dd40_core`, `dd40_physics_core` |
+| `dd40_integration_character_physics` | Bridges `CharacterInput` → physics `Impulse` (the only crate that knows about both `dd40_character_core` and `dd40_physics_core`) | `dd40_core`, `dd40_character_core`, `dd40_physics_core` |
 | `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999) | `dd40_core` |
 | `dd40_world` | World generation (generic over `WorldGenerator` trait) | `dd40_core` |
 | `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) | `dd40_core` |
