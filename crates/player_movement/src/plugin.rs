@@ -3,11 +3,10 @@ use dd40_character_core::plugin::CharacterCorePlugin;
 use dd40_core::plugin::CorePlugin;
 use dd40_physics_core::plugin::PhysicsCorePlugin;
 
-use crate::components::{CameraRotation, MouseSensitivity};
 use crate::state::PlayerMode;
 use crate::systems::{
     add_debug_info, free_cam_movement, load_nearby_chunks, mouse_look, on_pause, on_resume,
-    pause_on_escape, player_input, setup_camera, sync_camera_to_player, toggle_player_mode,
+    pause_on_escape, player_input, setup_camera, sync_camera_to_face, toggle_player_mode,
     update_local_player_action,
 };
 use dd40_character_core::system_sets::CharacterRenderSet;
@@ -41,8 +40,6 @@ impl Plugin for PlayerMovementPlugin {
 
         app.init_state::<PlayerMode>()
             .register_type::<PlayerMode>()
-            .register_type::<MouseSensitivity>()
-            .register_type::<CameraRotation>()
             // ── Startup ───────────────────────────────────────────────
             .add_systems(OnEnter(AppState::Playing), setup_camera)
             // ── Cursor management ─────────────────────────────────────
@@ -67,7 +64,7 @@ impl Plugin for PlayerMovementPlugin {
                 (
                     player_input,
                     update_local_player_action,
-                    sync_camera_to_player.in_set(CharacterRenderSet::CameraSync),
+                    sync_camera_to_face.in_set(CharacterRenderSet::CameraSync),
                 )
                     .run_if(
                         playing_and_running

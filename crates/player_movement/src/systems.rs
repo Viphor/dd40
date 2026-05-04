@@ -3,26 +3,30 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use dd40_character_core::components::Player;
 use dd40_character_core::controller::CharacterInput;
+use dd40_character_core::face::{CameraRotation, CharacterFace, MouseSensitivity};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::{BlockId, BlockPos, ChunkPos, GameState};
 use dd40_item_core::active_item::ActiveItem;
 use dd40_item_core::registry::ItemRegistry;
 
-use crate::components::{CameraRotation, MouseSensitivity};
 use crate::state::PlayerMode;
 
 // ---------------------------------------------------------------------------
 // Startup
 // ---------------------------------------------------------------------------
 
-/// Spawns the first-person camera entity on entering [`AppState::Playing`].
+/// Spawns the first-person [`Camera3d`] entity on entering
+/// [`AppState::Playing`].
+///
+/// The camera no longer carries `CameraRotation` or `MouseSensitivity` —
+/// those live on the local player's [`CharacterFace`] child entity, and
+/// [`sync_camera_to_face`] copies the face's `GlobalTransform` onto the
+/// camera each frame.
 pub(crate) fn setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(0.0, 64.0, 0.0),
-        CameraRotation::default(),
-        MouseSensitivity::default(),
     ));
 }
 
@@ -86,24 +90,41 @@ pub(crate) fn toggle_player_mode(
 // Controller mode — input → CharacterInput
 // ---------------------------------------------------------------------------
 
-/// Reads keyboard and camera state and writes movement intent into
-/// [`CharacterInput`].
+/// Reads keyboard and the local player's face rotation, and writes
+/// movement intent into [`CharacterInput`].
 ///
-/// Runs only in [`PlayerMode::Controller`].
+/// Forward / right are taken from the face's `GlobalTransform` (projected
+/// horizontally), so movement direction follows where the player is
+/// looking — independent of where the rendering camera is.  Pitch and yaw
+/// are copied from the face's [`CameraRotation`] so they replicate to
+/// remote characters.
+///
+/// Runs only in [`PlayerMode::Controller`].  No-op until both the local
+/// [`Player`] and its [`CharacterFace`] child exist.
 pub(crate) fn player_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    camera_query: Query<(&Transform, &CameraRotation), With<Camera3d>>,
+    face_query: Query<(&GlobalTransform, &CameraRotation, &ChildOf), With<CharacterFace>>,
     mut player_query: Query<&mut CharacterInput, With<Player>>,
 ) {
-    let Ok(mut char_input) = player_query.single_mut() else {
-        return;
-    };
-    let Ok((camera_transform, camera_rotation)) = camera_query.single() else {
+    // Find the local player's face by walking up to the parent and
+    // checking for the `Player` marker.
+    let Some((face_global, rotation, character_entity)) =
+        face_query
+            .iter()
+            .find_map(|(gt, rot, child_of)| {
+                let parent = child_of.parent();
+                player_query.get(parent).ok().map(|_| (gt, rot, parent))
+            })
+    else {
         return;
     };
 
-    let forward = camera_transform.forward();
-    let right = camera_transform.right();
+    let Ok(mut char_input) = player_query.get_mut(character_entity) else {
+        return;
+    };
+
+    let forward = face_global.forward();
+    let right = face_global.right();
     let forward_h = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
     let right_h = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
 
@@ -124,8 +145,8 @@ pub(crate) fn player_input(
     char_input.movement = direction.normalize_or_zero();
     char_input.jump |= keyboard.just_pressed(KeyCode::Space);
     char_input.sprint = keyboard.pressed(KeyCode::ControlLeft);
-    char_input.pitch = camera_rotation.pitch;
-    char_input.yaw = camera_rotation.yaw;
+    char_input.pitch = rotation.pitch;
+    char_input.yaw = rotation.yaw;
 }
 
 // ---------------------------------------------------------------------------
@@ -406,15 +427,32 @@ pub(crate) fn free_cam_movement(
 // Shared camera systems
 // ---------------------------------------------------------------------------
 
-/// Handles mouse movement to rotate the camera.
+/// Handles mouse movement to rotate the local player's [`CharacterFace`].
 ///
-/// Runs in both [`PlayerMode::Controller`] and [`PlayerMode::FreeCam`].
+/// Updates the face's [`CameraRotation`] (clamping pitch) and writes the
+/// resulting quaternion onto the face's local `Transform.rotation`. The
+/// rendering camera mirrors the face's `GlobalTransform` via
+/// [`sync_camera_to_face`].
+///
+/// `MouseSensitivity` is read from the face entity if present and falls
+/// back to `MouseSensitivity::default()` otherwise — this lets editors and
+/// configuration override per-character sensitivity without requiring it.
+///
+/// Runs in both [`PlayerMode::Controller`] and [`PlayerMode::FreeCam`] —
+/// in FreeCam the rotation flows to the camera via the same mirror system,
+/// keeping look behaviour consistent.
 pub(crate) fn mouse_look(
     accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
-    mut camera_query: Query<
-        (&mut Transform, &mut CameraRotation, &MouseSensitivity),
-        With<Camera3d>,
+    mut face_query: Query<
+        (
+            &mut Transform,
+            &mut CameraRotation,
+            Option<&MouseSensitivity>,
+            &ChildOf,
+        ),
+        With<CharacterFace>,
     >,
+    player_query: Query<(), With<Player>>,
     cursor_options: Query<&CursorOptions>,
 ) {
     let Ok(cursor_option) = cursor_options.single() else {
@@ -424,10 +462,20 @@ pub(crate) fn mouse_look(
         return;
     }
 
-    let Ok((mut transform, mut rotation, sensitivity)) = camera_query.single_mut() else {
+    let Some((mut transform, mut rotation, sensitivity)) =
+        face_query
+            .iter_mut()
+            .find_map(|(t, r, s, child_of)| {
+                player_query
+                    .get(child_of.parent())
+                    .ok()
+                    .map(|_| (t, r, s.copied()))
+            })
+    else {
         return;
     };
 
+    let sensitivity = sensitivity.unwrap_or_default();
     let ev = accumulated_mouse_motion;
     rotation.yaw -= ev.delta.x * sensitivity.0;
     rotation.pitch -= ev.delta.y * sensitivity.0;
@@ -439,20 +487,36 @@ pub(crate) fn mouse_look(
     transform.rotation = Quat::from_euler(EulerRot::YXZ, rotation.yaw, rotation.pitch, 0.0);
 }
 
-/// Syncs the camera translation to the player entity's position.
+/// Mirrors the local player's [`CharacterFace`] world-space transform onto
+/// the rendering [`Camera3d`].
 ///
-/// Runs only in [`PlayerMode::Controller`].
-pub(crate) fn sync_camera_to_player(
-    player_query: Query<&Transform, (With<Player>, Without<Camera3d>)>,
+/// The face is the source of truth for eye position and look direction.
+/// This system simply copies its `GlobalTransform` (decomposed) onto the
+/// camera's local `Transform` each frame, so the rendered view always
+/// matches what the targeting raycast and remote replication see.
+///
+/// No-op if the local player or its face child is not yet spawned, or if
+/// no camera exists.
+pub(crate) fn sync_camera_to_face(
+    face_query: Query<(&GlobalTransform, &ChildOf), With<CharacterFace>>,
+    player_query: Query<(), With<Player>>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
 ) {
-    let Ok(player_transform) = player_query.single() else {
+    let Some(face_global) =
+        face_query
+            .iter()
+            .find_map(|(gt, child_of)| {
+                player_query.get(child_of.parent()).ok().map(|_| gt)
+            })
+    else {
         return;
     };
     let Ok(mut camera_transform) = camera_query.single_mut() else {
         return;
     };
-    camera_transform.translation = player_transform.translation + Vec3::new(0.0, 1.6, 0.0);
+    let (_scale, rotation, translation) = face_global.to_scale_rotation_translation();
+    camera_transform.translation = translation;
+    camera_transform.rotation = rotation;
 }
 
 // ---------------------------------------------------------------------------

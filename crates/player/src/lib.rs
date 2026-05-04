@@ -17,7 +17,8 @@ pub use dd40_character_interaction::{
     BlockFace, BlockInteractionConfig, CharacterInteractionPlugin as BlockInteractionPlugin,
     TargetedBlock as TargetBlock,
 };
-pub use dd40_player_movement::{CameraRotation, MouseSensitivity, PlayerMode as PlayerModeType};
+pub use dd40_character_core::face::{CameraRotation, MouseSensitivity};
+pub use dd40_player_movement::PlayerMode as PlayerModeType;
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 
