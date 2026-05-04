@@ -1,21 +1,24 @@
 //! Block placement logic for any [`Character`] entity.
 //!
 //! This module reads each character's [`TargetedBlock`] every frame and, when
-//! the player presses the place-block button (right mouse button), attempts to
+//! the character's [`CharacterInput::place`] flag is `true`, attempts to
 //! place the block declared by the character's [`ActiveItem`] into the
 //! face-adjacent voxel.
 //!
-//! # Flow
+//! ## Input source
 //!
-//! 1. Read the character's [`TargetedBlock`] — if no block is targeted, do nothing.
-//! 2. Read the character's [`ActiveItem`] — if `None` or the item has no
-//!    [`placeable`][ItemDefinition::placeable] block, do nothing.
-//! 3. Compute the placement position: `targeted.pos + targeted.face.normal()`.
-//! 4. Look up the block currently occupying that position in [`ChunkCache`].
-//! 5. Check [`BlockRegistry::is_replaceable`] — if the destination voxel is
-//!    not replaceable (e.g. it already contains stone), do nothing.
-//! 6. Write a [`PlaceBlockRequest`] message so the network layer forwards the
-//!    request to the authoritative server.
+//! Placement is driven exclusively by [`CharacterInput::place`]. The local
+//! player's input layer (`dd40_player_movement`) is responsible for
+//! translating mouse/keyboard into that flag — this module is input-device
+//! agnostic and runs identically on the client and the server.
+//!
+//! ## Reset semantics ("decision D")
+//!
+//! `CharacterInput::place` is treated as a one-shot intent: every tick where
+//! `place == true` consumes it, regardless of whether the placement
+//! actually succeeded. This mirrors how `CharacterInput::jump` is consumed
+//! by the controller and prevents a single right-click from queuing up
+//! multiple identical attempts on subsequent ticks.
 //!
 //! # Authoritativeness
 //!
@@ -32,10 +35,12 @@
 //! [`ItemRegistry`]. Inventory crates write [`ActiveItem`]; this system never
 //! reads any inventory layout directly. A character with no [`ActiveItem`]
 //! component, with `ActiveItem(None)`, or whose item has no `placeable`
-//! field is treated as holding nothing placeable — right-click is a no-op.
+//! field is treated as holding nothing placeable — `place` is consumed but
+//! no message is emitted.
 
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
+use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::block::events::{BlockPlaced, PlaceBlockRequest};
 use dd40_core::chunk::cache::ChunkCache;
@@ -43,87 +48,103 @@ use dd40_core::prelude::*;
 use dd40_item_core::active_item::ActiveItem;
 use dd40_item_core::registry::{ItemDefinition, ItemRegistry};
 
-/// Reads input and the local character's [`TargetedBlock`] + [`ActiveItem`],
-/// then emits a [`PlaceBlockRequest`] when the place-block button is pressed
-/// and the destination voxel is replaceable.
-///
-/// # When does placement fire?
-///
-/// - Right mouse button is **just pressed** (single press, not held).
-/// - The character has a [`TargetedBlock`] with both `pos` and `face` set.
-/// - The character has an [`ActiveItem`] whose
-///   [`ItemDefinition::placeable`] is `Some(block_id)` and `block_id` is not
-///   [`BlockId::AIR`].
-/// - The voxel at the placement position is loaded and
-///   [`BlockRegistry::is_replaceable`] returns `true`.
-///
-/// # No local mutation
-///
-/// This system intentionally does not write to [`ChunkCache`]. The server
-/// applies the change and broadcasts [`BlockPlaced`] back; the client network
-/// layer applies that to the local cache.
-pub(crate) fn try_place_block(
-    mouse: Res<ButtonInput<MouseButton>>,
-    character_query: Query<(&TargetedBlock, Option<&ActiveItem>), With<Character>>,
-    cache: Res<ChunkCache>,
-    registry: Res<BlockRegistry>,
-    items: Res<ItemRegistry>,
-    mut requests: MessageWriter<PlaceBlockRequest>,
-) {
-    if !mouse.just_pressed(MouseButton::Right) {
-        return;
-    }
+/// Pure placement-step result returned by [`step_placement`].
+#[derive(Debug, Default, Clone)]
+pub(crate) struct PlacementStep {
+    /// `Some(req)` if a [`PlaceBlockRequest`] should be emitted.
+    pub request: Option<PlaceBlockRequest>,
+}
 
-    let Some((targeted, active)) = character_query.iter().next() else { return };
+/// Pure placement state-machine step.
+///
+/// `destination` returns:
+/// - `None` if the destination voxel cannot be evaluated (chunk unloaded,
+///   below world).
+/// - `Some(true)` if the destination is replaceable.
+/// - `Some(false)` if the destination is occupied by a non-replaceable block.
+pub(crate) fn step_placement(
+    place_intent: bool,
+    targeted: &TargetedBlock,
+    placeable: Option<BlockId>,
+    destination: impl FnOnce(BlockPos) -> Option<bool>,
+) -> PlacementStep {
+    if !place_intent {
+        return PlacementStep::default();
+    }
     let (Some(hit_pos), Some(face)) = (targeted.pos, targeted.face) else {
-        return;
+        return PlacementStep::default();
     };
-
-    let Some(block_id) = placeable_block(active, &items) else { return };
+    let Some(block_id) = placeable else {
+        return PlacementStep::default();
+    };
     if block_id == BlockId::AIR {
-        return;
+        return PlacementStep::default();
     }
-
     let normal = face.normal();
     let place_pos = BlockPos::new(
         hit_pos.x + normal.x,
         hit_pos.y + normal.y,
         hit_pos.z + normal.z,
     );
-
-    let chunk_pos = place_pos.chunk_pos();
-    let local = place_pos.chunk_local();
-
-    let Some(chunk) = cache.get(&chunk_pos) else {
-        debug!("Placement skipped: chunk at {} is not loaded", chunk_pos);
-        return;
-    };
-
-    if local.y < 0 {
-        return;
+    match destination(place_pos) {
+        Some(true) => PlacementStep {
+            request: Some(PlaceBlockRequest {
+                pos: place_pos,
+                block_id,
+            }),
+        },
+        _ => PlacementStep::default(),
     }
+}
 
-    let Some(existing) = chunk.get(local.x as usize, local.y as usize, local.z as usize) else {
-        return;
-    };
+/// Per-character placement system.
+///
+/// Reads `(&mut CharacterInput, &TargetedBlock, Option<&ActiveItem>)` for
+/// every [`Character`], runs [`step_placement`], emits a
+/// [`PlaceBlockRequest`] when appropriate, and **always resets**
+/// `CharacterInput::place` to `false` after one tick where it was `true`
+/// (see "decision D" in the module docs).
+pub(crate) fn try_place_block(
+    mut character_query: Query<
+        (&mut CharacterInput, &TargetedBlock, Option<&ActiveItem>),
+        With<Character>,
+    >,
+    cache: Res<ChunkCache>,
+    registry: Res<BlockRegistry>,
+    items: Res<ItemRegistry>,
+    mut requests: MessageWriter<PlaceBlockRequest>,
+) {
+    for (mut input, targeted, active) in &mut character_query {
+        if !input.place {
+            continue;
+        }
 
-    if !registry.is_replaceable(&existing) {
-        debug!(
-            "Placement blocked: voxel at {} (block {:?}) is not replaceable",
-            place_pos, existing.block_id
-        );
-        return;
+        let placeable = placeable_block(active, &items);
+
+        let destination = |place_pos: BlockPos| -> Option<bool> {
+            let chunk_pos = place_pos.chunk_pos();
+            let local = place_pos.chunk_local();
+            if local.y < 0 {
+                return None;
+            }
+            let chunk = cache.get(&chunk_pos)?;
+            let existing =
+                chunk.get(local.x as usize, local.y as usize, local.z as usize)?;
+            Some(registry.is_replaceable(&existing))
+        };
+
+        let step = step_placement(input.place, targeted, placeable, destination);
+
+        if let Some(req) = step.request {
+            debug!(
+                "Requesting placement of {:?} at {}",
+                req.block_id, req.pos
+            );
+            requests.write(req);
+        }
+
+        input.place = false;
     }
-
-    debug!(
-        "Requesting placement of {:?} at {} (face {:?} of {})",
-        block_id, place_pos, face, hit_pos
-    );
-
-    requests.write(PlaceBlockRequest {
-        pos: place_pos,
-        block_id,
-    });
 }
 
 /// Resolves the [`BlockId`] a character is set to place by following
@@ -170,5 +191,98 @@ pub(crate) fn apply_placed_blocks(
             "Applied confirmed placement of {:?} at {}",
             placed.block_id, placed.pos
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dd40_character_core::targeted_block::BlockFace;
+
+    fn target_at(pos: BlockPos, face: BlockFace) -> TargetedBlock {
+        TargetedBlock {
+            pos: Some(pos),
+            face: Some(face),
+            block_id: Some(BlockId(1)),
+        }
+    }
+
+    #[test]
+    fn place_false_emits_nothing() {
+        let s = step_placement(
+            false,
+            &target_at(BlockPos::new(0, 0, 0), BlockFace::Top),
+            Some(BlockId(5)),
+            |_| Some(true),
+        );
+        assert!(s.request.is_none());
+    }
+
+    #[test]
+    fn place_true_no_target_emits_nothing() {
+        let s = step_placement(
+            true,
+            &TargetedBlock::default(),
+            Some(BlockId(5)),
+            |_| Some(true),
+        );
+        assert!(s.request.is_none());
+    }
+
+    #[test]
+    fn place_true_no_placeable_emits_nothing() {
+        let s = step_placement(
+            true,
+            &target_at(BlockPos::new(0, 0, 0), BlockFace::Top),
+            None,
+            |_| Some(true),
+        );
+        assert!(s.request.is_none());
+    }
+
+    #[test]
+    fn place_true_air_placeable_emits_nothing() {
+        let s = step_placement(
+            true,
+            &target_at(BlockPos::new(0, 0, 0), BlockFace::Top),
+            Some(BlockId::AIR),
+            |_| Some(true),
+        );
+        assert!(s.request.is_none());
+    }
+
+    #[test]
+    fn place_true_destination_not_replaceable_emits_nothing() {
+        let s = step_placement(
+            true,
+            &target_at(BlockPos::new(0, 0, 0), BlockFace::Top),
+            Some(BlockId(5)),
+            |_| Some(false),
+        );
+        assert!(s.request.is_none());
+    }
+
+    #[test]
+    fn place_true_destination_unloaded_emits_nothing() {
+        let s = step_placement(
+            true,
+            &target_at(BlockPos::new(0, 0, 0), BlockFace::Top),
+            Some(BlockId(5)),
+            |_| None,
+        );
+        assert!(s.request.is_none());
+    }
+
+    #[test]
+    fn place_true_replaceable_destination_emits_request_at_face_normal() {
+        let s = step_placement(
+            true,
+            &target_at(BlockPos::new(3, 64, 5), BlockFace::Top),
+            Some(BlockId(7)),
+            |_| Some(true),
+        );
+        let req = s.request.expect("expected a placement request");
+        assert_eq!(req.block_id, BlockId(7));
+        assert_eq!(req.pos, BlockPos::new(3, 65, 5));
     }
 }
