@@ -165,8 +165,9 @@ fn bridge_input_to_action_state(
             sprint: char_input.sprint,
             pitch: char_input.pitch,
             yaw: char_input.yaw,
-            place_block: false,
-            remove_block: false,
+            attack: char_input.attack,
+            interact: char_input.interact,
+            place: char_input.place,
         };
     }
 }

@@ -40,6 +40,12 @@ pub struct EventChannel;
 /// The controlling client mirrors the same logic on its [`Predicted`] entity
 /// for client-side prediction.
 ///
+/// The action triple ([`attack`](Self::attack) / [`interact`](Self::interact)
+/// / [`place`](Self::place)) is intentionally split: keeping policy ("does
+/// right-click interact or place?") out of the protocol lets the local-player
+/// input layer decide per right-click while the interaction/placement systems
+/// stay agnostic.
+///
 /// [`Predicted`]: lightyear::prelude::client::Predicted
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Reflect)]
 pub struct PlayerInput {
@@ -55,10 +61,14 @@ pub struct PlayerInput {
     ///
     /// [`MovementSpeed`]: dd40_core::character::MovementSpeed
     pub sprint: bool,
-    /// Whether the player wants to place a block this tick.
-    pub place_block: bool,
-    /// Whether the player wants to remove a block this tick.
-    pub remove_block: bool,
+    /// Continuous primary-action intent. Held while the player wants to
+    /// mine (and, eventually, melee-attack).
+    pub attack: bool,
+    /// One-shot secondary-action intent — interact with the targeted
+    /// block (lever, button, container).
+    pub interact: bool,
+    /// One-shot intent to place a block from the player's active item.
+    pub place: bool,
 }
 
 impl Default for PlayerInput {
@@ -69,8 +79,9 @@ impl Default for PlayerInput {
             yaw: 0.0,
             jump: false,
             sprint: false,
-            place_block: false,
-            remove_block: false,
+            attack: false,
+            interact: false,
+            place: false,
         }
     }
 }
@@ -412,7 +423,8 @@ mod tests {
         assert_eq!(input.yaw, 0.0);
         assert!(!input.jump);
         assert!(!input.sprint);
-        assert!(!input.place_block);
-        assert!(!input.remove_block);
+        assert!(!input.attack);
+        assert!(!input.interact);
+        assert!(!input.place);
     }
 }
