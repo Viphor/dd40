@@ -6,11 +6,12 @@ use dd40_core::block::events::{
 };
 use dd40_core::plugin::CorePlugin;
 use dd40_core::prelude::*;
+use dd40_item_core::plugin::ItemCorePlugin;
 
 use crate::mining::{apply_removed_blocks, update_mining};
 pub use dd40_character_core::mining_state::MiningState;
 pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
-use crate::placement::{HeldBlock, apply_placed_blocks, try_place_block};
+use crate::placement::{apply_placed_blocks, try_place_block};
 use crate::targeting::{
     BlockInteractionConfig, draw_targeted_block_highlight, spawn_debug_entity,
     update_debug_info, update_targeted_block,
@@ -26,9 +27,15 @@ use crate::targeting::{
 ///
 /// Registers the following resources:
 /// - [`BlockInteractionConfig`] — raycast reach and highlight colour.
-/// - [`TargetedBlock`]          — the block and face the character is looking at.
-/// - [`HeldBlock`]              — the block type to place on right-click.
-/// - [`MiningState`]            — current mining progress (readable by HUD / renderer).
+///
+/// Per-character components (attached via [`CharacterBundle`]):
+/// - [`TargetedBlock`] — the block and face the character is looking at.
+/// - [`MiningState`]   — current mining progress (readable by HUD / renderer).
+///
+/// Mining and placement read each character's
+/// [`ActiveItem`][dd40_item_core::active_item::ActiveItem] to determine the
+/// effective tool kind/tier and the placeable block. A character with no
+/// [`ActiveItem`] is treated as bare hands holding nothing.
 ///
 /// Registers the following messages:
 /// - [`PlaceBlockRequest`]     — written here, consumed by the network layer.
@@ -55,21 +62,20 @@ use crate::targeting::{
 /// ```
 ///
 /// [`Character`]: dd40_character_core::components::Character
+/// [`CharacterBundle`]: dd40_character_core::bundles::CharacterBundle
 /// [`ChunkCache`]: dd40_core::chunk::cache::ChunkCache
 #[derive(Default)]
 pub struct CharacterInteractionPlugin;
 
 impl Plugin for CharacterInteractionPlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin, CharacterCorePlugin);
+        dd40_core::ensure_plugins!(app, CorePlugin, CharacterCorePlugin, ItemCorePlugin);
 
         // ── Resources ─────────────────────────────────────────────────────
         // MiningState and TargetedBlock are per-character Components, attached
         // via CharacterBundle in dd40_character_core; do not insert as resources.
         app.insert_resource(BlockInteractionConfig::default())
-            .insert_resource(HeldBlock::default())
-            .register_type::<BlockInteractionConfig>()
-            .register_type::<HeldBlock>();
+            .register_type::<BlockInteractionConfig>();
 
         // ── Messages ──────────────────────────────────────────────────────
         app.add_message::<PlaceBlockRequest>();
@@ -122,6 +128,7 @@ mod tests {
         app.add_plugins(CharacterInteractionPlugin);
         assert!(app.is_plugin_added::<CorePlugin>());
         assert!(app.is_plugin_added::<CharacterCorePlugin>());
+        assert!(app.is_plugin_added::<ItemCorePlugin>());
     }
 
     #[test]
@@ -130,7 +137,6 @@ mod tests {
         app.add_plugins(CharacterInteractionPlugin);
         app.update();
         assert!(app.world().contains_resource::<BlockInteractionConfig>());
-        assert!(app.world().contains_resource::<HeldBlock>());
     }
 
     #[test]
@@ -138,6 +144,7 @@ mod tests {
         let mut app = make_app();
         app.add_plugins(CorePlugin);
         app.add_plugins(CharacterCorePlugin);
+        app.add_plugins(ItemCorePlugin);
         // Adding the plugin when its deps are already registered must not panic.
         app.add_plugins(CharacterInteractionPlugin);
         app.update();

@@ -15,7 +15,7 @@ use dd40_player_movement::{PlayerMode, PlayerMovementPlugin};
 
 pub use dd40_character_interaction::{
     BlockFace, BlockInteractionConfig, CharacterInteractionPlugin as BlockInteractionPlugin,
-    HeldBlock, TargetedBlock as TargetBlock,
+    TargetedBlock as TargetBlock,
 };
 pub use dd40_player_movement::{CameraRotation, MouseSensitivity, PlayerMode as PlayerModeType};
 

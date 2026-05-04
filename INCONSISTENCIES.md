@@ -82,6 +82,8 @@ would let the spawn system be reused for NPCs or alternative transports.
 | — | `MiningState` lived in `dd40_player` | SPEC.md Task 5.3 — moved to `dd40_character_core::mining_state` |
 | — | `MiningState` was a global `Resource` (singleton bug) | core-rewrite — converted to a `Component` on the `Character` entity, attached via `CharacterBundle` |
 | — | `TargetedBlock` was a global `Resource` in `dd40_character_interaction` (singleton bug) | core-rewrite — moved to `dd40_character_core::targeted_block` and converted to a `Component` |
+| — | `HeldBlock` was a global `Resource` (singleton bug) coupling placement to a single block | core-rewrite — deleted; placement now reads the placeable block from each character's `ActiveItem` via `ItemRegistry` |
+| — | `EquippedTool` newtype wrapped `(ToolKindId, ToolTierId)` and was never attached to any entity | core-rewrite — collapsed into raw primitives; mining reads tool kind/tier from each character's `ActiveItem` |
 | — | Physics systems lived in `dd40_core` | SPEC.md Phase 1 — extracted to `dd40_physics_core` + `dd40_physics` |
 | — | Character types lived in `dd40_core` | SPEC.md Phase 2 — extracted to `dd40_character_core` |
 | — | Block interaction and movement systems were player-gated | SPEC.md Phase 3 — `dd40_character_interaction` and `dd40_player_movement` created, filters changed to `With<Character>` |

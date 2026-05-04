@@ -2740,6 +2740,7 @@ dependencies = [
  "bevy",
  "dd40_character_core",
  "dd40_core",
+ "dd40_item_core",
  "dd40_physics_core",
 ]
 

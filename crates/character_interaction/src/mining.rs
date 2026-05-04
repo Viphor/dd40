@@ -7,38 +7,40 @@ use dd40_core::{
     prelude::*,
     tools::{ToolKindId, ToolTierId, mining_duration},
 };
+use dd40_item_core::active_item::ActiveItem;
+use dd40_item_core::registry::ItemRegistry;
 
 pub use dd40_character_core::mining_state::MiningState;
 
 /// Updates mining state each frame and emits mining request messages.
 ///
-/// Runs for the single [`Character`] entity that owns its
-/// [`MiningState`] component.  When no character exists, the system is a
-/// no-op.  Multi-character clients are out of scope: gating "which character
-/// owns the local mouse" belongs to a wrapper plugin (currently `dd40_player`).
+/// Runs for the single [`Character`] entity that owns its [`MiningState`]
+/// component.  When no character exists, the system is a no-op.
+/// Multi-character clients are out of scope: gating "which character owns
+/// the local mouse" belongs to a wrapper plugin (currently `dd40_player`).
 ///
 /// # Tool source
 ///
-/// This system currently uses bare hands ([`ToolKindId::NONE`] /
-/// [`ToolTierId::DEFAULT`]) for every character.  The next refactor
-/// (`interaction-uses-active-item`) will read the kind and tier from the
-/// character's `ActiveItem` via the item registry.
+/// The tool kind and tier are resolved from the character's [`ActiveItem`]
+/// via [`ItemRegistry`].  A character with no [`ActiveItem`], with
+/// `ActiveItem(None)`, or whose item has no
+/// [`tool`][dd40_item_core::registry::ItemDefinition::tool] field is treated
+/// as bare hands ([`ToolKindId::NONE`] / [`ToolTierId::DEFAULT`]).
 pub(crate) fn update_mining(
     mouse: Res<ButtonInput<MouseButton>>,
-    mut character_query: Query<(&TargetedBlock, &mut MiningState), With<Character>>,
+    mut character_query: Query<(&TargetedBlock, &mut MiningState, Option<&ActiveItem>), With<Character>>,
     registry: Res<BlockRegistry>,
     tool_registry: Res<ToolRegistry>,
+    items: Res<ItemRegistry>,
     time: Res<Time>,
     mut start_writer: MessageWriter<StartMiningRequest>,
     mut abort_writer: MessageWriter<AbortMiningRequest>,
     mut mine_writer: MessageWriter<MineBlockRequest>,
 ) {
-    let Some((targeted, mut state)) = character_query.iter_mut().next() else {
+    let Some((targeted, mut state, active)) = character_query.iter_mut().next() else {
         return;
     };
-    // Bare-hands placeholder until ActiveItem → tool lookup lands.
-    let tool_kind = ToolKindId::NONE;
-    let tool_tier = ToolTierId::DEFAULT;
+    let (tool_kind, tool_tier) = active_tool(active, &items);
 
     let left_held = mouse.pressed(MouseButton::Left);
     let left_just_pressed = mouse.just_pressed(MouseButton::Left);
@@ -86,6 +88,21 @@ pub(crate) fn update_mining(
                 *state = MiningState::Mining { pos: mining_pos, progress: new_progress, required_duration };
             }
         }
+    }
+}
+
+/// Resolves a character's effective tool kind and tier from its [`ActiveItem`].
+///
+/// Returns `(ToolKindId::NONE, ToolTierId::DEFAULT)` (bare hands) when the
+/// character has no item, no [`ActiveItem`] component, or holds an item that
+/// is not a tool.
+fn active_tool(active: Option<&ActiveItem>, items: &ItemRegistry) -> (ToolKindId, ToolTierId) {
+    let Some(stack) = active.and_then(|a| a.0) else {
+        return (ToolKindId::NONE, ToolTierId::DEFAULT);
+    };
+    match items.get(stack.item).and_then(|def| def.tool) {
+        Some(tool) => (tool.kind, tool.tier),
+        None => (ToolKindId::NONE, ToolTierId::DEFAULT),
     }
 }
 
