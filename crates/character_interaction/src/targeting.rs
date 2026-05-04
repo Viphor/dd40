@@ -1,6 +1,7 @@
 use bevy::color::palettes::basic::OLIVE;
 use bevy::prelude::*;
-use dd40_character_core::components::Character;
+use dd40_character_core::components::{Character, Player};
+use dd40_character_core::face::CharacterFace;
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
@@ -137,31 +138,42 @@ fn dda_raycast(
 
 // ── Systems ───────────────────────────────────────────────────────────────────
 
-/// Casts a ray from the camera and writes the result into the single
-/// [`Character`]'s [`TargetedBlock`] component.
+/// Casts a ray from the local player's [`CharacterFace`] and writes the
+/// result into the parent [`Character`]'s [`TargetedBlock`] component.
 ///
-/// The system is a no-op when no character entity exists (initial
-/// loading) or when no [`Camera3d`] is present.  Multi-character clients
-/// will need a wrapper system that decides which character owns the camera.
+/// The system finds the face whose parent has the [`Player`] marker (the
+/// local player) and uses its world-space transform as the ray's origin
+/// and forward direction.  This decouples targeting from the rendering
+/// [`Camera3d`] so headless servers can run the same code path against
+/// any character.
+///
+/// The system is a no-op when no local player exists yet (initial loading
+/// or before the network has spawned a character).
 pub(crate) fn update_targeted_block(
     config: Res<BlockInteractionConfig>,
-    camera_query: Query<&Transform, With<Camera3d>>,
+    face_query: Query<(&GlobalTransform, &ChildOf), With<CharacterFace>>,
+    player_query: Query<(), With<Player>>,
     mut character_query: Query<&mut TargetedBlock, With<Character>>,
     cache: Res<ChunkCache>,
     registry: Res<BlockRegistry>,
 ) {
-    let Some(mut targeted) = character_query.iter_mut().next() else {
-        return;
-    };
-    let Ok(camera_transform) = camera_query.single() else {
-        targeted.pos = None;
-        targeted.face = None;
-        targeted.block_id = None;
+    let Some((face_transform, character_entity)) =
+        face_query
+            .iter()
+            .find_map(|(gt, child_of)| {
+                let parent = child_of.parent();
+                player_query.get(parent).ok().map(|_| (gt, parent))
+            })
+    else {
         return;
     };
 
-    let origin = camera_transform.translation;
-    let direction = *camera_transform.forward();
+    let Ok(mut targeted) = character_query.get_mut(character_entity) else {
+        return;
+    };
+
+    let origin = face_transform.translation();
+    let direction = face_transform.forward().as_vec3();
 
     match dda_raycast(origin, direction, config.max_distance, &cache, &registry) {
         Some((pos, face, block_id)) => {
@@ -177,9 +189,10 @@ pub(crate) fn update_targeted_block(
     }
 }
 
-/// Draws a wireframe cuboid gizmo around the currently targeted block.
+/// Draws a wireframe cuboid gizmo around the local player's currently
+/// targeted block.
 pub(crate) fn draw_targeted_block_highlight(
-    targeted_query: Query<&TargetedBlock, With<Character>>,
+    targeted_query: Query<&TargetedBlock, With<Player>>,
     config: Res<BlockInteractionConfig>,
     mut gizmos: Gizmos,
 ) {
@@ -205,7 +218,7 @@ pub(crate) fn spawn_debug_entity(mut commands: Commands) {
 }
 
 pub(crate) fn update_debug_info(
-    targeted_query: Query<&TargetedBlock, With<Character>>,
+    targeted_query: Query<&TargetedBlock, With<Player>>,
     mut query: Query<&mut DebugInfo, With<TargetedBlockDebugInfo>>,
 ) {
     let Ok(mut debug_info) = query.single_mut() else { return };
