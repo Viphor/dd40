@@ -14,8 +14,7 @@ pub use dd40_character_core::mining_state::MiningState;
 pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
 use crate::placement::{apply_placed_blocks, try_place_block};
 use crate::targeting::{
-    BlockInteractionConfig, draw_targeted_block_highlight, spawn_debug_entity,
-    update_debug_info, update_targeted_block,
+    BlockInteractionConfig, spawn_debug_entity, update_debug_info, update_targeted_block,
 };
 
 /// Plugin that adds block-targeting, highlight rendering, placement, and
@@ -27,7 +26,12 @@ use crate::targeting::{
 /// `PlayerMode::Controller` for human players).
 ///
 /// Registers the following resources:
-/// - [`BlockInteractionConfig`] — raycast reach and highlight colour.
+/// - [`BlockInteractionConfig`] — raycast reach (gameplay-only). The
+///   targeted-block highlight gizmo lives in
+///   [`dd40_character_gui::plugin::CharacterGuiPlugin`][^gui] and owns its
+///   own render-only config.
+///
+/// [^gui]: crate documented in the `dd40_character_gui` crate.
 ///
 /// Per-character components (attached via [`CharacterBundle`]):
 /// - [`TargetedBlock`] — the block and face the character is looking at.
@@ -96,7 +100,6 @@ impl Plugin for CharacterInteractionPlugin {
             Update,
             (
                 update_targeted_block,
-                draw_targeted_block_highlight,
                 update_debug_info,
                 try_place_block,
                 try_interact,
@@ -150,5 +153,29 @@ mod tests {
         // Adding the plugin when its deps are already registered must not panic.
         app.add_plugins(CharacterInteractionPlugin);
         app.update();
+    }
+
+    /// Regression test for the headless-server gizmo panic.
+    ///
+    /// `MinimalPlugins` provides no `bevy_gizmos` runtime, so any system in
+    /// `CharacterInteractionPlugin` that asks for `Res<GizmoConfigStore>`
+    /// would panic when the gameplay schedule runs.  Forcing the state into
+    /// `Playing` + `Running` exercises every gameplay system.
+    #[test]
+    fn character_interaction_plugin_runs_under_minimal_plugins_in_playing_state() {
+        use dd40_core::state::{AppState, GameState};
+
+        let mut app = make_app();
+        app.add_plugins(CharacterInteractionPlugin);
+
+        // Drive the state machine into Playing/Running.
+        app.world_mut()
+            .resource_mut::<NextState<AppState>>()
+            .set(AppState::Playing);
+        app.world_mut()
+            .resource_mut::<NextState<GameState>>()
+            .set(GameState::Running);
+        app.update(); // applies state transitions
+        app.update(); // first tick where gameplay systems are eligible to run
     }
 }

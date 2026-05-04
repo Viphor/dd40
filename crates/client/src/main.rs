@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 //use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::FilterQueryInspectorPlugin};
+use dd40_character_gui::plugin::CharacterGuiPlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
 use dd40_gui::plugin::GuiPlugin;
@@ -34,6 +35,7 @@ fn main() {
         ClientNetworkPlugin,
         RendererPlugin,
         GuiPlugin,
+        CharacterGuiPlugin,
     ))
     //.add_plugins(EguiPlugin::default())
     //.add_plugins(FilterQueryInspectorPlugin::<With<Character>>::default())

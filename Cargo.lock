@@ -2767,6 +2767,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
+ "dd40_character_gui",
  "dd40_core",
  "dd40_debug_ui",
  "dd40_gui",

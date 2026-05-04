@@ -23,6 +23,7 @@ dd40_debug_ui = { workspace = true }
 dd40_network = { workspace = true, features = ["client"] }
 dd40_renderer = { workspace = true }
 dd40_gui = { workspace = true }
+dd40_character_gui = { workspace = true }
 dd40_vanilla_palette = { workspace = true }
 lightyear_ui = { version = "0.26", optional = true }
 bevy-inspector-egui = "0.36.0"

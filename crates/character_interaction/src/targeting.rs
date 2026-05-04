@@ -14,21 +14,20 @@ pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 /// Runtime configuration for the block-targeting raycast.
+///
+/// Render-only configuration (highlight colour, mining break colours) lives
+/// in `dd40_character_gui::block_highlight::BlockHighlightConfig` so that
+/// the headless server never needs to construct it.
 #[derive(Resource, Debug, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct BlockInteractionConfig {
     /// Maximum reach distance in blocks.
     pub max_distance: f32,
-    /// Color of the wireframe box drawn around the targeted block.
-    pub highlight_color: Color,
 }
 
 impl Default for BlockInteractionConfig {
     fn default() -> Self {
-        Self {
-            max_distance: 5.0,
-            highlight_color: Color::BLACK,
-        }
+        Self { max_distance: 5.0 }
     }
 }
 
@@ -147,9 +146,9 @@ fn dda_raycast(
 /// on the headless server (which has no [`Player`] marker — that's a
 /// local-only concept) for authoritative interaction handling.
 ///
-/// Local-display systems ([`draw_targeted_block_highlight`],
-/// [`update_debug_info`]) still filter on [`Player`] to render only the
-/// local character's target.
+/// Local-display systems ([`update_debug_info`]) still filter on
+/// [`Player`] to render only the local character's target. The targeted-block
+/// highlight gizmo lives in `dd40_character_gui::block_highlight`.
 pub(crate) fn update_targeted_block(
     config: Res<BlockInteractionConfig>,
     face_query: Query<(&GlobalTransform, &ChildOf), With<CharacterFace>>,
@@ -178,21 +177,6 @@ pub(crate) fn update_targeted_block(
             }
         }
     }
-}
-
-/// Draws a wireframe cuboid gizmo around the local player's currently
-/// targeted block.
-pub(crate) fn draw_targeted_block_highlight(
-    targeted_query: Query<&TargetedBlock, With<Player>>,
-    config: Res<BlockInteractionConfig>,
-    mut gizmos: Gizmos,
-) {
-    let Some(targeted) = targeted_query.iter().next() else { return };
-    let Some(pos) = targeted.pos else { return };
-    let center = Vec3::new(pos.x as f32 + 0.5, pos.y as f32 + 0.5, pos.z as f32 + 0.5);
-    const EPSILON: f32 = 0.0002;
-    let size = Vec3::splat(1.0 + EPSILON * 2.0);
-    gizmos.cube(Transform::from_translation(center).with_scale(size), config.highlight_color);
 }
 
 #[derive(Component)]

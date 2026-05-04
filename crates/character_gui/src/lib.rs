@@ -24,4 +24,5 @@
 //!     .run();
 //! ```
 
+pub mod block_highlight;
 pub mod plugin;
