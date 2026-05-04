@@ -1,6 +1,7 @@
 pub use crate::bundles::CharacterBundle;
 pub use crate::builder::CharacterBuilder;
 pub use crate::components::{Character, JumpImpulse, MovementSpeed, PlayerId, Player, SpawnPosition};
+pub use crate::face::{CameraRotation, CharacterFace, MouseSensitivity, DEFAULT_FACE_OFFSET};
 pub use crate::mining_state::MiningState;
 pub use crate::controller::{CharacterController, CharacterInput};
 pub use crate::plugin::CharacterCorePlugin;

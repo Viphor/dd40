@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     components::{Character, JumpImpulse, MovementSpeed, Player, PlayerId},
     controller::{CharacterController, CharacterInput},
+    face::{CameraRotation, CharacterFace, MouseSensitivity},
     mining_state::MiningState,
     system_sets::CharacterRenderSet,
     targeted_block::{BlockFace, TargetedBlock},
@@ -29,6 +30,9 @@ impl Plugin for CharacterCorePlugin {
             .register_type::<MiningState>()
             .register_type::<BlockFace>()
             .register_type::<TargetedBlock>()
+            .register_type::<CharacterFace>()
+            .register_type::<CameraRotation>()
+            .register_type::<MouseSensitivity>()
             .register_type::<CharacterInput>()
             .register_type::<CharacterController>()
             .configure_sets(
