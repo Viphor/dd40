@@ -126,6 +126,35 @@ impl CharacterBuilder {
         self
     }
 
+    /// Adds the components required to drive the character's locomotion
+    /// from a [`CharacterInput`][crate::controller::CharacterInput].
+    ///
+    /// Inserts:
+    ///
+    /// - [`CharacterInput`][crate::controller::CharacterInput] — the
+    ///   per-tick intent vector that gameplay systems write to.
+    /// - [`CharacterController`][crate::controller::CharacterController] —
+    ///   air-control / sprint multiplier configuration.
+    /// - [`JumpImpulse`][crate::components::JumpImpulse] — vertical
+    ///   impulse applied on jump (omit this method to make the character
+    ///   unable to jump).
+    ///
+    /// Does **not** add a physics body or collider; pair this with
+    /// `with_physics()` from `dd40_physics_core` for a controllable
+    /// character that participates in collisions.
+    pub fn with_controller(mut self) -> Self {
+        use crate::components::JumpImpulse;
+        use crate::controller::{CharacterController, CharacterInput};
+        self.add_extra(|e| {
+            e.insert((
+                CharacterInput::default(),
+                CharacterController::default(),
+                JumpImpulse::default(),
+            ));
+        });
+        self
+    }
+
     /// Spawns a fresh entity carrying the [`CharacterBundle`] and adds a
     /// face child. Returns the body's [`EntityCommands`] so callers can
     /// chain additional components (physics, networking, marker types).
@@ -357,6 +386,47 @@ mod tests {
             q.iter(app.world()).count(),
             0,
             "default builder must not add the Player marker"
+        );
+    }
+
+    #[test]
+    fn with_controller_inserts_input_controller_and_jump_impulse() {
+        use crate::components::JumpImpulse;
+        use crate::controller::{CharacterController, CharacterInput};
+
+        let mut app = make_app();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                CharacterBuilder::new("Walker")
+                    .with_controller()
+                    .spawn(&mut commands);
+            })
+            .unwrap();
+
+        let mut q = app.world_mut().query_filtered::<
+            (&CharacterInput, &CharacterController, &JumpImpulse),
+            With<Character>,
+        >();
+        let count = q.iter(app.world()).count();
+        assert_eq!(count, 1, "exactly one character with controller bundle");
+    }
+
+    #[test]
+    fn without_with_controller_no_controller_components_are_inserted() {
+        use crate::controller::CharacterInput;
+
+        let mut app = make_app();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                CharacterBuilder::new("Bare").spawn(&mut commands);
+            })
+            .unwrap();
+
+        let mut q = app.world_mut().query_filtered::<Entity, With<CharacterInput>>();
+        assert_eq!(
+            q.iter(app.world()).count(),
+            0,
+            "default builder must not add CharacterInput"
         );
     }
 
