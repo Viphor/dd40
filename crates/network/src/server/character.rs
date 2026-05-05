@@ -5,21 +5,14 @@
 
 use bevy::prelude::*;
 use dd40_character_core::{builder::CharacterBuilder, controller::CharacterInput};
+use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{CharacterPosition, PhysicsSet};
-use lightyear::prelude::{
-    Connected, ControlledBy, InterpolationTarget, NetworkTarget, PredictionTarget, RemoteId,
-    Replicate, input::native::ActionState, server::ClientOf,
-};
+use lightyear::prelude::{Connected, RemoteId, input::native::ActionState, server::ClientOf};
 
-use crate::{
-    protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation},
-    server::user::get_user,
-};
-use crate::{
-    server::spawn::{PlayerLocations, WorldSpawnConfig},
-    shared::character::character_bundle,
-};
-
+use crate::character_ext::CharacterServerNetworkExt;
+use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
+use crate::server::spawn::{PlayerLocations, WorldSpawnConfig};
+use crate::server::user::get_user;
 use crate::shared::character::apply_input_to_controller;
 
 // ============================================================================
@@ -74,41 +67,11 @@ fn server_spawn_character(
         client_id, spawn_pos
     );
 
-    let entity = commands
-        .spawn((
-            // ── Identity ─────────────────────────────────────────────────────
-            NetworkCharacter,
-            // Transform must be in the initial spawn tuple so that
-            // `CharacterPosition::on_add` (auto-required by `PhysicsBody`)
-            // sees the spawn position. Inserting `Transform` after
-            // `PhysicsBody` would leave `CharacterPosition` at `Vec3::ZERO`,
-            // and the player would fall from the world origin.
-            Transform::from_translation(spawn_pos),
-            // ── Physics ──────────────────────────────────────────────────────
-            character_bundle(),
-            // ── Networked state ───────────────────────────────────────────────
-            // Lightyear reads ActionState from this component and populates it
-            // with the inputs buffered by the controlling client.
-            ActionState::<PlayerInput>::default(),
-            PlayerPosition::from_vec3(spawn_pos),
-            PlayerRotation::new(0.0, 0.0),
-            // ── Replication config ────────────────────────────────────────────
-            Replicate::to_clients(NetworkTarget::All),
-            PredictionTarget::to_clients(NetworkTarget::Single(client_id)),
-            InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(client_id)),
-            ControlledBy {
-                owner: trigger.entity,
-                lifetime: Default::default(),
-            },
-        ))
-        .id();
-
-    // Attach the character body bundle + face child via the builder so the
-    // face entity is wired correctly (eye height, CameraRotation).
-    let mut entity_cmds = commands.entity(entity);
     CharacterBuilder::new(user.name)
         .transform(Transform::from_translation(spawn_pos))
-        .attach(&mut entity_cmds);
+        .with_physics()
+        .with_server_replication(client_id, spawn_pos, trigger.entity)
+        .spawn(&mut commands);
 }
 
 // ============================================================================
