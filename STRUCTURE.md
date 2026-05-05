@@ -146,6 +146,61 @@ src/
 └── system_sets.rs     — CharacterRenderSet (FrameInterpolation → CameraSync)
 ```
 
+#### `CharacterBuilder` and the extension-trait pattern
+
+`CharacterBuilder` is the **only** sanctioned way to spawn a character.
+Every spawn site (single-player, server, predicted client) goes through
+it.  Bypassing the builder risks forgetting to insert `Transform` before
+`PhysicsBody`, which silently leaves `CharacterPosition` at `Vec3::ZERO`.
+
+The builder owns three in-crate methods (which only need types from
+`dd40_character_core` itself):
+
+- `with_player()` — adds the `Player` marker.
+- `with_controller()` — adds `(CharacterInput, CharacterController, JumpImpulse)`.
+- `with_extra(|e| ...)` / `add_extra(|e| ...)` — pushes an arbitrary
+  insertion closure onto the builder.
+
+External capability crates extend the builder via **extension traits
+implemented as a blanket impl on any `T: AddExtra`**.  This lets a crate
+add a `with_*()` method to `CharacterBuilder` without any of the
+character-core crates needing to depend on it.  The pattern:
+
+```rust
+// In your capability crate (depends on dd40_core only):
+use dd40_core::builder_extra::AddExtra;
+
+pub trait CharacterFooExt: Sized {
+    fn with_foo(self, cfg: FooConfig) -> Self;
+}
+
+impl<T: AddExtra> CharacterFooExt for T {
+    fn with_foo(mut self, cfg: FooConfig) -> Self {
+        self.add_extra(move |e| { e.insert((Foo, cfg)); });
+        self
+    }
+}
+```
+
+Existing extension traits in the workspace:
+
+| Crate | Trait | Methods |
+|---|---|---|
+| `dd40_physics_core` | `CharacterPhysicsExt` | `with_physics()`, `with_physics_config(cfg)` |
+| `dd40_network` (server) | `CharacterServerNetworkExt` | `with_server_replication(client_id, spawn_pos, owner)` |
+| `dd40_network` (client) | `CharacterClientNetworkExt` | `with_predicted_local_player(initial_pos)` |
+
+A typical full chain:
+
+```rust
+CharacterBuilder::new("Player")
+    .transform(Transform::from_translation(spawn_pos))
+    .with_physics()
+    .with_controller()
+    .with_player()
+    .spawn(&mut commands);
+```
+
 ---
 
 ### `dd40_item_core`
