@@ -1,7 +1,4 @@
-use bevy::prelude::*;
-use dd40_character_core::controller::{CharacterController, CharacterInput};
-use dd40_character_core::components::JumpImpulse;
-use dd40_physics_core::prelude::{Aabb, CharacterCollider, PhysicsBody};
+use dd40_character_core::controller::CharacterInput;
 use lightyear::prelude::input::native::ActionState;
 
 use crate::protocol::PlayerInput;
@@ -31,27 +28,10 @@ pub(crate) fn apply_input_to_controller(
     char_input.place = action.0.place;
 }
 
-pub(crate) fn character_bundle() -> (
-    CharacterInput,
-    PhysicsBody,
-    CharacterCollider,
-    Aabb,
-    JumpImpulse,
-    CharacterController,
-) {
-    (
-        CharacterInput::default(),
-        PhysicsBody,
-        CharacterCollider,
-        Aabb::player(),
-        JumpImpulse::default(),
-        CharacterController::default(),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::math::Vec3;
 
     fn action(input: PlayerInput) -> ActionState<PlayerInput> {
         ActionState(input)
