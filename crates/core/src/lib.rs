@@ -1,4 +1,5 @@
 pub mod block;
+pub mod builder_extra;
 pub mod chunk;
 pub mod common;
 pub mod debug;
@@ -14,6 +15,7 @@ pub mod prelude {
             Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, CollisionShape, events::*,
             registry::BlockRegistrySet,
         },
+        builder_extra::AddExtra,
         chunk::{
             CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos,
             cache::ChunkCache, events::*,

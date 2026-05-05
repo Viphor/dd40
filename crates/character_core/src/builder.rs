@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::ecs::system::EntityCommands;
+use dd40_core::builder_extra::AddExtra;
 
 use crate::{
     bundles::CharacterBundle,
@@ -72,20 +73,18 @@ impl CharacterBuilder {
     ///
     /// This is the foundation for capability extension traits in other
     /// crates (e.g. `CharacterPhysicsExt::with_physics`). Capability crates
-    /// implement an extension trait on [`CharacterBuilder`] whose methods
-    /// call `add_extra` to register their own bundle insertion.
+    /// implement an extension trait with a blanket impl on
+    /// [`AddExtra`], so this method's behaviour is the only contract those
+    /// extensions rely on.
     ///
-    /// Extras run in registration order, **after** [`CharacterBundle`]
-    /// (which carries [`Transform`]) is inserted but **before** the face
-    /// child is spawned. This guarantees that `on_add` hooks fired by an
-    /// extra (such as the `CharacterPosition::on_add` hook required by
-    /// `PhysicsBody`) see the correct initial [`Transform`].
+    /// Inherent forward to the [`AddExtra`] trait impl below; kept so
+    /// callers don't need to import the trait just to push extras
+    /// directly on a [`CharacterBuilder`].
     pub fn add_extra<F>(&mut self, f: F) -> &mut Self
     where
         F: FnOnce(&mut EntityCommands) + Send + 'static,
     {
-        self.extras.push(Box::new(f));
-        self
+        <Self as AddExtra>::add_extra(self, f)
     }
 
     /// Overrides the base movement speed (world units per second).
@@ -184,6 +183,25 @@ fn spawn_face_child(entity: &mut EntityCommands<'_>, offset: Vec3) {
         CameraRotation::default(),
         Transform::from_translation(offset),
     ));
+}
+
+/// Implements the generic [`AddExtra`] protocol from [`dd40_core`] so that
+/// blanket-impl extension traits in other crates (e.g.
+/// `CharacterPhysicsExt`) automatically apply to [`CharacterBuilder`].
+///
+/// Extras run in registration order, **after** [`CharacterBundle`] (which
+/// carries [`Transform`]) is inserted but **before** the face child is
+/// spawned. This guarantees that `on_add` hooks fired by an extra — such
+/// as `CharacterPosition::on_add` (required by `PhysicsBody`) — see the
+/// correct initial [`Transform`].
+impl AddExtra for CharacterBuilder {
+    fn add_extra<F>(&mut self, f: F) -> &mut Self
+    where
+        F: FnOnce(&mut EntityCommands) + Send + 'static,
+    {
+        self.extras.push(Box::new(f));
+        self
+    }
 }
 
 #[cfg(test)]
