@@ -108,6 +108,25 @@ impl CharacterBuilder {
         self
     }
 
+    /// Marks the spawned character as the locally-controlled
+    /// [`Player`][crate::components::Player] entity.
+    ///
+    /// Exactly one entity in a running client session should carry the
+    /// `Player` marker. Single-player and the client-side predicted
+    /// character spawn use this; servers and remote replicated characters
+    /// do not.
+    ///
+    /// Implemented as an in-crate convenience over [`Self::add_extra`]
+    /// because [`Player`][crate::components::Player] lives in this crate.
+    /// Capabilities defined in other crates use the extension-trait pattern
+    /// instead (see `dd40_physics_core::CharacterPhysicsExt`).
+    pub fn with_player(mut self) -> Self {
+        self.add_extra(|e| {
+            e.insert(crate::components::Player);
+        });
+        self
+    }
+
     /// Spawns a fresh entity carrying the [`CharacterBundle`] and adds a
     /// face child. Returns the body's [`EntityCommands`] so callers can
     /// chain additional components (physics, networking, marker types).
@@ -283,6 +302,44 @@ mod tests {
 
         assert!(app.world().get::<Character>(preexisting).is_some());
         assert!(app.world().get::<AttachedMarker>(preexisting).is_some());
+    }
+
+    #[test]
+    fn with_player_inserts_player_marker() {
+        use crate::components::Player;
+
+        let mut app = make_app();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                CharacterBuilder::new("Local").with_player().spawn(&mut commands);
+            })
+            .unwrap();
+
+        let mut q = app.world_mut().query_filtered::<Entity, (With<Character>, With<Player>)>();
+        assert_eq!(
+            q.iter(app.world()).count(),
+            1,
+            "exactly one character carries the Player marker"
+        );
+    }
+
+    #[test]
+    fn without_with_player_no_player_marker_is_inserted() {
+        use crate::components::Player;
+
+        let mut app = make_app();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                CharacterBuilder::new("NPC").spawn(&mut commands);
+            })
+            .unwrap();
+
+        let mut q = app.world_mut().query_filtered::<Entity, With<Player>>();
+        assert_eq!(
+            q.iter(app.world()).count(),
+            0,
+            "default builder must not add the Player marker"
+        );
     }
 
     #[test]
