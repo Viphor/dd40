@@ -70,6 +70,7 @@ fn server_spawn_character(
     CharacterBuilder::new(user.name)
         .transform(Transform::from_translation(spawn_pos))
         .with_physics()
+        .with_controller()
         .with_server_replication(client_id, spawn_pos, trigger.entity)
         .spawn(&mut commands);
 }
