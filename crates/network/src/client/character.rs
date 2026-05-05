@@ -30,11 +30,9 @@
 
 use bevy::{prelude::*, time::Fixed};
 use dd40_character_core::{
-    builder::CharacterBuilder,
-    components::Player,
-    controller::CharacterInput,
-    system_sets::CharacterRenderSet,
+    builder::CharacterBuilder, controller::CharacterInput, system_sets::CharacterRenderSet,
 };
+use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{CharacterPosition, PhysicsSet};
 use lightyear::prelude::{
     Interpolated, Predicted,
@@ -43,9 +41,10 @@ use lightyear::prelude::{
     is_in_rollback,
 };
 
+use crate::character_ext::CharacterClientNetworkExt;
 use crate::{
     protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation},
-    shared::character::{apply_input_to_controller, character_bundle},
+    shared::character::apply_input_to_controller,
 };
 
 // ============================================================================
@@ -127,19 +126,12 @@ fn on_predicted_character_added(
         .unwrap_or(Vec3::ZERO);
 
     let mut entity_cmds = commands.entity(trigger.entity);
-    entity_cmds.insert((
-        InputMarker::<PlayerInput>::default(),
-        Player,
-        character_bundle(),
-        // Override the on_add-initialised CharacterPosition with the actual
-        // server-confirmed spawn position.
-        CharacterPosition(initial_pos),
-        PhysicsInterpolationData {
-            previous: initial_pos,
-            current: initial_pos,
-        },
-    ));
-    CharacterBuilder::new("ThePlayer").attach(&mut entity_cmds);
+    CharacterBuilder::new("ThePlayer")
+        .transform(Transform::from_translation(initial_pos))
+        .with_physics()
+        .with_controller()
+        .with_predicted_local_player(initial_pos)
+        .attach(&mut entity_cmds);
 
     info!(
         "Attached InputMarker + Player to predicted character {:?}",
