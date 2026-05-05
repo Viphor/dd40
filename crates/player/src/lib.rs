@@ -1,14 +1,14 @@
 use bevy::prelude::*;
 use dd40_character_core::{
     builder::CharacterBuilder,
-    components::{JumpImpulse, Player, SpawnPosition},
-    controller::CharacterController,
+    components::{Player, SpawnPosition},
 };
 use dd40_character_interaction::{CharacterInteractionPlugin, TargetedBlock};
 use dd40_character_core::mining_state::MiningState;
 use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
-use dd40_physics_core::prelude::{Aabb, CharacterCollider, Impulse, PhysicsBody, Velocity};
+use dd40_physics_core::character_ext::CharacterPhysicsExt;
+use dd40_physics_core::prelude::{Impulse, Velocity};
 use dd40_player_movement::{PlayerMode, PlayerMovementPlugin};
 
 // ── Re-exports ────────────────────────────────────────────────────────────────
@@ -32,33 +32,23 @@ fn spawn_player(mut commands: Commands, spawn_position: Option<Res<SpawnPosition
         .unwrap_or(Vec3::new(0.0, 84.0, 0.0));
 
     debug!("Spawning player at position {:?}", position);
-    let entity = commands
-        .spawn((
-            Player,
-            // Transform must be in the initial spawn tuple so that
-            // `CharacterPosition::on_add` (auto-required by `PhysicsBody`)
-            // sees the spawn position. Inserting `Transform` later via the
-            // `CharacterBuilder` would leave `CharacterPosition` at
-            // `Vec3::ZERO` and the player would fall from the world origin.
-            Transform::from_translation(position),
-            PhysicsBody,
-            CharacterCollider,
-            Aabb::player(),
-            CharacterController::default(),
-            JumpImpulse::default(),
-            DebugInfo::new("Player Info")
-                .with_color(bevy::color::palettes::basic::YELLOW.into())
-                .add("position", "Player position")
-                .add("velocity", "Player velocity")
-                .add("impulse", "Player impulse")
-                .add("chunk", "Player chunk")
-                .add("mining", "Idle"),
-        ))
-        .id();
-    let mut entity_cmds = commands.entity(entity);
     CharacterBuilder::new("Player")
         .transform(Transform::from_translation(position))
-        .attach(&mut entity_cmds);
+        .with_physics()
+        .with_controller()
+        .with_player()
+        .with_extra(|entity| {
+            entity.insert(
+                DebugInfo::new("Player Info")
+                    .with_color(bevy::color::palettes::basic::YELLOW.into())
+                    .add("position", "Player position")
+                    .add("velocity", "Player velocity")
+                    .add("impulse", "Player impulse")
+                    .add("chunk", "Player chunk")
+                    .add("mining", "Idle"),
+            );
+        })
+        .spawn(&mut commands);
 }
 
 // ── Per-frame systems ─────────────────────────────────────────────────────────

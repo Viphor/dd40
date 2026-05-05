@@ -18,7 +18,6 @@
 //!     .spawn(&mut commands);
 //! ```
 
-use bevy::prelude::*;
 use dd40_core::builder_extra::AddExtra;
 
 use crate::components::{Aabb, CharacterCollider, PhysicsBody};
@@ -104,7 +103,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::ecs::system::{Commands, EntityCommands, RunSystemOnce};
+    use bevy::prelude::*;
+    use bevy::ecs::system::{EntityCommands, RunSystemOnce};
 
     /// Tiny test-only builder so the physics_core tests don't depend on
     /// `dd40_character_core`. It only carries the bare minimum the

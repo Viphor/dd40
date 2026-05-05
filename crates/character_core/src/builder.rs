@@ -87,6 +87,16 @@ impl CharacterBuilder {
         <Self as AddExtra>::add_extra(self, f)
     }
 
+    /// By-value variant of [`Self::add_extra`] for fluent chaining
+    /// (e.g. `CharacterBuilder::new(...).with_extra(|e| ...).spawn(...)`).
+    pub fn with_extra<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(&mut EntityCommands) + Send + 'static,
+    {
+        self.add_extra(f);
+        self
+    }
+
     /// Overrides the base movement speed (world units per second).
     pub fn movement_speed(mut self, speed: f32) -> Self {
         self.movement_speed = MovementSpeed(speed);
