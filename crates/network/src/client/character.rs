@@ -59,13 +59,24 @@ use crate::{
 /// `previous`) and [`record_and_sync_post_physics`] (writes `current`).
 /// Read each render frame by [`apply_frame_interpolation`].
 #[derive(Component)]
-struct PhysicsInterpolationData {
+pub struct PhysicsInterpolationData {
     /// Physics position at the **start** of the most recent tick (end of the
     /// previous tick), used as the interpolation origin.
-    previous: Vec3,
+    pub(crate) previous: Vec3,
     /// Physics position at the **end** of the most recent tick, used as the
     /// interpolation target.
-    current: Vec3,
+    pub(crate) current: Vec3,
+}
+
+impl PhysicsInterpolationData {
+    /// Creates a new [`PhysicsInterpolationData`] with both `previous` and
+    /// `current` seeded to `pos`, suitable for the first tick after spawn.
+    pub fn new(pos: Vec3) -> Self {
+        Self {
+            previous: pos,
+            current: pos,
+        }
+    }
 }
 
 /// A decaying world-space offset added to [`Transform`] each render frame to

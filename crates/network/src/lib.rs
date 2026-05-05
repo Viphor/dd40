@@ -70,6 +70,7 @@
 //! The server sends back the confirmed state, which is used to correct any prediction
 //! errors on the client.
 
+pub mod character_ext;
 #[cfg(feature = "client")]
 pub mod client;
 pub mod protocol;
