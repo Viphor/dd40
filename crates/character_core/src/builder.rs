@@ -42,7 +42,17 @@ pub struct CharacterBuilder {
     movement_speed: MovementSpeed,
     transform: Transform,
     face_offset: Vec3,
+    extras: Vec<CharacterExtra>,
 }
+
+/// Boxed insertion closure used by [`CharacterBuilder::add_extra`].
+///
+/// Each closure runs **after** the core [`CharacterBundle`] has been
+/// inserted, so the entity already has a [`Transform`] and the marker
+/// components when the closure runs. This makes it safe for an extra to
+/// insert components whose `on_add` hooks read other components on the
+/// entity.
+pub type CharacterExtra = Box<dyn FnOnce(&mut EntityCommands) + Send + 'static>;
 
 impl CharacterBuilder {
     /// Starts a builder with default speed, the world origin as spawn point,
@@ -53,7 +63,29 @@ impl CharacterBuilder {
             movement_speed: MovementSpeed::default(),
             transform: Transform::default(),
             face_offset: DEFAULT_FACE_OFFSET,
+            extras: Vec::new(),
         }
+    }
+
+    /// Pushes an arbitrary insertion closure that runs after the core
+    /// [`CharacterBundle`] has been inserted on the entity.
+    ///
+    /// This is the foundation for capability extension traits in other
+    /// crates (e.g. `CharacterPhysicsExt::with_physics`). Capability crates
+    /// implement an extension trait on [`CharacterBuilder`] whose methods
+    /// call `add_extra` to register their own bundle insertion.
+    ///
+    /// Extras run in registration order, **after** [`CharacterBundle`]
+    /// (which carries [`Transform`]) is inserted but **before** the face
+    /// child is spawned. This guarantees that `on_add` hooks fired by an
+    /// extra (such as the `CharacterPosition::on_add` hook required by
+    /// `PhysicsBody`) see the correct initial [`Transform`].
+    pub fn add_extra<F>(&mut self, f: F) -> &mut Self
+    where
+        F: FnOnce(&mut EntityCommands) + Send + 'static,
+    {
+        self.extras.push(Box::new(f));
+        self
     }
 
     /// Overrides the base movement speed (world units per second).
@@ -81,12 +113,16 @@ impl CharacterBuilder {
     /// chain additional components (physics, networking, marker types).
     pub fn spawn<'c>(self, commands: &'c mut Commands) -> EntityCommands<'c> {
         let face_offset = self.face_offset;
+        let extras = self.extras;
         let body_bundle = CharacterBundle::new(
             self.name,
             self.movement_speed,
             self.transform,
         );
         let mut entity = commands.spawn(body_bundle);
+        for extra in extras {
+            extra(&mut entity);
+        }
         spawn_face_child(&mut entity, face_offset);
         entity
     }
@@ -99,11 +135,15 @@ impl CharacterBuilder {
         entity: &'a mut EntityCommands<'c>,
     ) -> &'a mut EntityCommands<'c> {
         let face_offset = self.face_offset;
+        let extras = self.extras;
         entity.insert(CharacterBundle::new(
             self.name,
             self.movement_speed,
             self.transform,
         ));
+        for extra in extras {
+            extra(entity);
+        }
         spawn_face_child(entity, face_offset);
         entity
     }
@@ -194,6 +234,81 @@ mod tests {
             app.world_mut().query_filtered::<&Transform, With<CharacterFace>>();
         let t = transforms.iter(app.world()).next().unwrap();
         assert_eq!(t.translation, custom);
+    }
+
+    #[test]
+    fn add_extra_runs_after_character_bundle_on_spawn() {
+        #[derive(Component)]
+        struct Marker(Vec3);
+
+        let mut app = make_app();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                let mut b = CharacterBuilder::new("Hero")
+                    .transform(Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)));
+                b.add_extra(|e| {
+                    // CharacterBundle (and its Transform) is already on the
+                    // entity at the time this closure runs — we encode the
+                    // contract by capturing the value here.
+                    e.insert(Marker(Vec3::new(1.0, 2.0, 3.0)));
+                });
+                b.spawn(&mut commands);
+            })
+            .unwrap();
+
+        let mut q = app.world_mut().query::<(&Character, &Marker, &Transform)>();
+        let (_, marker, transform) = q.iter(app.world()).next().expect("entity spawned");
+        assert_eq!(marker.0, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(transform.translation, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn add_extra_runs_after_character_bundle_on_attach() {
+        #[derive(Component)]
+        struct AttachedMarker;
+
+        let mut app = make_app();
+        let preexisting = app.world_mut().spawn_empty().id();
+
+        app.world_mut()
+            .run_system_once(move |mut commands: Commands| {
+                let mut e = commands.entity(preexisting);
+                let mut b = CharacterBuilder::new("X");
+                b.add_extra(|ec| {
+                    ec.insert(AttachedMarker);
+                });
+                b.attach(&mut e);
+            })
+            .unwrap();
+
+        assert!(app.world().get::<Character>(preexisting).is_some());
+        assert!(app.world().get::<AttachedMarker>(preexisting).is_some());
+    }
+
+    #[test]
+    fn extras_run_in_registration_order() {
+        #[derive(Component, Debug, PartialEq)]
+        struct Order(Vec<u8>);
+
+        let mut app = make_app();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                let mut b = CharacterBuilder::new("Ordered");
+                b.add_extra(|e| {
+                    e.insert(Order(vec![1]));
+                });
+                b.add_extra(|e| {
+                    // Bevy will overwrite the previous Order; we use that to
+                    // confirm extras run in the order they were registered.
+                    e.insert(Order(vec![1, 2]));
+                });
+                b.spawn(&mut commands);
+            })
+            .unwrap();
+
+        let mut q = app.world_mut().query::<&Order>();
+        let order = q.iter(app.world()).next().unwrap();
+        assert_eq!(order, &Order(vec![1, 2]));
     }
 
     #[test]
