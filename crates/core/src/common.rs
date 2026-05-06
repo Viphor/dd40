@@ -86,7 +86,7 @@ pub fn log_plugin() -> LogPlugin {
             },
             Filter {
                 module: "dd40_network",
-                level: Level::TRACE,
+                level: Level::DEBUG,
             },
             Filter {
                 module: "dd40_chunk_storage",
