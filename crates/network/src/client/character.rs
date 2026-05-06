@@ -105,26 +105,37 @@ const VISUAL_CORRECTION_DECAY: f32 = 15.0;
 // OBSERVERS
 // ============================================================================
 
-/// Attaches local-player components to a newly-created [`Predicted`] character.
+/// Attaches local-player components to a newly-replicated character body.
 ///
-/// lightyear creates the `Predicted` entity with all replicated components
-/// (including [`PlayerPosition`]) already in place before the `Predicted`
-/// marker is added, so by the time this observer fires the spawn position is
-/// available.
+/// Triggered on `Add<NetworkCharacter>`, which fires once per replicated
+/// character body — never for the face child or other replicated children
+/// (which don't carry the `NetworkCharacter` marker). This guarantees we
+/// don't accidentally treat a child entity as a character body and double
+/// up `InputMarker` insertions.
 ///
-/// We explicitly set both [`CharacterPosition`] and [`PhysicsInterpolationData`]
-/// from the replicated [`PlayerPosition`] so the first render frame shows the
-/// entity at the correct spawn location rather than at the origin.
-fn on_predicted_character_added(
-    trigger: On<Add, Predicted>,
+/// The observer fires for both copies that arrive on the client:
+/// * The **Confirmed** entity (server-replicated truth) — skipped here; it
+///   exists only as a rollback checkpoint.
+/// * The **Predicted** entity (local player's controllable copy) — gets the
+///   full character bundle plus local-player extras (`InputMarker`,
+///   `Player`, `PhysicsInterpolationData`).
+///
+/// Once remote-character rendering lands, an `Has<Interpolated>` branch can
+/// be added here to set up read-only render state for other players.
+fn on_network_character_added(
+    trigger: On<Add, NetworkCharacter>,
     mut commands: Commands,
-    position_query: Query<&PlayerPosition>,
+    query: Query<(&PlayerPosition, Has<Predicted>)>,
 ) {
-    let initial_pos = position_query
-        .get(trigger.entity)
-        .map(|p| p.to_vec3())
-        .unwrap_or(Vec3::ZERO);
+    let Ok((player_pos, is_predicted)) = query.get(trigger.entity) else {
+        return;
+    };
 
+    if !is_predicted {
+        return;
+    }
+
+    let initial_pos = player_pos.to_vec3();
     let mut entity_cmds = commands.entity(trigger.entity);
     CharacterBuilder::new("ThePlayer")
         .transform(Transform::from_translation(initial_pos))
@@ -134,7 +145,7 @@ fn on_predicted_character_added(
         .attach(&mut entity_cmds);
 
     info!(
-        "Attached InputMarker + Player to predicted character {:?}",
+        "Built local-player character on Predicted entity {:?}",
         trigger.entity
     );
 }
@@ -155,11 +166,7 @@ fn on_predicted_character_added(
 fn bridge_input_to_action_state(
     mut query: Query<
         (&CharacterInput, &mut ActionState<PlayerInput>),
-        (
-            With<NetworkCharacter>,
-            With<Predicted>,
-            With<InputMarker<PlayerInput>>,
-        ),
+        (With<Predicted>, With<InputMarker<PlayerInput>>),
     >,
 ) {
     for (char_input, mut action) in &mut query {
@@ -197,7 +204,7 @@ fn restore_and_record_previous(
             &mut PhysicsInterpolationData,
             Option<&VisualCorrectionOffset>,
         ),
-        (With<NetworkCharacter>, With<Predicted>),
+        With<Predicted>,
     >,
 ) {
     for (entity, player_pos, mut char_pos, mut interp, existing_correction) in &mut query {
@@ -230,10 +237,7 @@ fn restore_and_record_previous(
 /// Must run **before** [`PhysicsSet::Integrate`] so the physics step uses the
 /// current tick's input.
 fn client_apply_inputs(
-    mut query: Query<
-        (&ActionState<PlayerInput>, &mut CharacterInput),
-        (With<NetworkCharacter>, With<Predicted>),
-    >,
+    mut query: Query<(&ActionState<PlayerInput>, &mut CharacterInput), With<Predicted>>,
 ) {
     for (action, mut char_input) in &mut query {
         apply_input_to_controller(action, &mut char_input);
@@ -252,7 +256,7 @@ fn record_and_sync_post_physics(
             &mut PlayerPosition,
             &mut PhysicsInterpolationData,
         ),
-        (With<NetworkCharacter>, With<Predicted>),
+        With<Predicted>,
     >,
 ) {
     for (char_pos, mut player_pos, mut interp) in &mut query {
@@ -284,7 +288,7 @@ fn apply_frame_interpolation(
             Option<&mut VisualCorrectionOffset>,
             &mut Transform,
         ),
-        (With<NetworkCharacter>, With<Predicted>),
+        With<Predicted>,
     >,
 ) {
     let overstep = fixed_time.overstep_fraction();
@@ -313,7 +317,7 @@ fn apply_frame_interpolation(
 fn sync_interpolated_position_to_transform(
     mut query: Query<
         (&PlayerPosition, &mut Transform),
-        (With<NetworkCharacter>, With<Interpolated>),
+        With<Interpolated>,
     >,
 ) {
     for (pos, mut transform) in &mut query {
@@ -330,7 +334,7 @@ fn sync_interpolated_position_to_transform(
 fn apply_interpolated_rotation(
     mut query: Query<
         (&PlayerRotation, &mut Transform),
-        (With<NetworkCharacter>, With<Interpolated>),
+        With<Interpolated>,
     >,
 ) {
     for (rot, mut transform) in &mut query {
@@ -350,7 +354,7 @@ fn apply_interpolated_rotation(
 fn sync_local_rotation(
     mut query: Query<
         (&CharacterInput, &mut PlayerRotation),
-        (With<NetworkCharacter>, With<Predicted>),
+        With<Predicted>,
     >,
 ) {
     for (char_input, mut player_rot) in &mut query {
@@ -371,7 +375,7 @@ pub struct ClientCharacterPlugin;
 
 impl Plugin for ClientCharacterPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_predicted_character_added);
+        app.add_observer(on_network_character_added);
 
         // Bridge CharacterInput → ActionState in FixedPreUpdate so lightyear
         // buffers the current frame's input (including the one-shot jump flag)

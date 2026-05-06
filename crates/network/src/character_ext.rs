@@ -107,7 +107,7 @@ impl<T: AddExtra> CharacterServerNetworkExt for T {
 /// Client-side networking capability for a predicted local-player character.
 ///
 /// This is the counterpart to [`CharacterServerNetworkExt`] used inside the
-/// `on_predicted_character_added` observer to attach the components required
+/// `on_network_character_added` observer to attach the components required
 /// for the client to drive its own predicted entity.
 #[cfg(feature = "client")]
 pub trait CharacterClientNetworkExt: Sized {
@@ -117,10 +117,6 @@ pub trait CharacterClientNetworkExt: Sized {
     /// - [`InputMarker<PlayerInput>`](lightyear::prelude::input::native::InputMarker)
     ///   so lightyear knows this client controls the entity.
     /// - [`Player`](dd40_character_core::components::Player) marker.
-    /// - [`CharacterPosition`](dd40_physics_core::prelude::CharacterPosition)
-    ///   set explicitly to `initial_pos`, overriding the `Vec3::ZERO` default
-    ///   that `on_add` would otherwise install before the replicated
-    ///   `Transform` is applied.
     /// - [`PhysicsInterpolationData`] seeded so the first render frame shows
     ///   the entity at the spawn position.
     ///
@@ -137,14 +133,12 @@ impl<T: AddExtra> CharacterClientNetworkExt for T {
         use crate::client::character::PhysicsInterpolationData;
         use crate::protocol::PlayerInput;
         use dd40_character_core::components::Player;
-        use dd40_physics_core::prelude::CharacterPosition;
         use lightyear::prelude::input::native::InputMarker;
 
         self.add_extra(move |entity| {
             entity.insert((
                 InputMarker::<PlayerInput>::default(),
                 Player,
-                CharacterPosition(initial_pos),
                 PhysicsInterpolationData::new(initial_pos),
             ));
         });
