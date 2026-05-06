@@ -6,9 +6,9 @@
 
 use bevy::math::Curve;
 use bevy::prelude::*;
-pub use dd40_core::prelude::PlaceBlockRequest;
-pub use dd40_core::block::events::{AbortMiningRequest, MineBlockRequest, StartMiningRequest};
 use dd40_character_core::components::Character;
+pub use dd40_core::block::events::{AbortMiningRequest, MineBlockRequest, StartMiningRequest};
+pub use dd40_core::prelude::PlaceBlockRequest;
 use dd40_core::prelude::*;
 use dd40_physics_core::prelude::Velocity;
 use lightyear::prelude::*;
@@ -257,9 +257,24 @@ impl Plugin for ProtocolPlugin {
         // between client and server via lightyear's input pipeline.
         app.add_plugins(lightyear::prelude::input::native::InputPlugin::<PlayerInput>::default());
 
-        // Register components with replication
-        app.register_component::<NetworkCharacter>();
-        app.register_component::<Character>();
+        // Register components with replication.
+        //
+        // `NetworkCharacter` and `Character` are markers that never change,
+        // so `replicate_once` sends them once at spawn instead of every tick.
+        // Neither needs prediction: the markers are present on the Confirmed
+        // entity and the client-side predicted-entity systems filter on
+        // `With<Predicted>` (the only Predicted entity is the local
+        // character) rather than on the markers.
+        app.register_component::<NetworkCharacter>()
+            .with_replication_config(ComponentReplicationConfig {
+                replicate_once: true,
+                ..Default::default()
+            });
+        app.register_component::<Character>()
+            .with_replication_config(ComponentReplicationConfig {
+                replicate_once: true,
+                ..Default::default()
+            });
 
         app.register_component::<PlayerPosition>()
             .add_prediction()
@@ -270,8 +285,7 @@ impl Plugin for ProtocolPlugin {
         // restoring position but not velocity causes the re-simulation to
         // immediately diverge, producing visible drift especially during jumps
         // and gravity-driven falls.
-        app.register_component::<Velocity>()
-            .add_prediction();
+        app.register_component::<Velocity>().add_prediction();
 
         // Rotation is NOT predicted — the controlling client writes it locally
         // each PostUpdate frame from the camera, so it is always perfectly
