@@ -15,7 +15,7 @@ dd40_core = { path = "../core" }
 dd40_physics_core = { workspace = true }
 dd40_character_core = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
-lightyear = { version = "0.26", features = ["udp", "netcode", "std", "input_native", "client"] }
+lightyear = { version = "0.26", features = ["udp", "netcode", "std", "input_native", "client", "server", "replication", "prediction", "interpolation"] }
 rand = "0.8"
 crossbeam-channel = "0.5"
 
