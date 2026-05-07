@@ -14,9 +14,11 @@ use crate::block::{Block, BlockCoord, BlockId, BlockPos};
 
 pub mod cache;
 pub mod change;
+pub mod config;
 pub mod events;
 
 pub use change::{BlockLocal, ChunkChange};
+pub use config::MaxDeltaBehind;
 
 /// Width (X) of a chunk in blocks.
 pub const CHUNK_SIZE_X: usize = 16;
