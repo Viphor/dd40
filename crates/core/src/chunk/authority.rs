@@ -10,6 +10,22 @@
 //! `run_if`, no marker component to forget. If `ChunkAuthorityPlugin` is
 //! in the app, the local instance is authoritative.
 //!
+//! # Performance shape
+//!
+//! The commit pass iterates only the chunks listed in
+//! [`ChunkCache::dirty_chunks`] — an O(1) lookup per modified chunk
+//! rather than a scan over every loaded chunk. The dirty index is
+//! maintained automatically by [`ChunkCache::push_predicted`].
+//!
+//! Validators receive `&World` (read-only), not `&mut World`, so they
+//! can freely access shared state without escalating the system to
+//! exclusive-write contention beyond what the commit pass itself
+//! requires.
+//!
+//! Cross-chunk parallelism is a future optimisation — the dirty list is
+//! the much bigger win, and validators are pure-read which makes a
+//! `bevy::tasks::ComputeTaskPool` rollout straightforward when needed.
+//!
 //! # Extending the validator chain
 //!
 //! Acceptance/rejection of each predicted change is decided by an
@@ -80,13 +96,15 @@ impl RejectReason {
 /// A pluggable validator that decides whether one predicted
 /// [`ChunkChange`] should be committed.
 ///
-/// Validators may freely access the Bevy [`World`] to read whatever
-/// resources or queries they need. They are called from an exclusive
-/// system, so there is no contention to worry about.
+/// Validators take an immutable `&World` reference, allowing them to
+/// read any resource or run their own [`World::iter_entities`]-style
+/// queries without forcing the commit system to take a unique borrow on
+/// each one. Downstream validators that genuinely require cached query
+/// state can wrap a `SystemState` in a [`std::sync::Mutex`] and update
+/// it via interior mutability.
 ///
-/// Validators are stateful (`&mut self`) so they can cache
-/// [`SystemState`](bevy::ecs::system::SystemState) or other per-validator
-/// resources across calls.
+/// Validators are `&self` — pure with respect to their own state — so
+/// future cross-chunk parallelism stays trivial to implement.
 ///
 /// # Implementing
 ///
@@ -100,8 +118,8 @@ impl RejectReason {
 ///
 /// impl ChunkChangeValidator for MyValidator {
 ///     fn validate(
-///         &mut self,
-///         _world: &mut World,
+///         &self,
+///         _world: &World,
 ///         _change: &ChunkChange,
 ///         _prior: Block,
 ///         _chunk_pos: ChunkPos,
@@ -117,8 +135,8 @@ pub trait ChunkChangeValidator: Send + Sync + 'static {
     /// change was optimistically applied — this is what the validator
     /// should reason about, not the current value in `data`.
     fn validate(
-        &mut self,
-        world: &mut World,
+        &self,
+        world: &World,
         change: &ChunkChange,
         prior: Block,
         chunk_pos: ChunkPos,
@@ -194,8 +212,8 @@ pub struct DefaultBlockRegistryValidator;
 
 impl ChunkChangeValidator for DefaultBlockRegistryValidator {
     fn validate(
-        &mut self,
-        world: &mut World,
+        &self,
+        world: &World,
         change: &ChunkChange,
         prior: Block,
         _chunk_pos: ChunkPos,
@@ -223,100 +241,123 @@ impl ChunkChangeValidator for DefaultBlockRegistryValidator {
 
 /// Run the registered validator chain against a single change.
 ///
-/// Returns the first [`CommitDecision::Reject`] produced; otherwise
-/// returns [`CommitDecision::Accept`]. The chain is briefly removed
-/// from the world during the call so that validators may freely
-/// access the world themselves.
+/// Returns the first [`CommitDecision::Reject`] produced by a validator;
+/// otherwise returns [`CommitDecision::Accept`].
 fn run_validators(
-    world: &mut World,
+    world: &World,
+    validators: &ChunkChangeValidators,
     change: &ChunkChange,
     prior: Block,
     chunk_pos: ChunkPos,
 ) -> CommitDecision {
-    let Some(mut validators) = world.remove_resource::<ChunkChangeValidators>() else {
-        return CommitDecision::Accept;
-    };
-
-    let mut decision = CommitDecision::Accept;
-    for validator in validators.validators.iter_mut() {
-        decision = validator.validate(world, change, prior, chunk_pos);
+    for v in &validators.validators {
+        let decision = v.validate(world, change, prior, chunk_pos);
         if matches!(decision, CommitDecision::Reject(_)) {
-            break;
+            return decision;
         }
     }
-
-    world.insert_resource(validators);
-    decision
+    CommitDecision::Accept
 }
 
-/// Exclusive system: drain every chunk's predicted queue, run it
-/// through the registered validator chain, apply accepted changes,
-/// roll back rejected ones, and emit [`ChunkChanged`] messages.
+/// Exclusive system: walk the dirty index, drain each dirty chunk's
+/// predicted queue, run it through the registered validator chain,
+/// apply accepted changes, roll back rejected ones, and emit
+/// [`ChunkChanged`] messages.
 ///
 /// Runs in [`PostUpdate`] when [`ChunkAuthorityPlugin`] is added.
+///
+/// **Iteration cost** is O(dirty chunks * predictions per chunk *
+/// validators), not O(loaded chunks). The dirty index is maintained by
+/// [`ChunkCache::push_predicted`].
 pub fn commit_predicted_changes(world: &mut World) {
-    let positions: Vec<ChunkPos> = world
-        .resource::<ChunkCache>()
-        .iter_positions()
-        .copied()
-        .collect();
+    // Snapshot dirty positions and drain each dirty chunk's predicted
+    // queue in one pass while we hold the cache lock.
+    let work: Vec<(ChunkPos, Vec<PredictedChange>)> = {
+        let mut cache = world.resource_mut::<ChunkCache>();
+        let dirty: Vec<ChunkPos> = cache.drain_dirty().collect();
+        dirty
+            .into_iter()
+            .filter_map(|pos| {
+                let chunk = cache.get_mut(&pos)?;
+                let predicted = chunk.take_predicted();
+                if predicted.is_empty() {
+                    None
+                } else {
+                    Some((pos, predicted))
+                }
+            })
+            .collect()
+    };
 
-    for pos in positions {
-        let predicted: Vec<PredictedChange> = {
-            let mut cache = world.resource_mut::<ChunkCache>();
+    if work.is_empty() {
+        return;
+    }
+
+    // Run validators with resource_scope so we hold a unique borrow on
+    // ChunkChangeValidators while still passing &World to each validator.
+    // No remove/reinsert dance.
+    let decisions: Vec<(ChunkPos, Vec<(PredictedChange, CommitDecision)>)> = world
+        .resource_scope(|world, validators: Mut<ChunkChangeValidators>| {
+            work.into_iter()
+                .map(|(pos, predicted)| {
+                    let chunk_decisions = predicted
+                        .into_iter()
+                        .map(|entry| {
+                            let decision = run_validators(
+                                world,
+                                &validators,
+                                &entry.change,
+                                entry.prior,
+                                pos,
+                            );
+                            (entry, decision)
+                        })
+                        .collect();
+                    (pos, chunk_decisions)
+                })
+                .collect()
+        });
+
+    // Apply decisions: rollback rejected, commit accepted, build outgoing
+    // ChunkChanged messages.
+    let mut emit: Vec<ChunkChanged> = Vec::with_capacity(decisions.len());
+    {
+        let mut cache = world.resource_mut::<ChunkCache>();
+        for (pos, chunk_decisions) in decisions {
             let Some(chunk) = cache.get_mut(&pos) else {
                 continue;
             };
-            if chunk.predicted().is_empty() {
-                continue;
-            }
-            chunk.take_predicted()
-        };
-
-        let mut accepted: Vec<ChunkChange> = Vec::with_capacity(predicted.len());
-
-        for entry in predicted {
-            let decision = run_validators(world, &entry.change, entry.prior, pos);
-            match decision {
-                CommitDecision::Accept => accepted.push(entry.change),
-                CommitDecision::Reject(reason) => {
-                    warn!(
-                        "Rejected predicted change at chunk {} cell {:?}: {:?}",
-                        pos,
-                        entry.change.local(),
-                        reason,
-                    );
-                    let mut cache = world.resource_mut::<ChunkCache>();
-                    if let Some(chunk) = cache.get_mut(&pos) {
+            let mut accepted: Vec<ChunkChange> = Vec::with_capacity(chunk_decisions.len());
+            for (entry, decision) in chunk_decisions {
+                match decision {
+                    CommitDecision::Accept => accepted.push(entry.change),
+                    CommitDecision::Reject(reason) => {
+                        warn!(
+                            "Rejected predicted change at chunk {} cell {:?}: {:?}",
+                            pos,
+                            entry.change.local(),
+                            reason,
+                        );
                         chunk.rollback_to(entry.change.local(), entry.prior);
                     }
                 }
             }
-        }
-
-        if accepted.is_empty() {
-            continue;
-        }
-
-        let (changes, new_version) = {
-            let mut cache = world.resource_mut::<ChunkCache>();
-            let Some(chunk) = cache.get_mut(&pos) else {
+            if accepted.is_empty() {
                 continue;
-            };
+            }
             let committed = chunk.commit_accepted(&accepted);
-            (
-                committed.into_iter().map(|(_, c)| c).collect::<Vec<_>>(),
-                chunk.version(),
-            )
-        };
-
-        world.resource_mut::<Messages<ChunkChanged>>().write(
-            ChunkChanged {
+            let new_version = chunk.version();
+            emit.push(ChunkChanged {
                 pos,
-                changes,
+                changes: committed.into_iter().map(|(_, c)| c).collect(),
                 new_version,
-            },
-        );
+            });
+        }
+    }
+
+    let mut writer = world.resource_mut::<Messages<ChunkChanged>>();
+    for msg in emit {
+        writer.write(msg);
     }
 }
 
@@ -352,14 +393,13 @@ mod tests {
         BlockLocal::new(x, y, z)
     }
 
-    /// Helper: run the default validator against a single change without
-    /// going through a full Bevy app. Builds a throwaway world, registers
-    /// the registry, and calls the validator directly.
+    /// Helper: build a throwaway World with a registry and run the
+    /// default validator against one change.
     fn run_default(change: &ChunkChange, prior: Block, registry: BlockRegistry) -> CommitDecision {
         let mut world = World::new();
         world.insert_resource(registry);
-        let mut v = DefaultBlockRegistryValidator;
-        v.validate(&mut world, change, prior, ChunkPos::new(0, 0))
+        let v = DefaultBlockRegistryValidator;
+        v.validate(&world, change, prior, ChunkPos::new(0, 0))
     }
 
     #[test]
@@ -407,61 +447,71 @@ mod tests {
         );
     }
 
-    #[test]
-    fn plugin_drains_predicted_and_emits_chunk_changed() {
+    /// Build a Bevy app pre-populated with a chunk at `pos` containing
+    /// no predictions, and seeds the registry resource.
+    fn build_app_with_chunk(pos: ChunkPos) -> App {
         let mut app = App::new();
         app.add_plugins(bevy::MinimalPlugins);
         app.add_message::<ChunkChanged>();
         app.insert_resource(registry_with_stone());
 
         let mut cache = ChunkCache::new();
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
-        chunk.push_predicted(ChunkChange::new_place(lp(2, 3, 4), BlockId(1)));
-        cache.insert(chunk);
+        cache.insert(Chunk::new(pos));
         app.insert_resource(cache);
+        app
+    }
+
+    #[test]
+    fn plugin_drains_predicted_and_emits_chunk_changed() {
+        let pos = ChunkPos::new(0, 0);
+        let mut app = build_app_with_chunk(pos);
+
+        // Use the canonical entry point — also marks the chunk dirty.
+        app.world_mut()
+            .resource_mut::<ChunkCache>()
+            .push_predicted(pos, ChunkChange::new_place(lp(2, 3, 4), BlockId(1)));
 
         app.add_plugins(ChunkAuthorityPlugin);
         app.update();
 
         let cache = app.world().resource::<ChunkCache>();
-        let chunk = cache.get(&ChunkPos::new(0, 0)).expect("chunk present");
+        let chunk = cache.get(&pos).expect("chunk present");
         assert_eq!(chunk.version(), 1);
         assert!(chunk.predicted().is_empty());
         assert_eq!(chunk.confirmed_history().len(), 1);
+        assert_eq!(cache.dirty_count(), 0, "dirty index drained after commit");
 
-        let messages = app
-            .world()
-            .resource::<bevy::ecs::message::Messages<ChunkChanged>>();
+        let messages = app.world().resource::<Messages<ChunkChanged>>();
         let emitted: Vec<_> = messages.iter_current_update_messages().cloned().collect();
         assert_eq!(emitted.len(), 1);
         assert_eq!(emitted[0].new_version, 1);
         assert_eq!(emitted[0].changes.len(), 1);
-        assert_eq!(emitted[0].pos, ChunkPos::new(0, 0));
+        assert_eq!(emitted[0].pos, pos);
     }
 
     #[test]
     fn plugin_rolls_back_rejected_prediction() {
-        let mut app = App::new();
-        app.add_plugins(bevy::MinimalPlugins);
-        app.add_message::<ChunkChanged>();
-        app.insert_resource(registry_with_stone());
+        let pos = ChunkPos::new(0, 0);
+        let mut app = build_app_with_chunk(pos);
 
-        let mut cache = ChunkCache::new();
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
         // Pre-fill the cell with stone (non-replaceable). This is the
         // pre-prediction state.
-        chunk.set_local(lp(0, 0, 0), Block::new(BlockId(1)));
+        app.world_mut()
+            .resource_mut::<ChunkCache>()
+            .get_mut(&pos)
+            .unwrap()
+            .set_local(lp(0, 0, 0), Block::new(BlockId(1)));
         // Push a Place — the prior captured by push_predicted is stone,
         // so validation rejects the change.
-        chunk.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
-        cache.insert(chunk);
-        app.insert_resource(cache);
+        app.world_mut()
+            .resource_mut::<ChunkCache>()
+            .push_predicted(pos, ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
 
         app.add_plugins(ChunkAuthorityPlugin);
         app.update();
 
         let cache = app.world().resource::<ChunkCache>();
-        let chunk = cache.get(&ChunkPos::new(0, 0)).unwrap();
+        let chunk = cache.get(&pos).unwrap();
         assert_eq!(chunk.version(), 0);
         assert!(chunk.predicted().is_empty());
         assert_eq!(chunk.confirmed_history().len(), 0);
@@ -470,34 +520,64 @@ mod tests {
 
     #[test]
     fn predicted_queue_untouched_without_plugin() {
+        let pos = ChunkPos::new(0, 0);
+        let mut app = build_app_with_chunk(pos);
+        app.world_mut()
+            .resource_mut::<ChunkCache>()
+            .push_predicted(pos, ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
+
+        // No ChunkAuthorityPlugin — predicted queue must survive.
+        app.update();
+
+        let cache = app.world().resource::<ChunkCache>();
+        let chunk = cache.get(&pos).unwrap();
+        assert_eq!(chunk.predicted().len(), 1);
+        assert_eq!(chunk.version(), 0);
+        // The dirty index also persists — caller (e.g. a future client
+        // ChunkUpdate handler) is expected to drain it.
+        assert_eq!(cache.dirty_count(), 1);
+    }
+
+    #[test]
+    fn dirty_index_skips_clean_chunks() {
+        // 100 chunks, only one with a prediction. The commit pass must
+        // touch exactly one chunk.
         let mut app = App::new();
         app.add_plugins(bevy::MinimalPlugins);
         app.add_message::<ChunkChanged>();
         app.insert_resource(registry_with_stone());
 
         let mut cache = ChunkCache::new();
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
-        chunk.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
-        cache.insert(chunk);
+        for x in 0..10 {
+            for z in 0..10 {
+                cache.insert(Chunk::new(ChunkPos::new(x, z)));
+            }
+        }
+        let dirty_pos = ChunkPos::new(5, 5);
+        cache.push_predicted(dirty_pos, ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
+        assert_eq!(cache.dirty_count(), 1);
         app.insert_resource(cache);
 
-        // No ChunkAuthorityPlugin — predicted queue must survive.
+        app.add_plugins(ChunkAuthorityPlugin);
         app.update();
 
+        // Exactly one chunk advanced past version 0.
         let cache = app.world().resource::<ChunkCache>();
-        let chunk = cache.get(&ChunkPos::new(0, 0)).unwrap();
-        assert_eq!(chunk.predicted().len(), 1);
-        assert_eq!(chunk.version(), 0);
+        let advanced: Vec<_> = cache
+            .iter_positions()
+            .filter(|p| cache.get(p).unwrap().version() > 0)
+            .collect();
+        assert_eq!(advanced.len(), 1);
+        assert_eq!(*advanced[0], dirty_pos);
     }
 
     /// A custom validator that rejects every change with a custom reason.
-    /// Used to verify the extension contract.
     struct AlwaysRejectValidator;
 
     impl ChunkChangeValidator for AlwaysRejectValidator {
         fn validate(
-            &mut self,
-            _world: &mut World,
+            &self,
+            _world: &World,
             _change: &ChunkChange,
             _prior: Block,
             _chunk_pos: ChunkPos,
@@ -508,17 +588,12 @@ mod tests {
 
     #[test]
     fn registered_custom_validator_is_consulted() {
-        let mut app = App::new();
-        app.add_plugins(bevy::MinimalPlugins);
-        app.add_message::<ChunkChanged>();
-        app.insert_resource(registry_with_stone());
-
-        let mut cache = ChunkCache::new();
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let pos = ChunkPos::new(0, 0);
+        let mut app = build_app_with_chunk(pos);
         // Push a change the default validator would ACCEPT (place into air)…
-        chunk.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
-        cache.insert(chunk);
-        app.insert_resource(cache);
+        app.world_mut()
+            .resource_mut::<ChunkCache>()
+            .push_predicted(pos, ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
 
         app.add_plugins(ChunkAuthorityPlugin);
         // …but a downstream validator rejects everything.
@@ -527,16 +602,12 @@ mod tests {
         app.update();
 
         let cache = app.world().resource::<ChunkCache>();
-        let chunk = cache.get(&ChunkPos::new(0, 0)).unwrap();
-        // Rolled back: cell stays air, version stays 0, no history, no
-        // ChunkChanged message.
+        let chunk = cache.get(&pos).unwrap();
         assert_eq!(chunk.version(), 0);
         assert!(chunk.confirmed_history().is_empty());
         assert_eq!(chunk.get_local(lp(0, 0, 0)).block_id, BlockId::AIR);
 
-        let messages = app
-            .world()
-            .resource::<bevy::ecs::message::Messages<ChunkChanged>>();
+        let messages = app.world().resource::<Messages<ChunkChanged>>();
         assert_eq!(messages.iter_current_update_messages().count(), 0);
     }
 
@@ -562,8 +633,8 @@ mod tests {
 
         impl ChunkChangeValidator for CountingValidator {
             fn validate(
-                &mut self,
-                _world: &mut World,
+                &self,
+                _world: &World,
                 _change: &ChunkChange,
                 _prior: Block,
                 _chunk_pos: ChunkPos,
@@ -573,16 +644,11 @@ mod tests {
             }
         }
 
-        let mut app = App::new();
-        app.add_plugins(bevy::MinimalPlugins);
-        app.add_message::<ChunkChanged>();
-        app.insert_resource(registry_with_stone());
-
-        let mut cache = ChunkCache::new();
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
-        chunk.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
-        cache.insert(chunk);
-        app.insert_resource(cache);
+        let pos = ChunkPos::new(0, 0);
+        let mut app = build_app_with_chunk(pos);
+        app.world_mut()
+            .resource_mut::<ChunkCache>()
+            .push_predicted(pos, ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
 
         app.add_plugins(ChunkAuthorityPlugin);
         app.add_chunk_change_validator(AlwaysRejectValidator);
@@ -590,6 +656,10 @@ mod tests {
         app.add_chunk_change_validator(CountingValidator(counter.clone()));
 
         app.update();
-        assert_eq!(counter.load(Ordering::SeqCst), 0, "downstream validator must not run after a reject");
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            0,
+            "downstream validator must not run after a reject"
+        );
     }
 }

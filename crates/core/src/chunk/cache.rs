@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use crate::chunk::{
-    ChunkPos,
+    ChunkChange, ChunkPos,
     events::{ChunkReady, RequestChunk},
 };
 
@@ -18,6 +18,14 @@ pub struct ChunkCache {
     requested: HashSet<ChunkPos>,
     /// Chunks that have been requested but not yet fulfilled by the provider.
     waiting: HashSet<ChunkPos>,
+    /// Index of chunks that currently have pending predicted changes.
+    ///
+    /// Maintained automatically by [`ChunkCache::push_predicted`]; consumed
+    /// by the chunk-authority commit pass via [`ChunkCache::drain_dirty`].
+    /// This is the **O(1)** alternative to scanning every chunk in the cache
+    /// every frame looking for non-empty predicted queues — important once
+    /// the loaded radius is large.
+    dirty: HashSet<ChunkPos>,
 }
 
 impl ChunkCache {
@@ -26,6 +34,7 @@ impl ChunkCache {
             chunks: HashMap::new(),
             requested: HashSet::new(),
             waiting: HashSet::new(),
+            dirty: HashSet::new(),
         }
     }
 
@@ -37,8 +46,64 @@ impl ChunkCache {
 
     /// Returns a mutable reference to the cached chunk at `pos`, or `None` if
     /// it is not present in the cache.
+    ///
+    /// **Warning:** mutations performed via this handle do **not** mark the
+    /// chunk dirty. To enqueue a predicted change, prefer
+    /// [`ChunkCache::push_predicted`], which both forwards to
+    /// [`Chunk::push_predicted`] and registers the chunk in the dirty index.
     pub fn get_mut(&mut self, pos: &ChunkPos) -> Option<&mut Chunk> {
         self.chunks.get_mut(pos)
+    }
+
+    /// Enqueue a predicted [`ChunkChange`] on the chunk at `pos`, capturing
+    /// the prior block at the target cell, optimistically applying the
+    /// change to the chunk's data, and marking the chunk dirty for the
+    /// next authority commit pass.
+    ///
+    /// This is the **canonical entry point** for prediction. It guarantees
+    /// the chunk lands in the dirty index in O(1), so the commit pass never
+    /// has to scan the whole cache.
+    ///
+    /// Returns `true` if the chunk was present and the change was queued,
+    /// `false` if there is no chunk at `pos` (caller should request the
+    /// chunk first).
+    pub fn push_predicted(&mut self, pos: ChunkPos, change: ChunkChange) -> bool {
+        let Some(chunk) = self.chunks.get_mut(&pos) else {
+            return false;
+        };
+        chunk.push_predicted(change);
+        self.dirty.insert(pos);
+        true
+    }
+
+    /// Manually mark a chunk as dirty.
+    ///
+    /// You should rarely need this — [`ChunkCache::push_predicted`] handles
+    /// it for you. Useful only if you bypass the canonical predicted path
+    /// (e.g. when applying confirmed history out-of-band on the client).
+    pub fn mark_dirty(&mut self, pos: ChunkPos) {
+        if self.chunks.contains_key(&pos) {
+            self.dirty.insert(pos);
+        }
+    }
+
+    /// Iterate over chunk positions that currently have pending predicted
+    /// changes, without consuming the dirty index.
+    pub fn dirty_chunks(&self) -> impl Iterator<Item = &ChunkPos> {
+        self.dirty.iter()
+    }
+
+    /// Drain the dirty index, returning every position with pending
+    /// predicted changes and leaving the index empty.
+    ///
+    /// The chunk-authority commit pass calls this exactly once per frame.
+    pub fn drain_dirty(&mut self) -> bevy::platform::collections::hash_set::Drain<'_, ChunkPos> {
+        self.dirty.drain()
+    }
+
+    /// Number of chunks currently flagged dirty.
+    pub fn dirty_count(&self) -> usize {
+        self.dirty.len()
     }
 
     /// Requests the chunk at `pos` from the provider if it has not already been requested,
@@ -73,7 +138,11 @@ impl ChunkCache {
     /// Calling this method directly may lead to unexpected behavior.
     /// No guarantees are made for updating the rest of the systems.
     pub fn insert(&mut self, chunk: Chunk) {
-        self.chunks.insert(chunk.position, chunk);
+        let pos = chunk.position;
+        if !chunk.predicted().is_empty() {
+            self.dirty.insert(pos);
+        }
+        self.chunks.insert(pos, chunk);
     }
 
     pub fn chunk_count(&self) -> usize {

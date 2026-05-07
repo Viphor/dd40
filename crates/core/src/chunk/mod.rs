@@ -309,6 +309,19 @@ impl Chunk {
     /// The change is **not** added to `confirmed_history` and the chunk
     /// `version` is **not** bumped — both happen only when the server's
     /// authoritative commit pass acknowledges the change (or rejects it).
+    ///
+    /// # Prefer [`ChunkCache::push_predicted`]
+    ///
+    /// This is a low-level entry point that does **not** mark the chunk
+    /// dirty in the [`ChunkCache`]'s dirty index. The chunk-authority
+    /// commit pass relies on that index to know which chunks to walk —
+    /// any prediction queued via this path will be invisible to it.
+    ///
+    /// External callers should use
+    /// [`ChunkCache::push_predicted`](crate::chunk::cache::ChunkCache::push_predicted)
+    /// instead, which forwards here and updates the dirty index in the
+    /// same call. This method exists only for the cache's own use and a
+    /// handful of unit tests that operate on standalone chunks.
     pub fn push_predicted(&mut self, change: ChunkChange) {
         let local = change.local();
         let prior = self.get_local(local);
