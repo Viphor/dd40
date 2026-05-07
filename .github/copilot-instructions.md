@@ -39,6 +39,23 @@ a three-tier model (Foundation → Implementation → Binary):
 - UI elements
 - Network protocols
 
+### 1.5. Flexibility Over Convenience
+
+**dd40 always favours flexibility and the ability to extend functionality from other crates.** This is the project's core design principle, especially for code in `dd40_core` and other foundation crates. The whole point of this implementation is to be moddable and to let downstream crates change behaviour without forking the engine.
+
+When designing core systems:
+
+- Prefer **extension points** (trait-object hooks, registries, validator chains, plugin-driven system sets) over hard-coded logic that downstream crates would have to fork to change.
+- If a system has a single concrete behaviour today but is conceptually open-ended (e.g. "validate a chunk change", "decide what to do on death", "rank inventory slots"), expose it as a registered list of behaviours rather than inlining the one we happen to need.
+- Accept a small amount of indirection cost for a large gain in extensibility. A `Vec<Box<dyn Validator>>` is fine. A trait registry is fine. An extra plugin add-call from the binary is fine.
+- The cost of *not* doing this is that someone wanting to change the behaviour has to either fork the crate or carry an upstream patch — both unacceptable for the project's modding goals.
+
+**Concrete examples in the codebase:**
+- `BlockRegistry` is a runtime registry, not a hard-coded enum.
+- The chunk authority commit pass uses a registered chain of `ChunkChangeValidator`s, not an inlined match against built-in change types — so e.g. a character-collision check can live in a downstream crate that owns the relevant resources.
+
+When you find yourself adding `if change == X { hard_coded_check(); }` inside a foundation crate, stop and ask whether the check should be a registered hook instead.
+
 ### 2. Extensible Block Registry System
 
 The block registry is a **core extensibility mechanism** that allows any crate to register new block types dynamically:
