@@ -12,11 +12,13 @@ use serde::{Deserialize, Serialize, ser::SerializeTuple};
 
 use crate::block::{Block, BlockCoord, BlockId, BlockPos};
 
+pub mod authority;
 pub mod cache;
 pub mod change;
 pub mod config;
 pub mod events;
 
+pub use authority::ChunkAuthorityPlugin;
 pub use change::{BlockLocal, ChunkChange};
 pub use config::MaxDeltaBehind;
 
@@ -177,10 +179,30 @@ pub struct Chunk {
     /// Confirmed change log, paired with the version each change produced.
     /// Uncapped in memory. Persisted only by storage backends that opt in.
     confirmed_history: VecDeque<(u64, ChunkChange)>,
-    /// Runtime-only queue of locally-predicted, not-yet-confirmed changes.
+    /// Runtime-only queue of locally-predicted changes paired with the
+    /// pre-prediction value at the target cell. The pre-prediction value
+    /// lets the authoritative server validate against the *original* state
+    /// (not the optimistically-mutated `data`) and lets rejections roll
+    /// back the cell precisely.
+    ///
     /// Skipped by serde so it never crosses the wire or reaches disk.
     #[serde(skip)]
-    predicted: VecDeque<ChunkChange>,
+    predicted: VecDeque<PredictedChange>,
+}
+
+/// A locally-predicted change paired with the pre-prediction value at its
+/// target cell.
+///
+/// `prior` is the block that occupied `change.local()` immediately before
+/// `push_predicted` overwrote it. The server's commit pass uses this to
+/// validate the change against the cell's true confirmed state — not the
+/// optimistically-mutated `data`. On rejection, `prior` is written back.
+#[derive(Debug, Clone, Copy)]
+pub struct PredictedChange {
+    /// The change the caller pushed.
+    pub change: ChunkChange,
+    /// Block that occupied the target cell before the change was applied.
+    pub prior: Block,
 }
 
 impl Chunk {
@@ -215,7 +237,7 @@ impl Chunk {
 
     /// Returns the queue of locally-predicted changes that have not yet
     /// been confirmed.
-    pub fn predicted(&self) -> &VecDeque<ChunkChange> {
+    pub fn predicted(&self) -> &VecDeque<PredictedChange> {
         &self.predicted
     }
 
@@ -276,12 +298,25 @@ impl Chunk {
     /// `data` immediately so the local renderer reflects the optimistic
     /// state.
     ///
+    /// The pre-prediction value at the target cell is captured in the
+    /// queue entry so the authoritative server can validate against the
+    /// original state and roll back on rejection.
+    ///
     /// The change is **not** added to `confirmed_history` and the chunk
     /// `version` is **not** bumped — both happen only when the server's
     /// authoritative commit pass acknowledges the change (or rejects it).
     pub fn push_predicted(&mut self, change: ChunkChange) {
+        let local = change.local();
+        let prior = self.get_local(local);
         self.apply_change_to_data(&change);
-        self.predicted.push_back(change);
+        self.predicted.push_back(PredictedChange { change, prior });
+    }
+
+    /// Drains every queued predicted change without touching `data`,
+    /// `version`, or `confirmed_history`. Returns the entries in
+    /// FIFO order.
+    pub fn take_predicted(&mut self) -> Vec<PredictedChange> {
+        self.predicted.drain(..).collect()
     }
 
     /// Server-side: commit every predicted change as confirmed.
@@ -291,22 +326,37 @@ impl Chunk {
     /// committed `(version, change)` pairs in commit order so callers can
     /// broadcast a single `ChunkUpdate` per chunk.
     ///
-    /// **This does not run any validators** — pure helpers like the
-    /// `commit_predicted` step function in [`ChunkAuthorityPlugin`] are
-    /// expected to filter rejected changes out of the queue *before*
-    /// calling this. Validation lives there because it needs ECS context
-    /// (block registry, character collisions) that doesn't belong on
-    /// `Chunk` itself.
-    ///
-    /// [`ChunkAuthorityPlugin`]: crate::chunk
+    /// **Does no validation.** Callers that need validation should use
+    /// [`Self::take_predicted`] + [`Self::commit_accepted`] instead.
     pub fn commit_predicted_all(&mut self) -> Vec<(u64, ChunkChange)> {
         let mut committed = Vec::with_capacity(self.predicted.len());
-        while let Some(change) = self.predicted.pop_front() {
+        while let Some(entry) = self.predicted.pop_front() {
             self.version += 1;
-            self.confirmed_history.push_back((self.version, change));
-            committed.push((self.version, change));
+            self.confirmed_history.push_back((self.version, entry.change));
+            committed.push((self.version, entry.change));
         }
         committed
+    }
+
+    /// Server-side: commit a pre-validated list of changes that are already
+    /// reflected in `data` (because they were predicted and accepted).
+    /// Bumps `version` once per change and appends to `confirmed_history`.
+    ///
+    /// Returns the committed `(version, change)` pairs in commit order.
+    pub fn commit_accepted(&mut self, accepted: &[ChunkChange]) -> Vec<(u64, ChunkChange)> {
+        let mut committed = Vec::with_capacity(accepted.len());
+        for change in accepted {
+            self.version += 1;
+            self.confirmed_history.push_back((self.version, *change));
+            committed.push((self.version, *change));
+        }
+        committed
+    }
+
+    /// Restores the cell at `local` to `prior`. Used by the server commit
+    /// pass after a predicted change is rejected.
+    pub fn rollback_to(&mut self, local: BlockLocal, prior: Block) {
+        self.set_local(local, prior);
     }
 
     /// Client-side: apply a batch of confirmed changes coming from the
