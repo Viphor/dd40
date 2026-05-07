@@ -12,7 +12,10 @@ use serde::{Deserialize, Serialize, ser::SerializeTuple};
 use crate::block::{Block, BlockCoord, BlockPos};
 
 pub mod cache;
+pub mod change;
 pub mod events;
+
+pub use change::{BlockLocal, ChunkChange};
 
 /// Width (X) of a chunk in blocks.
 pub const CHUNK_SIZE_X: usize = 16;

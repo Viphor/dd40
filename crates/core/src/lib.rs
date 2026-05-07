@@ -17,8 +17,8 @@ pub mod prelude {
         },
         builder_extra::AddExtra,
         chunk::{
-            CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos,
-            cache::ChunkCache, events::*,
+            BlockLocal, CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk,
+            ChunkChange, ChunkPos, cache::ChunkCache, events::*,
         },
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
