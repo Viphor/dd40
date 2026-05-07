@@ -18,7 +18,11 @@ pub mod change;
 pub mod config;
 pub mod events;
 
-pub use authority::ChunkAuthorityPlugin;
+pub use authority::{
+    ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkChangeValidator,
+    ChunkChangeValidators, CommitDecision, DefaultBlockRegistryValidator,
+    RejectReason,
+};
 pub use change::{BlockLocal, ChunkChange};
 pub use config::MaxDeltaBehind;
 
