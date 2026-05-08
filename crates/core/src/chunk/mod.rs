@@ -19,9 +19,9 @@ pub mod config;
 pub mod events;
 
 pub use authority::{
-    ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkChangeValidator,
-    ChunkChangeValidators, CommitDecision, DefaultBlockRegistryValidator,
-    RejectReason,
+    ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkAuthoritySet,
+    PendingChunkRejections, RejectReason, commit_predicted_changes,
+    default_block_registry_validator,
 };
 pub use change::{BlockLocal, ChunkChange};
 pub use config::MaxDeltaBehind;
