@@ -46,6 +46,25 @@ impl ChunkPos {
     pub fn new(x: BlockCoord, z: BlockCoord) -> Self {
         Self { x, z }
     }
+
+    /// Convert a chunk-local coordinate to a world-space [`BlockPos`].
+    ///
+    /// This is the inverse of [`BlockPos::chunk_pos`] +
+    /// [`BlockPos::chunk_local`]: feeding the local coord of any block
+    /// inside this chunk back through `block_pos` reconstructs its
+    /// world-space position.
+    ///
+    /// `local.y` is preserved as-is — chunks span the entire build height
+    /// in Y today, but this method is forward-compatible with the
+    /// upcoming Y-axis split on `ChunkPos` (see `vc-chunkpos-y-axis`).
+    #[inline]
+    pub fn block_pos(self, local: BlockLocal) -> BlockPos {
+        BlockPos::new(
+            self.x * (CHUNK_SIZE_X as BlockCoord) + local.x as BlockCoord,
+            local.y as BlockCoord,
+            self.z * (CHUNK_SIZE_Z as BlockCoord) + local.z as BlockCoord,
+        )
+    }
 }
 
 impl Display for ChunkPos {
@@ -478,6 +497,35 @@ mod tests {
         assert_eq!(c.version(), 0);
         assert!(c.predicted().is_empty());
         assert!(c.confirmed_history().is_empty());
+    }
+
+    #[test]
+    fn chunk_pos_block_pos_is_inverse_of_block_pos_chunk_local() {
+        // Roundtrip across positive, negative, and chunk-boundary chunks.
+        for (cx, cz) in [(0, 0), (3, -2), (-5, -7), (12345, -67890)] {
+            let chunk_pos = ChunkPos::new(cx, cz);
+            for (lx, ly, lz) in [
+                (0u8, 0u16, 0u8),
+                (15, 255, 15),
+                (7, 64, 11),
+            ] {
+                let local = BlockLocal::new(lx, ly, lz);
+                let world = chunk_pos.block_pos(local);
+                assert_eq!(world.chunk_pos(), chunk_pos);
+                let local_again = world.chunk_local();
+                assert_eq!(local_again.x as u8, lx);
+                assert_eq!(local_again.y as u16, ly);
+                assert_eq!(local_again.z as u8, lz);
+            }
+        }
+    }
+
+    #[test]
+    fn chunk_pos_block_pos_origin() {
+        // The (0,0,0) local of chunk (3,5) is at world (48, 0, 80).
+        let cp = ChunkPos::new(3, 5);
+        let bp = cp.block_pos(BlockLocal::new(0, 0, 0));
+        assert_eq!(bp, BlockPos::new(48, 0, 80));
     }
 
     #[test]
