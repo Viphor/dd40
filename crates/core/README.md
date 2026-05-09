@@ -24,8 +24,7 @@ src/
 ├── block/
 │   ├── mod.rs         — Block, BlockId, BlockPos, BlockCoord, CollisionShape
 │   ├── registry.rs    — BlockDefinition, BlockRegistry, BlockRegistrySet
-│   └── events.rs      — PlaceBlockRequest, BlockPlaced, BlockRemoved, BlockChanged,
-│                        StartMiningRequest, AbortMiningRequest, MineBlockRequest
+│   └── events.rs      — BlockPlaced, BlockRemoved, BlockChanged
 ├── chunk/
 │   ├── mod.rs         — Chunk, ChunkPos, CHUNK_SIZE_* constants
 │   ├── cache.rs       — ChunkCache resource, ChunkCachePlugin

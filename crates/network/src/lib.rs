@@ -80,8 +80,8 @@ pub mod shared;
 
 // Re-export commonly used types
 pub use protocol::{
-    NetworkCharacter, PlaceBlockRequest, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage,
-    PlayerPosition, PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
+    NetworkCharacter, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage, PlayerPosition,
+    PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
 };
 pub use shared::connection::{CLIENT_PORT, SERVER_ADDR, SERVER_PORT};
 

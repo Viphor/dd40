@@ -36,10 +36,7 @@ impl Plugin for CorePlugin {
             .add_message::<ChunkSnapshotFallback>()
             .add_message::<BlockPlaced>()
             .add_message::<BlockRemoved>()
-            .add_message::<BlockChanged>()
-            .add_message::<StartMiningRequest>()
-            .add_message::<AbortMiningRequest>()
-            .add_message::<MineBlockRequest>();
+            .add_message::<BlockChanged>();
 
         app.configure_sets(Startup, (ToolRegistrySet, BlockRegistrySet).chain());
 

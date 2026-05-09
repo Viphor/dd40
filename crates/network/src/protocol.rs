@@ -7,8 +7,6 @@
 use bevy::math::Curve;
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
-pub use dd40_core::block::events::{AbortMiningRequest, MineBlockRequest, StartMiningRequest};
-pub use dd40_core::prelude::PlaceBlockRequest;
 use dd40_core::prelude::*;
 use dd40_physics_core::prelude::Velocity;
 use lightyear::prelude::*;
@@ -298,18 +296,6 @@ impl Plugin for ProtocolPlugin {
         // Register messages with directions
         // Client -> Server
         app.register_message::<RequestChunk>()
-            .add_direction(NetworkDirection::ClientToServer);
-
-        app.register_message::<PlaceBlockRequest>()
-            .add_direction(NetworkDirection::ClientToServer);
-
-        app.register_message::<StartMiningRequest>()
-            .add_direction(NetworkDirection::ClientToServer);
-
-        app.register_message::<AbortMiningRequest>()
-            .add_direction(NetworkDirection::ClientToServer);
-
-        app.register_message::<MineBlockRequest>()
             .add_direction(NetworkDirection::ClientToServer);
 
         app.register_message::<RequestSpawn>()
