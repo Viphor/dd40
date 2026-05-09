@@ -5,7 +5,8 @@
 //! `attack` flag, the elapsed delta, and a closure that resolves a block to
 //! the mining duration the character would need to break it. The Bevy system
 //! [`update_mining`] is a thin wrapper that wires queries and registries to
-//! `step_mining` and emits the resulting messages.
+//! `step_mining` and pushes a predicted [`ChunkChange::Remove`] on
+//! completion or instant-break.
 //!
 //! ## Transition table
 //!
@@ -14,31 +15,41 @@
 //! ─────────────  ─────  ────────────────  ─────────────────────────  ────────────────
 //! Idle           false  *                 nothing                    Idle
 //! Idle           true   None              nothing                    Idle
-//! Idle           true   Some(p) breakable Start                      Mining { p, 0 }
-//! Idle           true   Some(p) instant   Mine                       Idle
-//! Mining(mp)     false  *                 Abort(mp)                  Idle
+//! Idle           true   Some(p) breakable begin                      Mining { p, 0 }
+//! Idle           true   Some(p) instant   mine                       Idle
+//! Mining(mp)     false  *                 cancel                     Idle
 //! Mining(mp)     true   Some(p) p == mp   tick progress              Mining(mp, +Δ)
-//!                                          → Mine on completion      Idle
-//! Mining(mp)     true   _ (different)     Abort(mp)                  Idle
+//!                                          → mine on completion      Idle
+//! Mining(mp)     true   _ (different)     cancel                     Idle
 //!                                          (next tick the Idle row picks
 //!                                           up the new target automatically)
 //! ```
 //!
 //! "Auto-continue while held" and "auto-restart on target change while held"
 //! both fall out of the table without dedicated branches: completing a mine
-//! or aborting on target-switch leaves the state in `Idle`, and the next
+//! or cancelling on target-switch leaves the state in `Idle`, and the next
 //! tick's `Idle, true, Some(p)` row picks up where the previous tick stopped.
+//!
+//! # Authority model (versioned-chunk-cache pipeline)
+//!
+//! On completion the system pushes a predicted [`ChunkChange::Remove`]
+//! directly onto the local [`ChunkCache`] on **both** the client and the
+//! server. Because [`CharacterInput::attack`] is replicated, the server runs
+//! the same state machine against the same per-tick input — the client
+//! predicts optimistically and the server confirms authoritatively via
+//! [`ChunkAuthorityPlugin`](dd40_core::chunk::ChunkAuthorityPlugin).
+//!
+//! The mining player sees the block disappear immediately on screen. Other
+//! clients will see the removal once `ChunkUpdate` broadcasting is wired
+//! (Phase 4 of the versioned-chunk-cache plan).
 
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
 use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::{
-    block::{
-        Block, BlockId,
-        events::{AbortMiningRequest, BlockRemoved, MineBlockRequest, StartMiningRequest},
-    },
-    chunk::cache::ChunkCache,
+    block::{Block, BlockId, events::BlockRemoved},
+    chunk::{ChunkChange, cache::ChunkCache, change::BlockLocal},
     prelude::*,
     tools::{ToolKindId, ToolTierId, mining_duration},
 };
@@ -47,23 +58,18 @@ use dd40_item_core::registry::ItemRegistry;
 
 pub use dd40_character_core::mining_state::MiningState;
 
-/// Side effects emitted by one [`step_mining`] tick.
+/// Outcome of one [`step_mining`] tick.
 ///
-/// At most one of [`Self::start`] / [`Self::mine`] / [`Self::abort`] is
-/// `Some`. The pure state-machine returns these so the Bevy wrapper can
-/// translate them into outgoing messages without `step_mining` itself
-/// touching any Bevy types beyond [`BlockPos`].
+/// `mine` is set to `Some(pos)` when the character should break the block at
+/// `pos` this tick — either because they targeted an instant-break block from
+/// `Idle` or because the mining timer reached completion. The system pushes
+/// a predicted [`ChunkChange::Remove`] for that position.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct MiningStep {
     /// New state to write back to the character's [`MiningState`] component.
     pub next_state: MiningState,
-    /// `Some(pos)` when a [`StartMiningRequest`] should be sent.
-    pub start: Option<BlockPos>,
-    /// `Some(pos)` when a [`MineBlockRequest`] should be sent (instant-break
-    /// from `Idle` or completion from `Mining`).
+    /// `Some(pos)` when the block at `pos` should be removed this tick.
     pub mine: Option<BlockPos>,
-    /// `Some(pos)` when an [`AbortMiningRequest`] should be sent.
-    pub abort: Option<BlockPos>,
 }
 
 /// Pure mining state-machine step.
@@ -95,7 +101,6 @@ pub(crate) fn step_mining(
                 return MiningStep {
                     next_state: MiningState::Idle,
                     mine: Some(pos),
-                    ..default()
                 };
             }
             MiningStep {
@@ -104,8 +109,7 @@ pub(crate) fn step_mining(
                     progress: 0.0,
                     required_duration: duration,
                 },
-                start: Some(pos),
-                ..default()
+                mine: None,
             }
         }
 
@@ -118,8 +122,7 @@ pub(crate) fn step_mining(
             if !attack || !same_target {
                 return MiningStep {
                     next_state: MiningState::Idle,
-                    abort: Some(mining_pos),
-                    ..default()
+                    mine: None,
                 };
             }
             let new_progress =
@@ -128,7 +131,6 @@ pub(crate) fn step_mining(
                 MiningStep {
                     next_state: MiningState::Idle,
                     mine: Some(mining_pos),
-                    ..default()
                 }
             } else {
                 MiningStep {
@@ -137,7 +139,7 @@ pub(crate) fn step_mining(
                         progress: new_progress,
                         required_duration,
                     },
-                    ..default()
+                    mine: None,
                 }
             }
         }
@@ -145,7 +147,8 @@ pub(crate) fn step_mining(
 }
 
 /// Updates each character's [`MiningState`] from its [`CharacterInput::attack`]
-/// flag and emits mining request messages.
+/// flag and pushes a predicted [`ChunkChange::Remove`] when the mining timer
+/// completes (or for instant-break blocks).
 ///
 /// Multi-character clients are out of scope: the system iterates every
 /// character that has the relevant components, but the gating "which
@@ -173,9 +176,7 @@ pub(crate) fn update_mining(
     tool_registry: Res<ToolRegistry>,
     items: Res<ItemRegistry>,
     time: Res<Time>,
-    mut start_writer: MessageWriter<StartMiningRequest>,
-    mut abort_writer: MessageWriter<AbortMiningRequest>,
-    mut mine_writer: MessageWriter<MineBlockRequest>,
+    mut cache: ResMut<ChunkCache>,
 ) {
     let dt = time.delta_secs();
     for (input, targeted, mut state, active) in &mut character_query {
@@ -195,22 +196,32 @@ pub(crate) fn update_mining(
 
         let step = step_mining(state.clone(), targeted, input.attack, dt, duration_for);
 
-        if let Some(pos) = step.start {
-            start_writer.write(StartMiningRequest {
-                pos,
-                tool_kind,
-                tool_tier,
-            });
-        }
         if let Some(pos) = step.mine {
-            mine_writer.write(MineBlockRequest {
-                pos,
-                tool_kind,
-                tool_tier,
-            });
-        }
-        if let Some(pos) = step.abort {
-            abort_writer.write(AbortMiningRequest { pos });
+            let chunk_pos = pos.chunk_pos();
+            let local_world = pos.chunk_local();
+            if local_world.y < 0 {
+                warn!("Refusing mine at {} — y is below world floor", pos);
+            } else if let Some(local) = BlockLocal::try_new(
+                local_world.x as u8,
+                local_world.y as u16,
+                local_world.z as u8,
+            ) {
+                debug!(
+                    "Predicting removal at {} (chunk {} local {:?})",
+                    pos, chunk_pos, local
+                );
+                if !cache.push_predicted(chunk_pos, ChunkChange::new_remove(local)) {
+                    debug!(
+                        "Removal dropped — chunk {} not present in cache",
+                        chunk_pos
+                    );
+                }
+            } else {
+                warn!(
+                    "Refusing mine at {} — could not build a valid BlockLocal",
+                    pos
+                );
+            }
         }
 
         *state = step.next_state;
@@ -286,16 +297,14 @@ mod tests {
     fn idle_with_attack_false_stays_idle() {
         let s = step_mining(MiningState::Idle, &target(None), false, 0.016, breakable);
         assert!(matches!(s.next_state, MiningState::Idle));
-        assert_eq!(s.start, None);
         assert_eq!(s.mine, None);
-        assert_eq!(s.abort, None);
     }
 
     #[test]
     fn idle_with_attack_true_no_target_stays_idle() {
         let s = step_mining(MiningState::Idle, &target(None), true, 0.016, breakable);
         assert!(matches!(s.next_state, MiningState::Idle));
-        assert_eq!(s.start, None);
+        assert_eq!(s.mine, None);
     }
 
     #[test]
@@ -313,7 +322,6 @@ mod tests {
         assert_eq!(p, pos);
         assert_eq!(progress, 0.0);
         assert_eq!(required_duration, 2.0);
-        assert_eq!(s.start, Some(pos));
         assert_eq!(s.mine, None);
     }
 
@@ -323,7 +331,6 @@ mod tests {
         let s = step_mining(MiningState::Idle, &target(Some(pos)), true, 0.016, instant);
         assert!(matches!(s.next_state, MiningState::Idle));
         assert_eq!(s.mine, Some(pos));
-        assert_eq!(s.start, None);
     }
 
     #[test]
@@ -331,7 +338,6 @@ mod tests {
         let pos = BlockPos::new(0, 0, 0);
         let s = step_mining(MiningState::Idle, &target(Some(pos)), true, 0.016, unbreakable);
         assert!(matches!(s.next_state, MiningState::Idle));
-        assert_eq!(s.start, None);
         assert_eq!(s.mine, None);
     }
 
@@ -345,7 +351,7 @@ mod tests {
         };
         let s = step_mining(state, &target(Some(pos)), false, 0.016, breakable);
         assert!(matches!(s.next_state, MiningState::Idle));
-        assert_eq!(s.abort, Some(pos));
+        assert_eq!(s.mine, None);
     }
 
     #[test]
@@ -362,7 +368,6 @@ mod tests {
         };
         assert!((progress - 0.5).abs() < 1e-5, "progress = {progress}");
         assert_eq!(s.mine, None);
-        assert_eq!(s.abort, None);
     }
 
     #[test]
@@ -389,8 +394,7 @@ mod tests {
         };
         let s = step_mining(state, &target(Some(new_target)), true, 0.016, breakable);
         assert!(matches!(s.next_state, MiningState::Idle));
-        assert_eq!(s.abort, Some(mining_pos));
-        assert_eq!(s.start, None, "abort and start are separate ticks");
+        assert_eq!(s.mine, None);
     }
 
     #[test]
@@ -402,12 +406,15 @@ mod tests {
             progress: 0.5,
             required_duration: 2.0,
         };
-        // Tick 1: target changed while attack still held → abort.
+        // Tick 1: target changed while attack still held → cancel.
         let s1 = step_mining(state, &target(Some(new_target)), true, 0.016, breakable);
-        assert_eq!(s1.abort, Some(mining_pos));
+        assert!(matches!(s1.next_state, MiningState::Idle));
         // Tick 2: now Idle + attack still held + new target → start.
         let s2 = step_mining(s1.next_state, &target(Some(new_target)), true, 0.016, breakable);
-        assert_eq!(s2.start, Some(new_target));
+        let MiningState::Mining { pos, .. } = s2.next_state else {
+            panic!("expected Mining on new target");
+        };
+        assert_eq!(pos, new_target);
     }
 
     #[test]
@@ -425,7 +432,10 @@ mod tests {
         assert!(matches!(s1.next_state, MiningState::Idle));
         // Tick 2: still holding attack on a different target → starts fresh.
         let s2 = step_mining(s1.next_state, &target(Some(new_target)), true, 0.016, breakable);
-        assert_eq!(s2.start, Some(new_target));
+        let MiningState::Mining { pos: p, .. } = s2.next_state else {
+            panic!("expected Mining on new target");
+        };
+        assert_eq!(p, new_target);
     }
 
     #[test]
@@ -433,10 +443,12 @@ mod tests {
         // Tick 1: looking at nothing while attack held → idle.
         let s1 = step_mining(MiningState::Idle, &target(None), true, 0.016, breakable);
         assert!(matches!(s1.next_state, MiningState::Idle));
-        assert_eq!(s1.start, None);
         // Tick 2: now looking at a valid block → start.
         let pos = BlockPos::new(2, 2, 2);
         let s2 = step_mining(s1.next_state, &target(Some(pos)), true, 0.016, breakable);
-        assert_eq!(s2.start, Some(pos));
+        let MiningState::Mining { pos: p, .. } = s2.next_state else {
+            panic!("expected Mining");
+        };
+        assert_eq!(p, pos);
     }
 }

@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 use dd40_character_core::plugin::CharacterCorePlugin;
-use dd40_core::block::events::{
-    AbortMiningRequest, BlockPlaced, BlockRemoved, MineBlockRequest, StartMiningRequest,
-};
+use dd40_core::block::events::{BlockPlaced, BlockRemoved};
 use dd40_core::plugin::CorePlugin;
 use dd40_core::prelude::*;
 use dd40_item_core::plugin::ItemCorePlugin;
@@ -44,17 +42,15 @@ use dd40_core::chunk::ChunkAuthorityAppExt;
 /// [`ActiveItem`] is treated as bare hands holding nothing.
 ///
 /// Registers the following messages:
-/// - [`BlockPlaced`]           — written by the network layer; consumed here.
-/// - [`BlockRemoved`]          — written by the network layer; consumed here.
-/// - [`StartMiningRequest`]    — written here, consumed by the network layer.
-/// - [`AbortMiningRequest`]    — written here, consumed by the network layer.
-/// - [`MineBlockRequest`]      — written here, consumed by the network layer.
+/// - [`BlockPlaced`]   — written by the network layer; consumed here.
+/// - [`BlockRemoved`]  — written by the network layer; consumed here.
 ///
-/// Block **placement** does not go through a request message: the
-/// `try_place_block` system pushes a predicted [`ChunkChange`] onto the local
-/// [`ChunkCache`] directly. The server runs the same system against the
-/// replicated [`CharacterInput`][dd40_character_core::components::CharacterInput]
-/// and commits authoritatively via the chunk-authority pipeline.
+/// Block **placement** and **mining** do not go through request messages:
+/// the `try_place_block` and `update_mining` systems push predicted
+/// [`ChunkChange`]s onto the local [`ChunkCache`] directly. The server runs
+/// the same systems against the replicated
+/// [`CharacterInput`][dd40_character_core::components::CharacterInput] and
+/// commits authoritatively via the chunk-authority pipeline.
 ///
 /// [`ChunkChange`]: dd40_core::chunk::ChunkChange
 ///
@@ -93,9 +89,6 @@ impl Plugin for CharacterInteractionPlugin {
         // ── Messages ──────────────────────────────────────────────────────
         app.add_message::<BlockPlaced>();
         app.add_message::<BlockRemoved>();
-        app.add_message::<StartMiningRequest>();
-        app.add_message::<AbortMiningRequest>();
-        app.add_message::<MineBlockRequest>();
 
         // ── Startup ───────────────────────────────────────────────────────
         app.add_systems(Startup, spawn_debug_entity);
