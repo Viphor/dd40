@@ -258,6 +258,19 @@ impl Chunk {
         self.version
     }
 
+    /// Sets the chunk version directly, bypassing the predicted/confirmed
+    /// queues.
+    ///
+    /// This is a low-level escape hatch for systems that author chunks
+    /// outside the predict-and-commit flow — world generators (which stamp
+    /// version `1` on first emission) and storage backends (which restore
+    /// the version they persisted). Anything inside the live predict /
+    /// commit pipeline must let [`Chunk::commit_accepted`] manage the
+    /// version instead.
+    pub fn set_version(&mut self, version: u64) {
+        self.version = version;
+    }
+
     /// Returns the queue of locally-predicted changes that have not yet
     /// been confirmed.
     pub fn predicted(&self) -> &VecDeque<PredictedChange> {
