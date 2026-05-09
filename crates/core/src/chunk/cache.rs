@@ -179,10 +179,22 @@ pub fn chunk_ready_listener(mut cache: ResMut<ChunkCache>, mut events: MessageRe
 }
 
 pub fn request_chunk_system(mut cache: ResMut<ChunkCache>, mut mq: MessageWriter<RequestChunk>) {
-    cache.requested.iter().for_each(|&pos| {
-        debug!("Requesting chunk {:?} from provider", pos);
-        mq.write(RequestChunk { pos });
-    });
+    let requests: Vec<RequestChunk> = cache
+        .requested
+        .iter()
+        .map(|&pos| {
+            let current_version = cache.chunks.get(&pos).map(Chunk::version).unwrap_or(0);
+            debug!(
+                "Requesting chunk {:?} from provider (current_version={current_version})",
+                pos
+            );
+            RequestChunk {
+                pos,
+                current_version,
+            }
+        })
+        .collect();
+    mq.write_batch(requests);
     let requested = cache.requested.drain().collect::<Vec<_>>();
     cache.waiting.extend(requested);
 }

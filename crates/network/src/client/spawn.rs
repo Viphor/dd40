@@ -138,7 +138,10 @@ pub(crate) fn receive_spawn_location(
         pending: pending.clone(),
     });
 
-    requester.write_batch(pending.iter().map(|pos| RequestChunk { pos: *pos }));
+    requester.write_batch(pending.iter().map(|pos| RequestChunk {
+        pos: *pos,
+        current_version: 0,
+    }));
 
     // Register the loading gate and start the timeout from now.
     if !tracker.contains(LOADING_KEY_INITIAL_CHUNKS) {

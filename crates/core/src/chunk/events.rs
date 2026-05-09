@@ -11,9 +11,27 @@ pub struct GenerateChunk {
 }
 
 /// Sent when some system wants a chunk to be loaded/generated.
+///
+/// `current_version` carries the chunk version the requester already has
+/// cached, or `0` if none. The server uses this to decide between sending
+/// a [`ChunkSnapshot`](crate::chunk::events) (full chunk) and a
+/// [`ChunkChanged`] delta:
+///
+/// - `0` → always reply with a snapshot (the requester has nothing).
+/// - `> server_version` → log + reply with a snapshot (requester is ahead).
+/// - `< server_version` and within `MaxDeltaBehind` → reply with the
+///   missing changes as a delta.
+/// - Otherwise → reply with a snapshot (the gap is too large or history
+///   has been truncated).
+///
+/// Local-only requesters (e.g. `dd40_chunk_storage`) ignore this field
+/// since they always materialise the chunk from disk or generation.
 #[derive(Message, Clone, Serialize, Deserialize)]
 pub struct RequestChunk {
+    /// Position of the chunk being requested.
     pub pos: ChunkPos,
+    /// The version the requester already has cached, or `0` if none.
+    pub current_version: u64,
 }
 
 /// Sent when a chunk is ready to be inserted into [`ChunkCache`].
