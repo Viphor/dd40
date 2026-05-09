@@ -15,6 +15,7 @@ pub mod mining;
 pub mod placement;
 pub mod plugin;
 pub mod targeting;
+pub mod validators;
 
 pub use dd40_character_core::mining_state::MiningState;
 pub use plugin::CharacterInteractionPlugin;

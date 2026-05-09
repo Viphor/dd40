@@ -16,6 +16,8 @@ use crate::placement::{apply_placed_blocks, try_place_block};
 use crate::targeting::{
     BlockInteractionConfig, spawn_debug_entity, update_debug_info, update_targeted_block,
 };
+use crate::validators::character_collision_validator;
+use dd40_core::chunk::ChunkAuthorityAppExt;
 
 /// Plugin that adds block-targeting, highlight rendering, placement, and
 /// mining for any entity with a [`Character`] marker.
@@ -113,6 +115,22 @@ impl Plugin for CharacterInteractionPlugin {
 
         let playing = in_state(AppState::Playing);
         app.add_systems(PostUpdate, apply_removed_blocks.run_if(playing));
+
+        // Register the character-collision validator with the chunk
+        // authority pipeline. Has effect only on instances that also add
+        // ChunkAuthorityPlugin (the server). On clients that don't add
+        // the plugin the system still runs harmlessly — there is no
+        // PendingChunkRejections resource to write to, so the
+        // registration short-circuits at scheduler-init time.
+        //
+        // NOTE: PendingChunkRejections is inserted by ChunkAuthorityPlugin.
+        // If the plugin isn't added the system would panic on missing
+        // resource. We gate the system on the resource's existence so it
+        // is safe to add unconditionally — see the run_if below.
+        app.add_chunk_change_validator_system(
+            character_collision_validator
+                .run_if(resource_exists::<dd40_core::chunk::PendingChunkRejections>),
+        );
     }
 }
 
