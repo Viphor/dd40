@@ -5,8 +5,6 @@ use lightyear::prelude::client::ClientPlugins;
 
 use crate::{
     client::{
-        block_mining::{receive_removed_blocks, send_abort_mining, send_mine_block, send_start_mining},
-        block_placement::{receive_placed_blocks, send_place_requests},
         character::ClientCharacterPlugin,
         chunk_provider::{receive_chunk_data, send_chunk_requests},
         connection::{DDClient, connect, on_server_connected},
@@ -75,12 +73,6 @@ impl Plugin for ClientNetworkPlugin {
         // Communication systems.
         app.add_systems(PreUpdate, send_chunk_requests);
         app.add_systems(PostUpdate, receive_chunk_data);
-        app.add_systems(PostUpdate, receive_placed_blocks);
-        app.add_systems(PostUpdate, send_place_requests);
-        app.add_systems(PostUpdate, receive_removed_blocks);
-        app.add_systems(PostUpdate, send_start_mining);
-        app.add_systems(PostUpdate, send_abort_mining);
-        app.add_systems(PostUpdate, send_mine_block);
 
         // Spawn-location and chunk-tracking systems run after chunk data has
         // been forwarded so notifications are written before we drain them.
