@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 use dd40_character_core::plugin::CharacterCorePlugin;
 use dd40_core::block::events::{
-    AbortMiningRequest, BlockPlaced, BlockRemoved, MineBlockRequest, PlaceBlockRequest,
-    StartMiningRequest,
+    AbortMiningRequest, BlockPlaced, BlockRemoved, MineBlockRequest, StartMiningRequest,
 };
 use dd40_core::plugin::CorePlugin;
 use dd40_core::prelude::*;
@@ -45,12 +44,19 @@ use dd40_core::chunk::ChunkAuthorityAppExt;
 /// [`ActiveItem`] is treated as bare hands holding nothing.
 ///
 /// Registers the following messages:
-/// - [`PlaceBlockRequest`]     — written here, consumed by the network layer.
 /// - [`BlockPlaced`]           — written by the network layer; consumed here.
 /// - [`BlockRemoved`]          — written by the network layer; consumed here.
 /// - [`StartMiningRequest`]    — written here, consumed by the network layer.
 /// - [`AbortMiningRequest`]    — written here, consumed by the network layer.
 /// - [`MineBlockRequest`]      — written here, consumed by the network layer.
+///
+/// Block **placement** does not go through a request message: the
+/// `try_place_block` system pushes a predicted [`ChunkChange`] onto the local
+/// [`ChunkCache`] directly. The server runs the same system against the
+/// replicated [`CharacterInput`][dd40_character_core::components::CharacterInput]
+/// and commits authoritatively via the chunk-authority pipeline.
+///
+/// [`ChunkChange`]: dd40_core::chunk::ChunkChange
 ///
 /// All gameplay systems run only while [`AppState::Playing`] **and**
 /// [`GameState::Running`]. [`apply_removed_blocks`] runs whenever
@@ -85,7 +91,6 @@ impl Plugin for CharacterInteractionPlugin {
             .register_type::<BlockInteractionConfig>();
 
         // ── Messages ──────────────────────────────────────────────────────
-        app.add_message::<PlaceBlockRequest>();
         app.add_message::<BlockPlaced>();
         app.add_message::<BlockRemoved>();
         app.add_message::<StartMiningRequest>();
@@ -116,17 +121,8 @@ impl Plugin for CharacterInteractionPlugin {
         let playing = in_state(AppState::Playing);
         app.add_systems(PostUpdate, apply_removed_blocks.run_if(playing));
 
-        // Register the character-collision validator with the chunk
-        // authority pipeline. Has effect only on instances that also add
-        // ChunkAuthorityPlugin (the server). On clients that don't add
-        // the plugin the system still runs harmlessly — there is no
-        // PendingChunkRejections resource to write to, so the
-        // registration short-circuits at scheduler-init time.
-        //
-        // NOTE: PendingChunkRejections is inserted by ChunkAuthorityPlugin.
-        // If the plugin isn't added the system would panic on missing
-        // resource. We gate the system on the resource's existence so it
-        // is safe to add unconditionally — see the run_if below.
+        // Gated on PendingChunkRejections so the registration is harmless
+        // on instances without ChunkAuthorityPlugin (e.g. clients).
         app.add_chunk_change_validator_system(
             character_collision_validator
                 .run_if(resource_exists::<dd40_core::chunk::PendingChunkRejections>),

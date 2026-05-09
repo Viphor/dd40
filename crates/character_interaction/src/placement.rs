@@ -20,14 +20,26 @@
 //! by the controller and prevents a single right-click from queuing up
 //! multiple identical attempts on subsequent ticks.
 //!
-//! # Authoritativeness
+//! # Authority model (versioned-chunk-cache pipeline)
 //!
-//! This system does **not** mutate [`ChunkCache`] directly. The server is
-//! authoritative: when it accepts the request it updates its own cache and
-//! broadcasts a [`BlockPlaced`] message back to all clients. The client-side
-//! network layer receives that message and applies it to the local cache,
-//! which then triggers a re-render. This keeps the client and server caches
-//! consistent without client-side prediction for placement.
+//! This system pushes a predicted [`ChunkChange::Place`] directly onto the
+//! local [`ChunkCache`] on **both** the client and the server. Because
+//! [`CharacterInput`] is replicated, the server runs the exact same
+//! placement code against the same per-tick input — the client predicts
+//! optimistically, the server confirms authoritatively via
+//! [`ChunkAuthorityPlugin`](dd40_core::chunk::ChunkAuthorityPlugin).
+//!
+//! The placing player sees their placement persist immediately on screen
+//! (the predicted change mutates `chunk.data` at push time). Other clients
+//! will see the placement once `ChunkUpdate` broadcasting is wired (Phase 4
+//! of the versioned-chunk-cache plan).
+//!
+//! Validation is performed by chunk-change validators on the server:
+//! [`default_block_registry_validator`](dd40_core::chunk::default_block_registry_validator)
+//! enforces replaceability;
+//! [`character_collision_validator`](crate::validators::character_collision_validator)
+//! enforces that no character occupies the target cell. Both run in
+//! [`ChunkAuthoritySet::Validate`] before the commit pass.
 //!
 //! # Source of the placement block
 //!
@@ -36,23 +48,29 @@
 //! reads any inventory layout directly. A character with no [`ActiveItem`]
 //! component, with `ActiveItem(None)`, or whose item has no `placeable`
 //! field is treated as holding nothing placeable — `place` is consumed but
-//! no message is emitted.
+//! no change is queued.
 
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
 use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::targeted_block::TargetedBlock;
-use dd40_core::block::events::{BlockPlaced, PlaceBlockRequest};
+use dd40_core::block::events::BlockPlaced;
 use dd40_core::chunk::cache::ChunkCache;
+use dd40_core::chunk::{ChunkChange, change::BlockLocal};
 use dd40_core::prelude::*;
 use dd40_item_core::active_item::ActiveItem;
 use dd40_item_core::registry::{ItemDefinition, ItemRegistry};
 
-/// Pure placement-step result returned by [`step_placement`].
-#[derive(Debug, Default, Clone)]
+/// Outcome of one placement step.
+///
+/// Returned by [`step_placement`]. The world-space `pos` and `block_id`
+/// are everything the caller needs to push a `ChunkChange::Place` onto
+/// the local chunk cache — the conversion to chunk-local coordinates
+/// happens in [`try_place_block`] (it requires access to the cache).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct PlacementStep {
-    /// `Some(req)` if a [`PlaceBlockRequest`] should be emitted.
-    pub request: Option<PlaceBlockRequest>,
+    /// `Some((world_pos, block_id))` if a placement should be enqueued.
+    pub place: Option<(BlockPos, BlockId)>,
 }
 
 /// Pure placement state-machine step.
@@ -88,10 +106,7 @@ pub(crate) fn step_placement(
     );
     match destination(place_pos) {
         Some(true) => PlacementStep {
-            request: Some(PlaceBlockRequest {
-                pos: place_pos,
-                block_id,
-            }),
+            place: Some((place_pos, block_id)),
         },
         _ => PlacementStep::default(),
     }
@@ -100,8 +115,8 @@ pub(crate) fn step_placement(
 /// Per-character placement system.
 ///
 /// Reads `(&mut CharacterInput, &TargetedBlock, Option<&ActiveItem>)` for
-/// every [`Character`], runs [`step_placement`], emits a
-/// [`PlaceBlockRequest`] when appropriate, and **always resets**
+/// every [`Character`], runs [`step_placement`], pushes a predicted
+/// [`ChunkChange::Place`] when appropriate, and **always resets**
 /// `CharacterInput::place` to `false` after one tick where it was `true`
 /// (see "decision D" in the module docs).
 pub(crate) fn try_place_block(
@@ -109,10 +124,9 @@ pub(crate) fn try_place_block(
         (&mut CharacterInput, &TargetedBlock, Option<&ActiveItem>),
         With<Character>,
     >,
-    cache: Res<ChunkCache>,
+    mut cache: ResMut<ChunkCache>,
     registry: Res<BlockRegistry>,
     items: Res<ItemRegistry>,
-    mut requests: MessageWriter<PlaceBlockRequest>,
 ) {
     for (mut input, targeted, active) in &mut character_query {
         if !input.place {
@@ -135,12 +149,34 @@ pub(crate) fn try_place_block(
 
         let step = step_placement(input.place, targeted, placeable, destination);
 
-        if let Some(req) = step.request {
+        if let Some((place_pos, block_id)) = step.place {
+            let chunk_pos = place_pos.chunk_pos();
+            let local_world = place_pos.chunk_local();
+            // We already validated `local.y >= 0` inside `destination`,
+            // and the X/Z bounds are guaranteed by `chunk_local`'s
+            // `rem_euclid`. Build the typed `BlockLocal` accordingly.
+            let Some(local) = BlockLocal::try_new(
+                local_world.x as u8,
+                local_world.y as u16,
+                local_world.z as u8,
+            ) else {
+                warn!(
+                    "Refusing placement at {} — could not build a valid BlockLocal",
+                    place_pos
+                );
+                input.place = false;
+                continue;
+            };
             debug!(
-                "Requesting placement of {:?} at {}",
-                req.block_id, req.pos
+                "Predicting placement of {:?} at {} (chunk {} local {:?})",
+                block_id, place_pos, chunk_pos, local
             );
-            requests.write(req);
+            if !cache.push_predicted(chunk_pos, ChunkChange::new_place(local, block_id)) {
+                debug!(
+                    "Placement dropped — chunk {} not present in cache",
+                    chunk_pos
+                );
+            }
         }
 
         input.place = false;
@@ -158,12 +194,9 @@ fn placeable_block(active: Option<&ActiveItem>, items: &ItemRegistry) -> Option<
     def.placeable
 }
 
-/// Listens for confirmed [`BlockPlaced`] messages and applies them to the
-/// local [`ChunkCache`].
-///
-/// The server broadcasts [`BlockPlaced`] after it has validated and applied a
-/// [`PlaceBlockRequest`]. Any client receives the message here and updates its
-/// own cache, which then triggers a mesh rebuild.
+/// Listens for [`BlockPlaced`] messages from the network layer and applies
+/// them to the local [`ChunkCache`]. Used to mirror placements made by
+/// remote players that arrive via the legacy network path.
 pub(crate) fn apply_placed_blocks(
     mut reader: MessageReader<BlockPlaced>,
     mut cache: ResMut<ChunkCache>,
@@ -215,7 +248,7 @@ mod tests {
             Some(BlockId(5)),
             |_| Some(true),
         );
-        assert!(s.request.is_none());
+        assert!(s.place.is_none());
     }
 
     #[test]
@@ -226,7 +259,7 @@ mod tests {
             Some(BlockId(5)),
             |_| Some(true),
         );
-        assert!(s.request.is_none());
+        assert!(s.place.is_none());
     }
 
     #[test]
@@ -237,7 +270,7 @@ mod tests {
             None,
             |_| Some(true),
         );
-        assert!(s.request.is_none());
+        assert!(s.place.is_none());
     }
 
     #[test]
@@ -248,7 +281,7 @@ mod tests {
             Some(BlockId::AIR),
             |_| Some(true),
         );
-        assert!(s.request.is_none());
+        assert!(s.place.is_none());
     }
 
     #[test]
@@ -259,7 +292,7 @@ mod tests {
             Some(BlockId(5)),
             |_| Some(false),
         );
-        assert!(s.request.is_none());
+        assert!(s.place.is_none());
     }
 
     #[test]
@@ -270,19 +303,19 @@ mod tests {
             Some(BlockId(5)),
             |_| None,
         );
-        assert!(s.request.is_none());
+        assert!(s.place.is_none());
     }
 
     #[test]
-    fn place_true_replaceable_destination_emits_request_at_face_normal() {
+    fn place_true_replaceable_destination_emits_at_face_normal() {
         let s = step_placement(
             true,
             &target_at(BlockPos::new(3, 64, 5), BlockFace::Top),
             Some(BlockId(7)),
             |_| Some(true),
         );
-        let req = s.request.expect("expected a placement request");
-        assert_eq!(req.block_id, BlockId(7));
-        assert_eq!(req.pos, BlockPos::new(3, 65, 5));
+        let (pos, block_id) = s.place.expect("expected a placement");
+        assert_eq!(block_id, BlockId(7));
+        assert_eq!(pos, BlockPos::new(3, 65, 5));
     }
 }

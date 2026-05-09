@@ -90,8 +90,7 @@ pub fn character_collision_validator(
 
             let world_pos = chunk_pos.block_pos(*local);
             // Block AABB in world space — origin at bottom-centre,
-            // half-extents 0.5 (1×1×1 cell). Matches the convention used
-            // by the legacy `receive_place_requests` collision check.
+            // half-extents 0.5 for a 1×1×1 cell.
             let block_aabb = Aabb::new(0.5, 0.5, 0.5);
             let block_origin = Vec3::new(
                 world_pos.x as f32 + 0.5,
