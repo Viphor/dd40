@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::chunk::{
     ChunkChange, ChunkPos,
-    events::{ChunkReady, RequestChunk},
+    events::{ChunkPredicted, ChunkReady, RequestChunk},
 };
 
 use super::*;
@@ -26,6 +26,12 @@ pub struct ChunkCache {
     /// every frame looking for non-empty predicted queues — important once
     /// the loaded radius is large.
     dirty: HashSet<ChunkPos>,
+    /// Buffered [`ChunkPredicted`] payloads queued by
+    /// [`ChunkCache::push_predicted`], drained each frame by
+    /// [`emit_predicted_events`] into a [`MessageWriter`]. Listeners (the
+    /// renderer, audio, …) subscribe to the resulting messages rather than
+    /// polling the cache.
+    pending_predicted_events: Vec<(ChunkPos, ChunkChange)>,
 }
 
 impl ChunkCache {
@@ -35,6 +41,7 @@ impl ChunkCache {
             requested: HashSet::new(),
             waiting: HashSet::new(),
             dirty: HashSet::new(),
+            pending_predicted_events: Vec::new(),
         }
     }
 
@@ -73,6 +80,7 @@ impl ChunkCache {
         };
         chunk.push_predicted(change);
         self.dirty.insert(pos);
+        self.pending_predicted_events.push((pos, change));
         true
     }
 
@@ -104,6 +112,15 @@ impl ChunkCache {
     /// Number of chunks currently flagged dirty.
     pub fn dirty_count(&self) -> usize {
         self.dirty.len()
+    }
+
+    /// Drains buffered [`ChunkPredicted`] payloads queued by
+    /// [`ChunkCache::push_predicted`]. Called once per frame by
+    /// [`emit_predicted_events`].
+    pub fn drain_pending_predicted_events(
+        &mut self,
+    ) -> std::vec::Drain<'_, (ChunkPos, ChunkChange)> {
+        self.pending_predicted_events.drain(..)
     }
 
     /// Requests the chunk at `pos` from the provider if it has not already been requested,
@@ -170,12 +187,104 @@ pub fn request_chunk_system(mut cache: ResMut<ChunkCache>, mut mq: MessageWriter
     cache.waiting.extend(requested);
 }
 
+/// Drains buffered predictions queued by [`ChunkCache::push_predicted`] and
+/// publishes them as [`ChunkPredicted`] messages.
+///
+/// Runs in [`PostUpdate`] so every prediction queued during the same frame's
+/// `Update` is emitted in a single batch. Listeners read the messages on the
+/// next frame's [`PreUpdate`].
+pub fn emit_predicted_events(
+    mut cache: ResMut<ChunkCache>,
+    mut writer: MessageWriter<ChunkPredicted>,
+) {
+    for (pos, change) in cache.drain_pending_predicted_events() {
+        writer.write(ChunkPredicted { pos, change });
+    }
+}
+
 pub struct ChunkCachePlugin;
 
 impl Plugin for ChunkCachePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkCache>()
             .add_systems(PreUpdate, chunk_ready_listener)
-            .add_systems(PostUpdate, request_chunk_system);
+            .add_systems(PostUpdate, (request_chunk_system, emit_predicted_events));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::block::BlockId;
+    use crate::chunk::{BlockLocal, Chunk, ChunkChange};
+    use bevy::ecs::message::Messages;
+
+    fn cell() -> BlockLocal {
+        BlockLocal::new(1, 2, 3)
+    }
+
+    fn pos() -> ChunkPos {
+        ChunkPos::new(0, 0)
+    }
+
+    fn build_app() -> App {
+        let mut app = App::new();
+        app.add_message::<ChunkPredicted>();
+        app.add_message::<ChunkReady>();
+        app.add_message::<RequestChunk>();
+        app.add_plugins(ChunkCachePlugin);
+        app
+    }
+
+    #[test]
+    fn push_predicted_buffers_event_payload() {
+        let mut cache = ChunkCache::new();
+        cache.insert(Chunk::new(pos()));
+        let change = ChunkChange::new_place(cell(), BlockId(1));
+        assert!(cache.push_predicted(pos(), change));
+        let drained: Vec<_> = cache.drain_pending_predicted_events().collect();
+        assert_eq!(drained, vec![(pos(), change)]);
+    }
+
+    #[test]
+    fn push_predicted_on_missing_chunk_buffers_nothing() {
+        let mut cache = ChunkCache::new();
+        let change = ChunkChange::new_remove(cell());
+        assert!(!cache.push_predicted(pos(), change));
+        assert_eq!(cache.drain_pending_predicted_events().count(), 0);
+    }
+
+    #[test]
+    fn emit_predicted_events_publishes_message_per_prediction() {
+        let mut app = build_app();
+        {
+            let mut cache = app.world_mut().resource_mut::<ChunkCache>();
+            cache.insert(Chunk::new(pos()));
+            assert!(cache.push_predicted(pos(), ChunkChange::new_place(cell(), BlockId(7))));
+            assert!(cache.push_predicted(pos(), ChunkChange::new_remove(cell())));
+        }
+
+        app.update();
+
+        let messages = app.world().resource::<Messages<ChunkPredicted>>();
+        let mut reader = messages.get_cursor();
+        let collected: Vec<_> = reader.read(messages).cloned().collect();
+        assert_eq!(collected.len(), 2);
+        assert_eq!(collected[0].pos, pos());
+        assert!(matches!(collected[0].change, ChunkChange::Place { .. }));
+        assert!(matches!(collected[1].change, ChunkChange::Remove { .. }));
+    }
+
+    #[test]
+    fn emit_predicted_events_drains_buffer() {
+        let mut app = build_app();
+        {
+            let mut cache = app.world_mut().resource_mut::<ChunkCache>();
+            cache.insert(Chunk::new(pos()));
+            assert!(cache.push_predicted(pos(), ChunkChange::new_remove(cell())));
+        }
+        app.update();
+        let cache = app.world().resource::<ChunkCache>();
+        assert_eq!(cache.pending_predicted_events.len(), 0);
     }
 }

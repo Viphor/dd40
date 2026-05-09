@@ -44,7 +44,7 @@ use bevy::{
 };
 use dd40_core::{
     block::{BlockId, BlockRegistry},
-    chunk::events::ChunkReady,
+    chunk::events::{ChunkChanged, ChunkPredicted, ChunkReady},
     chunk::{ChunkPos, cache::ChunkCache},
 };
 use dd40_physics_core::prelude::CharacterPosition;
@@ -89,36 +89,39 @@ pub fn mark_dirty_on_chunk_ready(
     }
 }
 
-pub fn mark_dirty_on_block_change(
-    mut reader: MessageReader<dd40_core::block::events::BlockPlaced>,
+/// Reads incoming [`ChunkPredicted`] messages and marks the corresponding
+/// chunks dirty so the renderer remeshes them with the optimistic state.
+///
+/// Runs in `PreUpdate` so dirty flags are set before the `Update` rebuild
+/// pass.
+pub fn mark_dirty_on_chunk_predicted(
+    mut reader: MessageReader<ChunkPredicted>,
     mut render_state: ResMut<ChunkRenderState>,
 ) {
     for msg in reader.read() {
-        let pos = msg.pos.chunk_pos();
-        render_state.mark_dirty(pos);
+        render_state.mark_dirty(msg.pos);
         trace!(
-            "Renderer: marked chunk {:?} dirty (BlockPlaced at {})",
-            pos, msg.pos
+            "Renderer: marked chunk {:?} dirty (ChunkPredicted, change={:?})",
+            msg.pos, msg.change,
         );
     }
 }
 
-/// Reads incoming [`BlockRemoved`] messages and marks the corresponding chunk
-/// dirty in [`ChunkRenderState`] so that exposed faces are rebuilt.
+/// Reads incoming [`ChunkChanged`] messages and marks the corresponding
+/// chunks dirty so the renderer remeshes them with the authoritative state.
 ///
-/// Runs in `PreUpdate` alongside [`mark_dirty_on_block_change`].
-///
-/// [`BlockRemoved`]: dd40_core::block::events::BlockRemoved
-pub fn mark_dirty_on_block_removed(
-    mut reader: MessageReader<dd40_core::block::events::BlockRemoved>,
+/// Runs in `PreUpdate` alongside [`mark_dirty_on_chunk_predicted`].
+pub fn mark_dirty_on_chunk_changed(
+    mut reader: MessageReader<ChunkChanged>,
     mut render_state: ResMut<ChunkRenderState>,
 ) {
     for msg in reader.read() {
-        let pos = msg.pos.chunk_pos();
-        render_state.mark_dirty(pos);
+        render_state.mark_dirty(msg.pos);
         trace!(
-            "Renderer: marked chunk {:?} dirty (BlockRemoved at {})",
-            pos, msg.pos
+            "Renderer: marked chunk {:?} dirty (ChunkChanged, version={}, {} change(s))",
+            msg.pos,
+            msg.new_version,
+            msg.changes.len(),
         );
     }
 }

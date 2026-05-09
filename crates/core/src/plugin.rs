@@ -32,6 +32,7 @@ impl Plugin for CorePlugin {
             .add_message::<RequestChunk>()
             .add_message::<GenerateChunk>()
             .add_message::<ChunkChanged>()
+            .add_message::<ChunkPredicted>()
             .add_message::<PredictionRejected>()
             .add_message::<ChunkSnapshotFallback>()
             .add_message::<BlockPlaced>()

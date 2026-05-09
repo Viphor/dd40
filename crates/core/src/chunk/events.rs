@@ -39,6 +39,26 @@ pub struct ChunkChanged {
     pub new_version: u64,
 }
 
+/// Local Bevy message fired every time a predicted [`ChunkChange`] is queued
+/// on a chunk via
+/// [`ChunkCache::push_predicted`](crate::chunk::cache::ChunkCache::push_predicted).
+///
+/// Optimistic listeners — first and foremost the renderer — subscribe to this
+/// to remesh chunks the same frame as the local prediction, without waiting
+/// for the authority commit pass.
+///
+/// `change.local()` already disambiguates the affected cell; the chunk is
+/// `pos`. The optimistic block value is already written into the chunk's
+/// `data` by the time this message is read, so listeners can read directly
+/// from the [`ChunkCache`](crate::chunk::cache::ChunkCache).
+#[derive(Message, Clone, Debug)]
+pub struct ChunkPredicted {
+    /// Chunk that received the prediction.
+    pub pos: ChunkPos,
+    /// Predicted change. Coordinates are chunk-local.
+    pub change: ChunkChange,
+}
+
 /// Local Bevy message fired on a client when a locally-predicted change is
 /// rejected by the server (i.e. the server's authoritative `ChunkUpdate`
 /// did not contain a matching change).
