@@ -34,13 +34,11 @@ use dd40_physics_core::prelude::{Aabb, CharacterPosition, CharacterSpatialCache}
 /// overlap a [`Character`](dd40_character_core::components::Character)'s
 /// AABB.
 ///
-/// This is the validator counterpart of the old, soon-to-be-removed
-/// server-side `receive_place_requests` collision check in
-/// `dd40_network::server::block_placement`. It runs only on instances
-/// that have added [`ChunkAuthorityPlugin`](dd40_core::chunk::ChunkAuthorityPlugin)
-/// — the server. The client never runs it; client-side prediction
-/// optimistically accepts the placement and reconciles when the server's
-/// `ChunkUpdate` arrives (Phase 4).
+/// Runs only on instances that have added
+/// [`ChunkAuthorityPlugin`](dd40_core::chunk::ChunkAuthorityPlugin) — the
+/// server. The client never runs it; client-side prediction optimistically
+/// accepts the placement and reconciles when the server's `ChunkUpdate`
+/// arrives.
 ///
 /// # Algorithm
 ///
