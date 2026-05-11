@@ -76,22 +76,96 @@ Never write `if !app.is_plugin_added` by hand — always use `ensure_plugins!`.
 ### Chunk pipeline
 
 ```
-[any system] → RequestChunk (Message)
+[any system] → RequestChunk { pos, current_version } (Message)
                     ↓
              dd40_chunk_storage
               ├─ found on disk → ChunkReady (Message)
               └─ missing → GenerateChunk (Message)
                                 ↓
-                          dd40_world → ChunkReady
+                          dd40_world → ChunkReady (version = 1)
                                           ↓
                              ChunkCachePlugin (core) caches it
                                           ↓
                                dd40_renderer meshes it
 ```
 
+Networked clients additionally consume `ChunkSnapshot` (full chunk) or
+`ChunkUpdate { base_version, changes, new_version }` (delta) on arrival —
+see "Versioned chunk cache" below.
+
 ### System ordering (Startup)
 
 `BlockRegistrySet` runs before `WorldGenerationSet`. All block registration must be in `BlockRegistrySet`; world generation must be in `WorldGenerationSet` or later.
+
+### Versioned chunk cache
+
+Every `Chunk` carries:
+- `version: u64` — monotonic, bumped once per server-committed batch.
+  Generator output is `version = 1`; `version = 0` means "client has
+  nothing".
+- `confirmed_history: VecDeque<(u64, ChunkChange)>` — every change ever
+  committed to this chunk while it has been loaded. **Not capped.**
+  Dropped on eviction (and persisted only when `DD40_CHUNK_STORAGE__SAVE_HISTORY=true`).
+- `predicted: VecDeque<ChunkChange>` — runtime-only queue of
+  locally-applied changes awaiting server confirmation. Both client and
+  server mutate chunks by pushing into `predicted`.
+
+`ChunkChange` is the single mutation type: `Place { local, block_id }`,
+`Remove { local }`, `Replace { local, new_block }`. All coordinates are
+**chunk-local** — a chunk has no global-world knowledge.
+
+#### Authoritative commit (server-only)
+
+`ChunkAuthorityPlugin` (added by the server binary, never the client)
+runs `commit_predicted_changes` in `PostUpdate`. It drains `predicted`
+through a registered chain of `ChunkChangeValidator`s, applies the
+survivors, bumps `version`, appends them to `confirmed_history`, and
+broadcasts `ChunkUpdate` to clients in range. Adding the plugin *is* the
+authority gate — there is no `run_if` / marker resource.
+
+#### Reconciliation (client)
+
+When a `ChunkUpdate { base_version, changes, new_version }` arrives:
+- `base_version == client_version` → walk `changes`; for each, scan
+  `predicted` for an exact match (same `local`, same kind) and remove on
+  first hit. Anything left in `predicted` is a **rejected prediction** →
+  log a warning and fire `PredictionRejected { pos, change }`.
+- `base_version > client_version` → client missed history. Log warn,
+  drop the update, re-request via `RequestChunk { pos, current_version }`.
+
+#### Snapshot fallback
+
+The single configurable knob is `MaxDeltaBehind(u16)` (default 15).
+If `current_version < server_version - MaxDeltaBehind`, the server
+replies with a full `ChunkSnapshot` instead of a `ChunkUpdate` and emits
+a local `ChunkSnapshotFallback { pos, client_version, server_version }`
+message for analysis tooling.
+
+#### Local notification
+
+After every commit (server) or applied update (client), a Bevy
+`ChunkChanged { pos, changes, new_version }` message is emitted.
+Renderer, audio, and any future system (redstone, …) subscribe to it.
+There is no `BlockPlaced` / `BlockRemoved` event — those were deleted
+when the versioned cache landed.
+
+#### Errors are loud
+
+Any rejection inside the commit pass logs at `warn!` on the server.
+Clients log at `warn!` on every `PredictionRejected`. Silence is never
+the right behaviour for a rejected change.
+
+#### Disk format
+
+`dd40_chunk_storage` reads any known `ChunkVersion` (currently `V1` and
+`V1Versioned`). The writer's choice is fixed at plugin startup from the
+`DD40_CHUNK_STORAGE__SAVE_HISTORY` env var (truthy: `1|true|yes|on`,
+default `false`):
+- `false` → `ChunkVersion::V1` — block data + `version`. Confirmed
+  history is dropped on save (logged at `debug!`).
+- `true` → `ChunkVersion::V1Versioned` — block data + `version` +
+  `confirmed_history`. Required for the server to serve delta updates
+  after a restart.
 
 ## Bevy 0.18 API — Events vs Messages
 

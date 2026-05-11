@@ -88,3 +88,7 @@ would let the spawn system be reused for NPCs or alternative transports.
 | — | Character types lived in `dd40_core` | SPEC.md Phase 2 — extracted to `dd40_character_core` |
 | — | Block interaction and movement systems were player-gated | SPEC.md Phase 3 — `dd40_character_interaction` and `dd40_player_movement` created, filters changed to `With<Character>` |
 | — | `PlayerId(u64)` did not exist | SPEC.md Task 5.2 — added to `dd40_character_core::components` |
+| — | `BlockPlaced` / `BlockRemoved` events were broadcast ad-hoc per change kind | versioned-chunk-cache — replaced by the unified `ChunkChange` enum and the local `ChunkChanged { pos, changes, new_version }` message emitted by the authority commit pass / client reconciler |
+| — | `PlaceBlockRequest` / `StartMiningRequest` / `AbortMiningRequest` / `MineBlockRequest` lived as separate lightyear messages | versioned-chunk-cache — replaced by predicted `ChunkChange`s on the chunk itself; clients push, the server's authority plugin commits and broadcasts `ChunkUpdate` |
+| — | `ChunkPos` was 2D, blocking vertical chunk splits in serialization paths | versioned-chunk-cache (Phase 7.5) — added `y` axis throughout; on-disk filenames are `chunk_X_Y_Z.bin`, physics + raycast walk Y boundaries |
+| — | Disk format was unversioned | versioned-chunk-cache (Phase 6) — `ChunkVersion::V1` and `V1Versioned` introduced; reader auto-detects, writer chooses via `DD40_CHUNK_STORAGE__SAVE_HISTORY` env var |

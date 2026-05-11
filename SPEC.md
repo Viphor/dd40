@@ -437,3 +437,71 @@ definitions.
   makes the architecture plug-and-play.
 - Use `EventReader`/`EventWriter`/`add_event` (Bevy 0.18 uses observers and
   messages; see `CLAUDE.md`).
+
+---
+
+## Versioned Chunk Cache
+
+The chunk cache is fully versioned. Every `Chunk` carries a monotonic
+`version: u64`, an unbounded `confirmed_history: VecDeque<(u64, ChunkChange)>`,
+and a runtime-only `predicted: VecDeque<ChunkChange>` queue.
+
+`ChunkChange` is the **single mutation type** for any chunk on either
+client or server. New mutation kinds extend the enum; no new messages or
+events are introduced.
+
+```rust
+pub enum ChunkChange {
+    Place   { local: BlockLocal, block_id: BlockId },
+    Remove  { local: BlockLocal },
+    Replace { local: BlockLocal, new_block: BlockId },
+}
+```
+
+All coordinates inside `Chunk` (data, history, predictions) are
+**chunk-local**. A chunk has no global-world knowledge; `Chunk::position`
+is metadata for the outer `HashMap<ChunkPos, Chunk>` only.
+
+### Lifecycle
+
+| Stage | Where | What happens |
+|---|---|---|
+| **Predict** | Client or server | Push a `ChunkChange` into the chunk's `predicted` queue and apply it locally. |
+| **Commit** (server only) | `ChunkAuthorityPlugin` in `PostUpdate` | Drain `predicted` through `ChunkChangeValidator` chain. Apply survivors. Bump `version`. Append to `confirmed_history`. Broadcast `ChunkUpdate { base_version, changes, new_version }` to clients in range. |
+| **Reconcile** (client) | On `ChunkUpdate` arrival | If `base_version == client_version`: walk `changes`; remove matching entries from `predicted`; emit `PredictionRejected` for any leftovers. If `base_version > client_version`: log warn, drop, re-request via `RequestChunk { pos, current_version }`. |
+| **Notify** | Both | Fire local `ChunkChanged { pos, changes, new_version }` Bevy message. Renderer / audio / future systems subscribe to it. |
+
+### Configurable knobs
+
+| Resource | Default | Meaning |
+|---|---|---|
+| `MaxDeltaBehind(u16)` | `15` | If `current_version < server_version - MaxDeltaBehind`, the server replies with a `ChunkSnapshot` instead of a `ChunkUpdate` and emits `ChunkSnapshotFallback { pos, client_version, server_version }`. |
+| `DD40_CHUNK_STORAGE__SAVE_HISTORY` (env var, read at startup) | `false` | When `true`, the disk writer uses `ChunkVersion::V1Versioned` and persists history. When `false`, it uses `ChunkVersion::V1` and drops history at save time (logged at `debug!`). |
+
+### Why a registered validator chain
+
+The commit pass uses `Vec<Box<dyn ChunkChangeValidator>>` rather than an
+inlined match against built-in change kinds. This keeps domain-specific
+checks out of `dd40_core`: e.g. a "no placing into a tile occupied by a
+character" rule lives in a downstream crate that owns the relevant
+queries, not in core. Same principle as `BlockRegistry` — runtime
+registration over hard-coded behaviour.
+
+### Networked vs local
+
+| | Local-only (singleplayer) | Networked |
+|---|---|---|
+| Predict | yes | yes |
+| Commit | `ChunkAuthorityPlugin` (added by server binary, but also valid for singleplayer where the binary owns authority) | server only |
+| Reconcile | n/a (commit and predict are the same process) | client |
+| Wire format | none | `RequestChunk { pos, current_version } → ChunkSnapshot \| ChunkUpdate` |
+
+Adding `ChunkAuthorityPlugin` *is* the authority gate. There is no
+`run_if`, no marker resource, no client-vs-server runtime check. The
+client binary simply does not add the plugin.
+
+### Errors are loud
+
+Every rejected change in `commit_predicted_changes` logs at `warn!` on
+the server. Every `PredictionRejected` logs at `warn!` on the client.
+Silence on a rejection is always a bug.
