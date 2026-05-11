@@ -27,7 +27,7 @@ use bevy::prelude::*;
 use dd40_core::{
     block::{Block, BlockPos, CollisionShape},
     block::registry::BlockRegistry,
-    chunk::{CHUNK_SIZE_Y, cache::ChunkCache},
+    chunk::cache::ChunkCache,
 };
 use dd40_physics_core::prelude::*;
 
@@ -104,10 +104,13 @@ fn block_world_aabb(pos: BlockPos, block: Block, registry: &BlockRegistry) -> Op
 // Block lookup helpers
 // ---------------------------------------------------------------------------
 
+/// Looks up the block at `pos` in the chunk cache.
+///
+/// Returns the default (air) block when the chunk is not loaded. Does **not**
+/// enforce a world-Y bound, because the chunk cache is the source of truth
+/// for which chunks exist — once the world supports vertical chunking, all
+/// `chunk_pos.y` values map through the cache the same way.
 fn get_block(pos: BlockPos, cache: &ChunkCache) -> Block {
-    if pos.y < 0 || pos.y >= CHUNK_SIZE_Y as i32 {
-        return Block::default();
-    }
     let chunk_pos = pos.chunk_pos();
     let Some(chunk) = cache.get(&chunk_pos) else {
         return Block::default();
@@ -861,6 +864,104 @@ mod tests {
             vel.0.z.abs() < 1e-3,
             "Z velocity should be zeroed on wall impact, got {}",
             vel.0.z
+        );
+    }
+
+    #[test]
+    fn entity_collides_with_block_in_non_zero_y_chunk() {
+        // A floor block lives in chunk (0, 1, 0) at world y = CHUNK_SIZE_Y.
+        // An entity dropping from above must land on it, proving that
+        // get_block looks up chunks at non-zero ChunkPos.y correctly.
+        use dd40_core::chunk::CHUNK_SIZE_Y;
+        let mut app = make_app(1.0 / 20.0);
+
+        {
+            let mut registry = app.world_mut().resource_mut::<BlockRegistry>();
+            registry.register_without_event(
+                BlockDefinition::new(BlockId(1), "stone")
+                    .with_solid(true)
+                    .with_renderable(false),
+            );
+        }
+
+        let mut chunk_above = Chunk::new(ChunkPos::new(0, 1, 0));
+        for lx in 0..CHUNK_SIZE_X {
+            for lz in 0..CHUNK_SIZE_Z {
+                chunk_above.set(lx, 0, lz, Block::new(BlockId(1)));
+            }
+        }
+        {
+            let mut cache = app.world_mut().resource_mut::<ChunkCache>();
+            cache.insert(chunk_above);
+        }
+
+        let floor_world_y = CHUNK_SIZE_Y as f32;
+        let entity = spawn_body(&mut app, Vec3::new(0.5, floor_world_y + 2.0, 0.5));
+        {
+            let mut vel = app.world_mut().get_mut::<Velocity>(entity).unwrap();
+            vel.0.y = -50.0;
+        }
+
+        tick(&mut app);
+
+        let transform = app.world().get::<Transform>(entity).unwrap();
+        assert!(
+            transform.translation.y >= floor_world_y + 1.0 - 1e-3,
+            "entity fell through floor at chunk Y boundary: y={} (expected >= {})",
+            transform.translation.y,
+            floor_world_y + 1.0,
+        );
+
+        let grounded = app.world().get::<Grounded>(entity).unwrap();
+        assert!(grounded.0, "entity should be grounded on floor in non-zero-y chunk");
+    }
+
+    #[test]
+    fn entity_aabb_straddling_y_chunk_boundary_collides_with_block_in_lower_chunk() {
+        // Entity is moving upward; a block sits in chunk (0, 0, 0) at the
+        // top of that chunk (world y = CHUNK_SIZE_Y - 1). The entity's AABB
+        // straddles the chunk-Y boundary so the swept collision test must
+        // examine the lower chunk even though the entity's centre is in
+        // the upper one.
+        use dd40_core::chunk::CHUNK_SIZE_Y;
+        let mut app = make_app(1.0 / 20.0);
+
+        {
+            let mut registry = app.world_mut().resource_mut::<BlockRegistry>();
+            registry.register_without_event(
+                BlockDefinition::new(BlockId(1), "stone")
+                    .with_solid(true)
+                    .with_renderable(false),
+            );
+        }
+
+        // Ceiling block sitting at the top cell of the lower chunk.
+        let mut chunk_below = Chunk::new(ChunkPos::new(0, 0, 0));
+        chunk_below.set(0, CHUNK_SIZE_Y - 1, 0, Block::new(BlockId(1)));
+        // Empty upper chunk so cache lookup succeeds for the entity's centre.
+        let chunk_above = Chunk::new(ChunkPos::new(0, 1, 0));
+        {
+            let mut cache = app.world_mut().resource_mut::<ChunkCache>();
+            cache.insert(chunk_below);
+            cache.insert(chunk_above);
+        }
+
+        // Position the entity so its AABB feet are around y = CHUNK_SIZE_Y
+        // (just above the ceiling block). Move it down into the block.
+        let start_y = CHUNK_SIZE_Y as f32 + 0.1;
+        let entity = spawn_body(&mut app, Vec3::new(0.5, start_y, 0.5));
+        {
+            let mut vel = app.world_mut().get_mut::<Velocity>(entity).unwrap();
+            vel.0.y = -10.0;
+        }
+
+        tick(&mut app);
+
+        let transform = app.world().get::<Transform>(entity).unwrap();
+        assert!(
+            transform.translation.y >= CHUNK_SIZE_Y as f32 - 1e-3,
+            "entity penetrated ceiling block across chunk Y boundary: y={}",
+            transform.translation.y,
         );
     }
 }
