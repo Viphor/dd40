@@ -301,6 +301,17 @@ impl Chunk {
         &self.confirmed_history
     }
 
+    /// Appends `(version, change)` to the confirmed history without
+    /// touching `data` or the chunk's own `version` field.
+    ///
+    /// This is a low-level escape hatch for storage backends that need to
+    /// rehydrate a persisted history alongside an already-loaded data
+    /// array. Inside the live predict / commit pipeline, history grows
+    /// only via [`Chunk::commit_accepted`].
+    pub fn push_confirmed_for_load(&mut self, version: u64, change: ChunkChange) {
+        self.confirmed_history.push_back((version, change));
+    }
+
     /// Returns the block at chunk-local coordinates, or `None` when the
     /// coordinates are out of range.
     pub fn get(&self, lx: usize, ly: usize, lz: usize) -> Option<Block> {
