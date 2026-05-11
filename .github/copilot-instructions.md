@@ -22,7 +22,7 @@ a three-tier model (Foundation → Implementation → Binary):
 - **`dd40_world`** — world generation
 - **`dd40_chunk_storage`** — disk-backed chunk persistence
 - **`dd40_renderer`** — greedy-mesh chunk renderer (replaces `BlockRenderingPlugin`)
-- **`dd40_player_movement`** — keyboard/mouse → `CharacterInput`, first-person camera
+- **`dd40_player_input`** — keyboard/mouse → `CharacterInput`, first-person camera
 - **`dd40_character_interaction`** — block targeting, mining, placement
 - **`dd40_network`** — lightyear networking
 - **`dd40_debug_ui`** — FPS overlay, orientation gizmo

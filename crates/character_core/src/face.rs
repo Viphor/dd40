@@ -67,7 +67,7 @@ impl Default for CharacterFace {
 ///
 /// Both angles are in radians. `pitch` is conventionally clamped to
 /// `(-π/2, π/2)` by whichever system writes it (see `mouse_look` in
-/// `dd40_player_movement`).
+/// `dd40_player_input`).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct CameraRotation {

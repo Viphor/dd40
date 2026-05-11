@@ -15,7 +15,7 @@ This spec drives three concrete changes:
    into dedicated vocabulary crates (`dd40_physics_core`,
    `dd40_character_core`).
 2. **System decomposition**: Move systems that belong to implementation crates
-   into dedicated crates (`dd40_physics`, `dd40_player_movement`,
+   into dedicated crates (`dd40_physics`, `dd40_player_input`,
    `dd40_character_interaction`).
 3. **Auto-plugin pattern**: Every plugin checks for its direct runtime
    dependencies and adds them with defaults when missing.
@@ -42,7 +42,7 @@ Same as foundation crates above. Use "foundation" going forward.
 ### Tier 2 — Implementation crates
 `dd40_physics`, `dd40_vanilla_palette`, `dd40_world`,
 `dd40_chunk_storage`, `dd40_renderer`, `dd40_character_interaction`,
-`dd40_player_movement`, `dd40_network`, `dd40_debug_ui`, `dd40_gui`
+`dd40_player_input`, `dd40_network`, `dd40_debug_ui`, `dd40_gui`
 
 - Contain systems, asset loading, and concrete behaviour.
 - May depend on **any** foundation crates and external libraries.
@@ -139,7 +139,7 @@ Implementation
   dd40_chunk_storage     — Disk-backed chunk persistence (unchanged)
   dd40_character_interaction — Block targeting, placement, mining systems,
                            generic over Character (moved from dd40_player)
-  dd40_player_movement   — Keyboard/mouse → CharacterInput, first-person
+  dd40_player_input   — Keyboard/mouse → CharacterInput, first-person
                            camera systems (moved from dd40_player)
   dd40_renderer          — Greedy mesh, LOD (unchanged; reads PlayerPosition
                            from character_core once LOD inconsistency fixed)
@@ -151,7 +151,7 @@ Binary
   dd40_client            — wires implementation plugins for the playable client
   dd40_server            — wires implementation plugins for the headless server
   dd40_player            — thin convenience plugin: re-exports
-                           PlayerMovementPlugin + CharacterInteractionPlugin
+                           PlayerInputPlugin + CharacterInteractionPlugin
                            for the standard first-person player experience
                            (kept so existing code that adds PlayerPlugin
                            continues to work)
@@ -275,12 +275,12 @@ pass green.
 
 ### Phase 3 — Decompose `dd40_player` into implementation crates
 
-**Task 3.1** Create `dd40_player_movement`
-- `crates/player_movement/Cargo.toml` depending on `dd40_character_core` +
+**Task 3.1** Create `dd40_player_input`
+- `crates/player_input/Cargo.toml` depending on `dd40_character_core` +
   `dd40_physics_core` + `dd40_core` + bevy.
 - Move: `PlayerMode` state, `MouseSensitivity`, `CameraRotation`, and all
   input+camera systems from `dd40_player`.
-- `PlayerMovementPlugin`: checks for `CorePlugin`, `PhysicsCorePlugin`,
+- `PlayerInputPlugin`: checks for `CorePlugin`, `PhysicsCorePlugin`,
   `CharacterCorePlugin`.
 
 **Task 3.2** Create `dd40_character_interaction`
@@ -295,12 +295,12 @@ pass green.
   `CharacterCorePlugin`.
 
 **Task 3.3** Slim `dd40_player` to a convenience plugin
-- `dd40_player` re-exports `PlayerMovementPlugin` + `CharacterInteractionPlugin`
+- `dd40_player` re-exports `PlayerInputPlugin` + `CharacterInteractionPlugin`
   under a `PlayerPlugin` umbrella so existing code adding `PlayerPlugin`
   continues to work.
 - `PlayerSpawnPlugin` stays in `dd40_player` (spawning a locally controlled
   player is player-specific).
-- `dd40_player/Cargo.toml` depends on `dd40_player_movement` +
+- `dd40_player/Cargo.toml` depends on `dd40_player_input` +
   `dd40_character_interaction` + `dd40_character_core`.
 
 **Task 3.4** Verify — full workspace build + tests green.

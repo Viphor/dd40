@@ -102,7 +102,7 @@ crates/
   world/                 — world generation (dd40_world)                              [Tier 1]
   chunk_storage/         — disk-backed chunk persistence (dd40_chunk_storage)         [Tier 1]
   renderer/              — greedy-mesh chunk renderer (dd40_renderer)                 [Tier 1]
-  player_movement/       — keyboard/mouse → CharacterInput, camera (dd40_player_movement) [Tier 1]
+  player_input/       — keyboard/mouse → CharacterInput, camera (dd40_player_input) [Tier 1]
   character_interaction/ — block targeting, mining, placement (dd40_character_interaction) [Tier 1]
   network/               — lightyear networking (dd40_network)                        [Tier 1]
   debug_ui/              — debug overlay (dd40_debug_ui)                              [Tier 1]

@@ -8,7 +8,7 @@
 //! ## Input source
 //!
 //! Placement is driven exclusively by [`CharacterInput::place`]. The local
-//! player's input layer (`dd40_player_movement`) is responsible for
+//! player's input layer (`dd40_player_input`) is responsible for
 //! translating mouse/keyboard into that flag — this module is input-device
 //! agnostic and runs identically on the client and the server.
 //!

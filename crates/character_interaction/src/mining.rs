@@ -153,7 +153,7 @@ pub(crate) fn step_mining(
 /// Multi-character clients are out of scope: the system iterates every
 /// character that has the relevant components, but the gating "which
 /// character holds the local attack input this frame" is the input layer's
-/// responsibility (see `dd40_player_movement`'s mouse-to-input translation).
+/// responsibility (see `dd40_player_input`'s mouse-to-input translation).
 ///
 /// # Tool source
 ///

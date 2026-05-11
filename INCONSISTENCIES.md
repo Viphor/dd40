@@ -15,7 +15,7 @@ Active architectural work is planned in `SPEC.md`.
 **Rule violated:** Implementation crates must not depend on other implementation
 crates.
 
-**Current state:** `dd40_player` depends on `dd40_player_movement` and
+**Current state:** `dd40_player` depends on `dd40_player_input` and
 `dd40_character_interaction`, both of which are Tier 1 implementation crates.
 
 **Rationale for keeping:** `dd40_player` is an intentional convenience wrapper
@@ -86,7 +86,7 @@ would let the spawn system be reused for NPCs or alternative transports.
 | — | `EquippedTool` newtype wrapped `(ToolKindId, ToolTierId)` and was never attached to any entity | core-rewrite — collapsed into raw primitives; mining reads tool kind/tier from each character's `ActiveItem` |
 | — | Physics systems lived in `dd40_core` | SPEC.md Phase 1 — extracted to `dd40_physics_core` + `dd40_physics` |
 | — | Character types lived in `dd40_core` | SPEC.md Phase 2 — extracted to `dd40_character_core` |
-| — | Block interaction and movement systems were player-gated | SPEC.md Phase 3 — `dd40_character_interaction` and `dd40_player_movement` created, filters changed to `With<Character>` |
+| — | Block interaction and movement systems were player-gated | SPEC.md Phase 3 — `dd40_character_interaction` and `dd40_player_input` created, filters changed to `With<Character>` |
 | — | `PlayerId(u64)` did not exist | SPEC.md Task 5.2 — added to `dd40_character_core::components` |
 | — | `BlockPlaced` / `BlockRemoved` events were broadcast ad-hoc per change kind | versioned-chunk-cache — replaced by the unified `ChunkChange` enum and the local `ChunkChanged { pos, changes, new_version }` message emitted by the authority commit pass / client reconciler |
 | — | `PlaceBlockRequest` / `StartMiningRequest` / `AbortMiningRequest` / `MineBlockRequest` lived as separate lightyear messages | versioned-chunk-cache — replaced by predicted `ChunkChange`s on the chunk itself; clients push, the server's authority plugin commits and broadcasts `ChunkUpdate` |

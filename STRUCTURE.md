@@ -44,13 +44,13 @@ entry below.
 | `dd40_world` | World generation (generic over `WorldGenerator` trait) | `dd40_core` |
 | `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) | `dd40_core` |
 | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD | `dd40_core`, `dd40_physics_core` |
-| `dd40_player_movement` | Keyboard/mouse → `CharacterInput`, first-person camera, `PlayerMode` | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
+| `dd40_player_input` | Keyboard/mouse → `CharacterInput`, first-person camera, `PlayerMode` | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
 | `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
 | `dd40_network` | lightyear client-server networking (feature-gated) | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
 | `dd40_debug_ui` | FPS overlay, orientation gizmo, custom debug elements | `dd40_core` |
 | `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
 | `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
-| `dd40_player` ¹ | Convenience wrapper: `PlayerMovementPlugin` + `CharacterInteractionPlugin` | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_player_movement`, `dd40_character_interaction` |
+| `dd40_player` ¹ | Convenience wrapper: `PlayerInputPlugin` + `CharacterInteractionPlugin` | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_player_input`, `dd40_character_interaction` |
 
 ¹ `dd40_player` depends on other Tier 1 crates — an intentional tracked exception.
 See `INCONSISTENCIES.md`.
@@ -312,7 +312,7 @@ src/
 
 ---
 
-### `dd40_player_movement`
+### `dd40_player_input`
 
 Translates keyboard and mouse input into `CharacterInput` on the player entity,
 drives the first-person camera, and manages the `PlayerMode` state.
@@ -320,7 +320,7 @@ drives the first-person camera, and manages the `PlayerMode` state.
 ```
 src/
 ├── lib.rs
-├── plugin.rs          — PlayerMovementPlugin
+├── plugin.rs          — PlayerInputPlugin
 ├── components.rs      — PlayerMode, CameraRotation, MouseSensitivity
 ├── state.rs           — PlayerMode state transitions
 └── systems.rs         — input mapping, camera follow systems
@@ -347,13 +347,13 @@ src/
 
 ### `dd40_player`
 
-Convenience wrapper that composes `PlayerMovementPlugin` and
+Convenience wrapper that composes `PlayerInputPlugin` and
 `CharacterInteractionPlugin` into three focused plugins.
 This is a tracked Tier 1 exception — see `INCONSISTENCIES.md`.
 
 ```
 src/
-└── lib.rs   — PlayerPlugin, PlayerInputPlugin, PlayerSpawnPlugin
+└── lib.rs   — PlayerPlugin, PlayerControlsPlugin, PlayerSpawnPlugin
 ```
 
 ---

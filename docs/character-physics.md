@@ -57,7 +57,7 @@ pub struct CharacterInput {
     pub sprint:   bool,
 }
 ```
-Written by `dd40_player_movement` (or the network layer for remote characters).
+Written by `dd40_player_input` (or the network layer for remote characters).
 Read by the physics integration system each tick. Network systems that write
 `CharacterInput` must do so in `PhysicsSet::InputSync`.
 
@@ -151,7 +151,7 @@ Two ordered stages in `Update` (from `dd40_character_core::system_sets`):
 | `CharacterRenderSet::FrameInterpolation` | Write the smoothed visual `Transform` |
 | `CharacterRenderSet::CameraSync` | Follow the smoothed `Transform` with the camera |
 
-Both `dd40_network` and `dd40_player_movement` import this set so they can
+Both `dd40_network` and `dd40_player_input` import this set so they can
 declare deterministic ordering without a direct dependency on each other.
 
 ---

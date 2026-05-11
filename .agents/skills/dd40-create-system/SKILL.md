@@ -75,7 +75,7 @@ The workspace currently has three tiers of crates:
 
 **Tier 1 — Implementation** (systems, game behaviour):
 `dd40_physics`, `dd40_vanilla_palette`, `dd40_world`, `dd40_chunk_storage`,
-`dd40_renderer`, `dd40_player_movement`, `dd40_character_interaction`,
+`dd40_renderer`, `dd40_player_input`, `dd40_character_interaction`,
 `dd40_network`, `dd40_debug_ui`, `dd40_gui`, `dd40_player`
 
 **Tier 2 — Binary**: `dd40_client`, `dd40_server`

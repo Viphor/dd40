@@ -2,7 +2,7 @@
 //! parent character's [`CharacterInput`].
 //!
 //! On the local-player client the face is driven by `mouse_look` in
-//! `dd40_player_movement` directly from raw mouse motion. That entity
+//! `dd40_player_input` directly from raw mouse motion. That entity
 //! is identified by the [`Player`] marker and is excluded here so the
 //! lower-frequency `CharacterInput` path does not fight `mouse_look`
 //! and produce visible snap-back between mouse samples.
