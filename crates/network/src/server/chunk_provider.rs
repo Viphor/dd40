@@ -4,7 +4,7 @@ use dd40_core::prelude::*;
 use lightyear::prelude::{MessageReceiver, MessageSender};
 
 use crate::{
-    protocol::{ChunkChannel, ChunkUpdate},
+    protocol::{ChunkChannel, ChunkSnapshot, ChunkUpdate},
     server::chunk_requests::ChunkRequests,
 };
 
@@ -14,10 +14,10 @@ use crate::{
 /// - **Chunk not cached** → forward the request into the local
 ///   [`RequestChunk`] message queue so the world generator / storage
 ///   backend produces it. The connection is registered in
-///   [`ChunkRequests`] so the corresponding [`ChunkReady`] is later
+///   [`ChunkRequests`] so the corresponding [`ChunkSnapshot`] is later
 ///   forwarded by [`send_chunk_data`].
 /// - **`current_version == 0`** → client has nothing; send the cached
-///   chunk as a [`ChunkReady`] (full snapshot).
+///   chunk as a [`ChunkSnapshot`] (full snapshot).
 /// - **`current_version == server_version`** → client is up to date;
 ///   no message is sent.
 /// - **`current_version > server_version`** → client claims to be ahead;
@@ -36,7 +36,7 @@ pub(crate) fn receive_chunk_requests(
     mut snapshot_fallback: MessageWriter<ChunkSnapshotFallback>,
     mut receivers: Query<(
         &mut MessageReceiver<RequestChunk>,
-        &mut MessageSender<ChunkReady>,
+        &mut MessageSender<ChunkSnapshot>,
         &mut MessageSender<ChunkUpdate>,
         &mut ChunkRequests,
     )>,
@@ -75,9 +75,7 @@ pub(crate) fn receive_chunk_requests(
                     "Client claims chunk {} version {} > server {} — sending snapshot to resync",
                     request.pos, client_version, server_version
                 );
-                snapshot_sender.send::<ChunkChannel>(ChunkReady {
-                    chunk: chunk.clone(),
-                });
+                snapshot_sender.send::<ChunkChannel>(ChunkSnapshot { chunk: chunk.clone() });
                 continue;
             }
 
@@ -116,9 +114,7 @@ pub(crate) fn receive_chunk_requests(
                     // history_since returned empty despite version mismatch
                     // — defensive fallback (shouldn't happen if version
                     // arithmetic is correct).
-                    snapshot_sender.send::<ChunkChannel>(ChunkReady {
-                        chunk: chunk.clone(),
-                    });
+                    snapshot_sender.send::<ChunkChannel>(ChunkSnapshot { chunk: chunk.clone() });
                 }
                 None => {
                     snapshot_fallback.write(ChunkSnapshotFallback {
@@ -130,25 +126,29 @@ pub(crate) fn receive_chunk_requests(
                         "Falling back to snapshot for chunk {} (client {} server {})",
                         request.pos, client_version, server_version
                     );
-                    snapshot_sender.send::<ChunkChannel>(ChunkReady {
-                        chunk: chunk.clone(),
-                    });
+                    snapshot_sender.send::<ChunkChannel>(ChunkSnapshot { chunk: chunk.clone() });
                 }
             }
         }
     }
 }
 
+/// Forwards locally-produced [`ChunkReady`] messages (typically emitted by
+/// the world generator or storage backend) to every connection that has a
+/// pending request for the chunk's position. Sent as a [`ChunkSnapshot`]
+/// over the wire.
 pub(crate) fn send_chunk_data(
     mut reader: MessageReader<ChunkReady>,
-    mut senders: Query<(&mut MessageSender<ChunkReady>, &mut ChunkRequests)>,
+    mut senders: Query<(&mut MessageSender<ChunkSnapshot>, &mut ChunkRequests)>,
 ) {
     let messages = reader.read().collect::<Vec<_>>();
     senders.par_iter_mut().for_each(|(mut sender, mut cache)| {
         for ready in messages.iter() {
             if cache.contains(&ready.chunk.position()) {
                 trace!("Sending chunk data at {}", ready.chunk.position());
-                sender.send::<ChunkChannel>((*ready).clone());
+                sender.send::<ChunkChannel>(ChunkSnapshot {
+                    chunk: ready.chunk.clone(),
+                });
                 cache.remove(&ready.chunk.position());
             }
         }

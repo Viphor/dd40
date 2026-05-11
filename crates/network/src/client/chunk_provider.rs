@@ -4,7 +4,7 @@ use dd40_core::chunk::events::{ChunkChanged, PredictionRejected};
 use dd40_core::prelude::*;
 use lightyear::prelude::{MessageReceiver, MessageSender};
 
-use crate::protocol::{ChunkChannel, ChunkUpdate};
+use crate::protocol::{ChunkChannel, ChunkSnapshot, ChunkUpdate};
 
 pub(crate) fn send_chunk_requests(
     mut requests: MessageReader<RequestChunk>,
@@ -16,14 +16,20 @@ pub(crate) fn send_chunk_requests(
     }
 }
 
+/// Reads [`ChunkSnapshot`] messages off the wire and forwards each as a
+/// local [`ChunkReady`] so the existing `chunk_ready_listener` inserts the
+/// chunk wholesale into [`ChunkCache`]. Used for both initial loads and
+/// snapshot-fallback recoveries.
 pub(crate) fn receive_chunk_data(
     mut ready: MessageWriter<ChunkReady>,
-    mut receiver: Single<&mut MessageReceiver<ChunkReady>>,
+    mut receiver: Single<&mut MessageReceiver<ChunkSnapshot>>,
 ) {
-    for chunk in receiver.receive() {
-        let pos = chunk.chunk.position();
-        trace!("Received chunk at {}", pos);
-        ready.write(chunk);
+    for snapshot in receiver.receive() {
+        let pos = snapshot.chunk.position();
+        trace!("Received chunk snapshot at {}", pos);
+        ready.write(ChunkReady {
+            chunk: snapshot.chunk,
+        });
     }
 }
 

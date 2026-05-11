@@ -356,9 +356,6 @@ impl Plugin for ProtocolPlugin {
         app.register_message::<PlayerSpawnLocation>()
             .add_direction(NetworkDirection::ServerToClient);
 
-        app.register_message::<ChunkReady>()
-            .add_direction(NetworkDirection::ServerToClient);
-
         app.register_message::<ChunkUpdate>()
             .add_direction(NetworkDirection::ServerToClient);
 
