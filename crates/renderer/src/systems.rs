@@ -202,6 +202,15 @@ pub fn spawn_mesh_tasks(
     let task_pool = AsyncComputeTaskPool::get();
 
     for pos in dirty {
+        // If a meshing task for this chunk is already in flight, skip
+        // re-spawning. Otherwise multiple tasks for the same chunk could
+        // complete out of order and a stale task would overwrite a fresh
+        // one. Leave the dirty flag set so we retry next frame after the
+        // current task completes.
+        if pending.in_flight.contains(&pos) {
+            continue;
+        }
+
         // --- Despawn the old mesh entity on the main thread (fast) -----------
         if let Some(old_entity) = render_state.mesh_entity(&pos) {
             commands.entity(old_entity).despawn();
@@ -288,6 +297,7 @@ pub fn spawn_mesh_tasks(
         });
 
         pending.tasks.push(task);
+        pending.in_flight.insert(pos);
 
         // Clear dirty immediately — the task is now in-flight.
         render_state.clear_dirty(pos);
@@ -313,9 +323,10 @@ pub fn apply_mesh_tasks(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Drain completed tasks, keep pending ones.
-    let mut still_pending: Vec<_> = Vec::with_capacity(pending.tasks.len());
+    let drained: Vec<_> = pending.tasks.drain(..).collect();
+    let mut still_pending: Vec<_> = Vec::with_capacity(drained.len());
 
-    for mut task in pending.tasks.drain(..) {
+    for mut task in drained {
         match block_on(future::poll_once(&mut task)) {
             None => {
                 // Task not finished yet — keep it for next frame.
@@ -323,6 +334,7 @@ pub fn apply_mesh_tasks(
             }
             Some(data) => {
                 let pos = data.pos;
+                pending.in_flight.remove(&pos);
                 if let Some(mesh) = data.mesh {
                     let mesh_handle = meshes.add(mesh);
 
@@ -360,4 +372,69 @@ fn chunk_pos_from_transform(transform: &Transform) -> ChunkPos {
     use dd40_core::block::BlockPos;
     let bp = BlockPos::from(transform);
     bp.chunk_pos()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::tasks::TaskPool;
+    use dd40_core::block::BlockRegistry;
+    use dd40_core::chunk::Chunk;
+
+    /// Regression: marking a chunk dirty while a previous mesh task for the
+    /// same chunk is still in flight must not spawn a second task. Without
+    /// this guard, two tasks for the same chunk could complete out of order
+    /// and a stale task would overwrite a fresh one — the symptom users see
+    /// as "block disappears from collision/targeting but the mesh is stale".
+    #[test]
+    fn spawn_skips_chunk_with_in_flight_task() {
+        AsyncComputeTaskPool::get_or_init(TaskPool::default);
+
+        let mut app = App::new();
+        app.init_resource::<ChunkRenderState>();
+        app.init_resource::<PendingMeshTasks>();
+        app.init_resource::<BlockRegistry>();
+
+        let mut cache = ChunkCache::default();
+        let pos = ChunkPos::new(0, 0);
+        cache.insert(Chunk::new(pos));
+        app.insert_resource(cache);
+
+        // First dirty + spawn → one task in flight.
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .mark_dirty(pos);
+        app.add_systems(Update, spawn_mesh_tasks);
+        app.update();
+
+        let pending = app.world().resource::<PendingMeshTasks>();
+        assert_eq!(pending.tasks.len(), 1, "first spawn should dispatch a task");
+        assert!(
+            pending.in_flight.contains(&pos),
+            "in_flight should track the dispatched task"
+        );
+
+        // Mark dirty again before the first task can complete.
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .mark_dirty(pos);
+        app.update();
+
+        let pending = app.world().resource::<PendingMeshTasks>();
+        assert_eq!(
+            pending.tasks.len(),
+            1,
+            "second spawn must not dispatch a duplicate task while one is in flight"
+        );
+
+        // Dirty bit must remain set so the chunk is retried after the
+        // current task finishes.
+        let render_state = app.world().resource::<ChunkRenderState>();
+        let dirty: Vec<ChunkPos> = render_state.dirty_chunks().collect();
+        assert_eq!(
+            dirty,
+            vec![pos],
+            "dirty bit must remain set when spawn was skipped"
+        );
+    }
 }
