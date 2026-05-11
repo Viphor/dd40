@@ -3,5 +3,5 @@ pub mod state;
 
 mod systems;
 
-pub use plugin::PlayerMovementPlugin;
+pub use plugin::PlayerInputPlugin;
 pub use state::PlayerMode;

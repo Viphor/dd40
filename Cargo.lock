@@ -2870,11 +2870,11 @@ dependencies = [
  "dd40_character_interaction",
  "dd40_core",
  "dd40_physics_core",
- "dd40_player_movement",
+ "dd40_player_input",
 ]
 
 [[package]]
-name = "dd40_player_movement"
+name = "dd40_player_input"
 version = "0.1.0"
 dependencies = [
  "bevy",

@@ -1,5 +1,5 @@
 [package]
-name = "dd40_player_movement"
+name = "dd40_player_input"
 version = "0.1.0"
 edition = "2024"
 

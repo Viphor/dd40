@@ -7,7 +7,7 @@ use dd40_gui::plugin::GuiPlugin;
 use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
 use dd40_network::ClientNetworkPlugin;
 use dd40_physics::PhysicsPlugin;
-use dd40_player::PlayerInputPlugin;
+use dd40_player::PlayerControlsPlugin;
 use dd40_renderer::RendererPlugin;
 use dd40_vanilla_palette::VanillaPalettePlugin;
 
@@ -30,7 +30,7 @@ fn main() {
         PhysicsPlugin,
         IntegrationCharacterPhysicsPlugin,
         VanillaPalettePlugin,
-        PlayerInputPlugin,
+        PlayerControlsPlugin,
         DebugUiPlugin,
         ClientNetworkPlugin,
         RendererPlugin,

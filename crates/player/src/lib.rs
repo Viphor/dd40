@@ -9,7 +9,7 @@ use dd40_core::debug::DebugInfo;
 use dd40_core::prelude::*;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{Impulse, Velocity};
-use dd40_player_movement::{PlayerMode, PlayerMovementPlugin};
+use dd40_player_input::{PlayerInputPlugin, PlayerMode};
 
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
@@ -18,7 +18,7 @@ pub use dd40_character_interaction::{
     TargetedBlock as TargetBlock,
 };
 pub use dd40_character_core::face::{CameraRotation, MouseSensitivity};
-pub use dd40_player_movement::PlayerMode as PlayerModeType;
+pub use dd40_player_input::PlayerMode as PlayerModeType;
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 
@@ -98,17 +98,30 @@ fn update_debug_info(
 ///
 /// For single-player mode, prefer [`PlayerPlugin`] which bundles this with
 /// [`PlayerSpawnPlugin`].
-pub struct PlayerInputPlugin;
+/// Bevy plugin that **only wires the input/interaction systems** for the
+/// local player. Does not spawn an entity.
+///
+/// Composes [`PlayerInputPlugin`] (camera + keyboard/mouse input) and
+/// [`CharacterInteractionPlugin`] (mining + placement) and adds the
+/// debug-info system that needs both physics and interaction state.
+///
+/// Use this in networked mode where the network crate spawns the character and
+/// adds the [`Player`] marker. All input systems query `With<Player>` and
+/// automatically pick up the network-spawned entity.
+///
+/// For single-player mode, prefer [`PlayerPlugin`] which bundles this with
+/// [`PlayerSpawnPlugin`].
+pub struct PlayerControlsPlugin;
 
-impl Plugin for PlayerInputPlugin {
+impl Plugin for PlayerControlsPlugin {
     fn build(&self, app: &mut App) {
         let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
 
-        app.add_plugins((PlayerMovementPlugin, CharacterInteractionPlugin));
+        app.add_plugins((PlayerInputPlugin, CharacterInteractionPlugin));
 
         // Clear interaction state when switching to FreeCam so highlights and
         // mining progress don't linger. OnEnter lives here because it needs
-        // both PlayerMode (player_movement) and the interaction resources.
+        // both PlayerMode (player_input) and the interaction resources.
         app.add_systems(
             OnEnter(PlayerMode::FreeCam),
             |mut player_query: Query<(&mut TargetedBlock, &mut MiningState), With<Player>>| {
@@ -130,7 +143,7 @@ impl Plugin for PlayerInputPlugin {
 /// [`AppState::Playing`].
 ///
 /// In networked mode the character is spawned by the network crate, so this
-/// plugin should be omitted. Use [`PlayerInputPlugin`] for input handling in
+/// plugin should be omitted. Use [`PlayerControlsPlugin`] for input handling in
 /// that case.
 pub struct PlayerSpawnPlugin;
 
@@ -141,15 +154,15 @@ impl Plugin for PlayerSpawnPlugin {
 }
 
 /// Convenience plugin for **single-player** mode. Combines [`PlayerSpawnPlugin`]
-/// and [`PlayerInputPlugin`].
+/// and [`PlayerControlsPlugin`].
 ///
-/// In **networked** mode, use [`PlayerInputPlugin`] only — the network crate
+/// In **networked** mode, use [`PlayerControlsPlugin`] only — the network crate
 /// spawns the character and adds the [`Player`] marker, so [`PlayerSpawnPlugin`]
 /// would create a duplicate entity.
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((PlayerSpawnPlugin, PlayerInputPlugin));
+        app.add_plugins((PlayerSpawnPlugin, PlayerControlsPlugin));
     }
 }

@@ -23,9 +23,9 @@ use dd40_item_core::plugin::ItemCorePlugin;
 /// Auto-adds [`CorePlugin`], [`PhysicsCorePlugin`], and [`CharacterCorePlugin`]
 /// via [`ensure_plugins!`] if not already present.
 #[derive(Default)]
-pub struct PlayerMovementPlugin;
+pub struct PlayerInputPlugin;
 
-impl Plugin for PlayerMovementPlugin {
+impl Plugin for PlayerInputPlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(
             app,
@@ -87,19 +87,19 @@ mod tests {
     use dd40_physics_core::prelude::PhysicsConfig;
 
     #[test]
-    fn player_movement_plugin_auto_adds_physics_core() {
+    fn player_input_plugin_auto_adds_physics_core() {
         let mut app = App::new();
-        app.add_plugins(PlayerMovementPlugin);
+        app.add_plugins(PlayerInputPlugin);
         assert!(
             app.world().contains_resource::<PhysicsConfig>(),
-            "PhysicsCorePlugin must be auto-added by PlayerMovementPlugin"
+            "PhysicsCorePlugin must be auto-added by PlayerInputPlugin"
         );
     }
 
     #[test]
-    fn player_movement_plugin_registers_player_mode_state() {
+    fn player_input_plugin_registers_player_mode_state() {
         let mut app = App::new();
-        app.add_plugins(PlayerMovementPlugin);
+        app.add_plugins(PlayerInputPlugin);
         assert!(
             app.world().contains_resource::<State<PlayerMode>>(),
             "PlayerMode state must be registered"
