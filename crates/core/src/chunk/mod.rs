@@ -36,15 +36,28 @@ pub const CHUNK_SIZE_Z: usize = 16;
 pub const CHUNK_SIZE: usize = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 
 /// Position of a chunk in the world, using chunk coordinates.
+///
+/// `x` and `z` index the horizontal chunk grid as you would expect.
+/// `y` indexes the **vertical** chunk grid: today every chunk spans the
+/// full build height so `y` is always `0`, but the field is reserved so
+/// that a future split into 16×N×16 cubic chunks (for near-infinite build
+/// height) is a non-breaking change to the on-disk format and the
+/// network protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component, Reflect, Serialize, Deserialize)]
 pub struct ChunkPos {
     pub x: BlockCoord,
+    pub y: BlockCoord,
     pub z: BlockCoord,
 }
 
 impl ChunkPos {
-    pub fn new(x: BlockCoord, z: BlockCoord) -> Self {
-        Self { x, z }
+    /// Constructs a chunk position from its three chunk-grid coordinates.
+    ///
+    /// All current callers pass `y = 0` because the world is a single
+    /// vertical column today; the parameter is exposed so callers think
+    /// about the third axis explicitly when (and if) it starts being used.
+    pub fn new(x: BlockCoord, y: BlockCoord, z: BlockCoord) -> Self {
+        Self { x, y, z }
     }
 
     /// Convert a chunk-local coordinate to a world-space [`BlockPos`].
@@ -54,14 +67,17 @@ impl ChunkPos {
     /// inside this chunk back through `block_pos` reconstructs its
     /// world-space position.
     ///
-    /// `local.y` is preserved as-is — chunks span the entire build height
-    /// in Y today, but this method is forward-compatible with the
-    /// upcoming Y-axis split on `ChunkPos` (see `vc-chunkpos-y-axis`).
+    /// Today `self.y` is always `0` and `local.y` carries the full
+    /// world-Y in the range `[0, CHUNK_SIZE_Y)`, so the reconstruction
+    /// reduces to `local.y`. The general formula
+    /// `self.y * CHUNK_SIZE_Y + local.y` is forward-compatible with a
+    /// future Y-split where `local.y` is bounded by the chunk's vertical
+    /// extent instead of the entire build height.
     #[inline]
     pub fn block_pos(self, local: BlockLocal) -> BlockPos {
         BlockPos::new(
             self.x * (CHUNK_SIZE_X as BlockCoord) + local.x as BlockCoord,
-            local.y as BlockCoord,
+            self.y * (CHUNK_SIZE_Y as BlockCoord) + local.y as BlockCoord,
             self.z * (CHUNK_SIZE_Z as BlockCoord) + local.z as BlockCoord,
         )
     }
@@ -69,7 +85,7 @@ impl ChunkPos {
 
 impl Display for ChunkPos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {})", self.x, self.z)
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
     }
 }
 
@@ -77,6 +93,7 @@ impl From<&BlockPos> for ChunkPos {
     fn from(value: &BlockPos) -> Self {
         Self {
             x: value.x.div_euclid(CHUNK_SIZE_X as BlockCoord),
+            y: value.y.div_euclid(CHUNK_SIZE_Y as BlockCoord),
             z: value.z.div_euclid(CHUNK_SIZE_Z as BlockCoord),
         }
     }
@@ -92,6 +109,7 @@ impl From<&Transform> for ChunkPos {
     fn from(value: &Transform) -> Self {
         Self {
             x: value.translation.x.div_euclid(CHUNK_SIZE_X as f32) as BlockCoord,
+            y: value.translation.y.div_euclid(CHUNK_SIZE_Y as f32) as BlockCoord,
             z: value.translation.z.div_euclid(CHUNK_SIZE_Z as f32) as BlockCoord,
         }
     }
@@ -101,6 +119,7 @@ impl From<&Vec3> for ChunkPos {
     fn from(value: &Vec3) -> Self {
         Self {
             x: value.x.div_euclid(CHUNK_SIZE_X as f32) as BlockCoord,
+            y: value.y.div_euclid(CHUNK_SIZE_Y as f32) as BlockCoord,
             z: value.z.div_euclid(CHUNK_SIZE_Z as f32) as BlockCoord,
         }
     }
@@ -506,7 +525,7 @@ mod tests {
 
     #[test]
     fn new_chunk_starts_at_version_zero_and_empty_queues() {
-        let c = Chunk::new(ChunkPos::new(0, 0));
+        let c = Chunk::new(ChunkPos::new(0, 0, 0));
         assert_eq!(c.version(), 0);
         assert!(c.predicted().is_empty());
         assert!(c.confirmed_history().is_empty());
@@ -516,7 +535,7 @@ mod tests {
     fn chunk_pos_block_pos_is_inverse_of_block_pos_chunk_local() {
         // Roundtrip across positive, negative, and chunk-boundary chunks.
         for (cx, cz) in [(0, 0), (3, -2), (-5, -7), (12345, -67890)] {
-            let chunk_pos = ChunkPos::new(cx, cz);
+            let chunk_pos = ChunkPos::new(cx, 0, cz);
             for (lx, ly, lz) in [
                 (0u8, 0u16, 0u8),
                 (15, 255, 15),
@@ -536,14 +555,14 @@ mod tests {
     #[test]
     fn chunk_pos_block_pos_origin() {
         // The (0,0,0) local of chunk (3,5) is at world (48, 0, 80).
-        let cp = ChunkPos::new(3, 5);
+        let cp = ChunkPos::new(3, 0, 5);
         let bp = cp.block_pos(BlockLocal::new(0, 0, 0));
         assert_eq!(bp, BlockPos::new(48, 0, 80));
     }
 
     #[test]
     fn push_predicted_applies_to_data_immediately() {
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.push_predicted(ChunkChange::new_place(lp(1, 2, 3), BlockId(7)));
         assert_eq!(c.get_local(lp(1, 2, 3)).block_id, BlockId(7));
         assert_eq!(c.predicted().len(), 1);
@@ -552,7 +571,7 @@ mod tests {
 
     #[test]
     fn commit_predicted_all_drains_and_bumps_version() {
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
         c.push_predicted(ChunkChange::new_place(lp(1, 0, 0), BlockId(2)));
 
@@ -568,7 +587,7 @@ mod tests {
 
     #[test]
     fn apply_confirmed_changes_rejects_mismatched_base_version() {
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
         c.commit_predicted_all();
         // c.version == 1
@@ -579,7 +598,7 @@ mod tests {
 
     #[test]
     fn apply_confirmed_changes_writes_data_and_appends_history() {
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         let ok = c.apply_confirmed_changes(
             0,
             &[
@@ -595,7 +614,7 @@ mod tests {
 
     #[test]
     fn history_since_returns_empty_when_caller_is_current() {
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
         c.commit_predicted_all();
         assert_eq!(c.history_since(1).unwrap().len(), 0);
@@ -603,7 +622,7 @@ mod tests {
 
     #[test]
     fn history_since_returns_delta() {
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.push_predicted(ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
         c.push_predicted(ChunkChange::new_place(lp(1, 0, 0), BlockId(2)));
         c.commit_predicted_all();
@@ -618,7 +637,7 @@ mod tests {
     fn history_since_returns_none_when_truncated() {
         // Simulate a chunk loaded from non-versioned storage: version > 0,
         // empty history.
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.version = 5;
         assert!(c.history_since(0).is_none());
         assert!(c.history_since(3).is_none());
@@ -628,7 +647,7 @@ mod tests {
     #[test]
     fn position_is_metadata_only_data_survives_swap() {
         // Build a chunk at (0,0) with a distinctive block pattern.
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.push_predicted(ChunkChange::new_place(lp(2, 64, 5), BlockId(42)));
         c.commit_predicted_all();
         let snapshot_block = c.get_local(lp(2, 64, 5));
@@ -636,7 +655,7 @@ mod tests {
         let history_len = c.confirmed_history().len();
 
         // Physically move the chunk to a different ChunkPos.
-        c.set_position(ChunkPos::new(-7, 13));
+        c.set_position(ChunkPos::new(-7, 0, 13));
 
         // Block data, version, and history must be untouched. The chunk
         // has no global-world knowledge to invalidate.
@@ -647,7 +666,7 @@ mod tests {
 
     #[test]
     fn replace_change_applies_unconditionally() {
-        let mut c = Chunk::new(ChunkPos::new(0, 0));
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
         c.set_local(lp(0, 0, 0), Block::new(BlockId(99)));
         c.push_predicted(ChunkChange::new_replace(lp(0, 0, 0), BlockId(7)));
         assert_eq!(c.get_local(lp(0, 0, 0)).block_id, BlockId(7));

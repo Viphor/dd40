@@ -408,7 +408,7 @@ pub fn global_to_chunk_local(global_pos: &BlockPos) -> (ChunkPos, (u8, u8, u8)) 
     let local_y = global_pos.y as u8; // Assuming y is always 0-255
     let local_z = global_pos.z.rem_euclid(16) as u8;
 
-    (ChunkPos::new(chunk_x, chunk_z), (local_x, local_y, local_z))
+    (ChunkPos::new(chunk_x, 0, chunk_z), (local_x, local_y, local_z))
 }
 
 /// Helper function to convert chunk position and local position to global block position.
@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_chunk_local_to_global() {
-        let chunk_pos = ChunkPos::new(2, -3);
+        let chunk_pos = ChunkPos::new(2, 0, -3);
         let local_pos = (5, 100, 7);
         let global_pos = chunk_local_to_global(&chunk_pos, local_pos);
 

@@ -561,6 +561,7 @@ pub(crate) fn load_nearby_chunks(
         for dx in -1..=1 {
             let chunk_pos = ChunkPos {
                 x: player_chunk_pos.x + dx,
+                y: player_chunk_pos.y,
                 z: player_chunk_pos.z + dz,
             };
             if !chunk_cache.contains(&chunk_pos) {

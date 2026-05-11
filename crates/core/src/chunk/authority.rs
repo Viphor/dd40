@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn plugin_drains_predicted_and_emits_chunk_changed() {
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut app = build_app_with_chunk(pos);
 
         app.world_mut()
@@ -462,7 +462,7 @@ mod tests {
 
     #[test]
     fn plugin_rolls_back_default_validator_rejection() {
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut app = build_app_with_chunk(pos);
 
         // Pre-fill the cell with stone (non-replaceable).
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn predicted_queue_untouched_without_plugin() {
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut app = build_app_with_chunk(pos);
         app.world_mut()
             .resource_mut::<ChunkCache>()
@@ -514,10 +514,10 @@ mod tests {
         let mut cache = ChunkCache::new();
         for x in 0..10 {
             for z in 0..10 {
-                cache.insert(Chunk::new(ChunkPos::new(x, z)));
+                cache.insert(Chunk::new(ChunkPos::new(x, 0, z)));
             }
         }
-        let dirty_pos = ChunkPos::new(5, 5);
+        let dirty_pos = ChunkPos::new(5, 0, 5);
         cache.push_predicted(dirty_pos, ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
         assert_eq!(cache.dirty_count(), 1);
         app.insert_resource(cache);
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn custom_validator_system_can_reject() {
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut app = build_app_with_chunk(pos);
         // Push a change the default validator would ACCEPT (place into air)…
         app.world_mut()
@@ -599,7 +599,7 @@ mod tests {
         }
 
         let mut pending = PendingChunkRejections::default();
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         pending.reject(pos, 0, RejectReason::custom("first"));
         pending.reject(pos, 0, RejectReason::custom("second"));
         assert_eq!(
@@ -610,7 +610,7 @@ mod tests {
 
         // And as systems with explicit ordering: A.before(B) means A's
         // reason is the one that wins.
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut app = build_app_with_chunk(pos);
         app.world_mut()
             .resource_mut::<ChunkCache>()
@@ -636,7 +636,7 @@ mod tests {
     fn rejections_for_evicted_chunks_are_dropped_safely() {
         // Push a rejection referencing a chunk that doesn't exist in the
         // cache — commit must not panic.
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut app = build_app_with_chunk(pos);
         // Mark dirty so commit runs, then evict the chunk.
         app.world_mut()
@@ -644,7 +644,7 @@ mod tests {
             .push_predicted(pos, ChunkChange::new_place(lp(0, 0, 0), BlockId(1)));
         // Manually inject a rejection for a chunk that's NOT in the cache.
         let mut pending = PendingChunkRejections::default();
-        pending.reject(ChunkPos::new(99, 99), 0, RejectReason::custom("ghost"));
+        pending.reject(ChunkPos::new(99, 0, 99), 0, RejectReason::custom("ghost"));
         app.insert_resource(pending);
 
         app.add_plugins(ChunkAuthorityPlugin);

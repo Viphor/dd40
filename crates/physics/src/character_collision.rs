@@ -475,7 +475,7 @@ mod tests {
 
         let cache = app.world().resource::<CharacterSpatialCache>();
         assert!(
-            cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
+            cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&e),
             "entity should appear in chunk (0,0) after a tick"
         );
     }
@@ -495,11 +495,11 @@ mod tests {
 
         let cache = app.world().resource::<CharacterSpatialCache>();
         assert!(
-            !cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
+            !cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&e),
             "entity should have left chunk (0,0)"
         );
         assert!(
-            cache.entities_in_chunk(ChunkPos::new(1, 0)).contains(&e),
+            cache.entities_in_chunk(ChunkPos::new(1, 0, 0)).contains(&e),
             "entity should now be in chunk (1,0)"
         );
     }

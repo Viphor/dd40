@@ -209,7 +209,7 @@ mod tests {
     use dd40_core::chunk::ChunkPos;
 
     fn pos(x: i32, z: i32) -> ChunkPos {
-        ChunkPos::new(x, z)
+        ChunkPos::new(x, 0, z)
     }
 
     // ── Initial state ─────────────────────────────────────────────────────────

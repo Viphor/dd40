@@ -408,7 +408,7 @@ mod tests {
         app.init_resource::<BlockRegistry>();
 
         let mut cache = ChunkCache::default();
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         cache.insert(Chunk::new(pos));
         app.insert_resource(cache);
 
@@ -465,7 +465,7 @@ mod tests {
         app.init_resource::<BlockRegistry>();
 
         let mut cache = ChunkCache::default();
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         cache.insert(Chunk::new(pos));
         app.insert_resource(cache);
 

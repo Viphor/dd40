@@ -236,7 +236,7 @@ mod tests {
     }
 
     fn pos() -> ChunkPos {
-        ChunkPos::new(0, 0)
+        ChunkPos::new(0, 0, 0)
     }
 
     fn build_app() -> App {

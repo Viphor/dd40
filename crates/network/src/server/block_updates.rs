@@ -115,7 +115,7 @@ mod tests {
     use super::*;
 
     fn cp(x: i32, z: i32) -> ChunkPos {
-        ChunkPos::new(x, z)
+        ChunkPos::new(x, 0, z)
     }
 
     #[test]

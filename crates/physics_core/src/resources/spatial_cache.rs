@@ -159,7 +159,7 @@ impl CharacterSpatialCache {
         let mut seen: Vec<Entity> = Vec::new();
         for cx in cx_min..=cx_max {
             for cz in cz_min..=cz_max {
-                for &entity in self.entities_in_chunk(ChunkPos::new(cx, cz)) {
+                for &entity in self.entities_in_chunk(ChunkPos::new(cx, 0, cz)) {
                     if !seen.contains(&entity) {
                         seen.push(entity);
                     }
@@ -186,7 +186,7 @@ fn chunks_for_aabb(origin: Vec3, aabb: &Aabb) -> impl Iterator<Item = ChunkPos> 
     let mut result = Vec::with_capacity(4);
     for cx in chunk_x_min..=chunk_x_max {
         for cz in chunk_z_min..=chunk_z_max {
-            result.push(ChunkPos::new(cx, cz));
+            result.push(ChunkPos::new(cx, 0, cz));
         }
     }
     result.into_iter()
@@ -231,7 +231,7 @@ mod tests {
             "should have one registration"
         );
         assert!(
-            cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e),
+            cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&e),
             "entity should be in chunk (0,0)"
         );
     }
@@ -244,8 +244,8 @@ mod tests {
 
         cache.rebuild(std::iter::once((e, Vec3::new(16.0, 0.0, 4.0), &aabb)));
 
-        let in_c0 = cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e);
-        let in_c1 = cache.entities_in_chunk(ChunkPos::new(1, 0)).contains(&e);
+        let in_c0 = cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&e);
+        let in_c1 = cache.entities_in_chunk(ChunkPos::new(1, 0, 0)).contains(&e);
 
         assert!(
             in_c0,
@@ -266,8 +266,8 @@ mod tests {
 
         cache.rebuild(std::iter::once((e, Vec3::new(4.0, 0.0, 16.0), &aabb)));
 
-        let in_c0 = cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&e);
-        let in_c1 = cache.entities_in_chunk(ChunkPos::new(0, 1)).contains(&e);
+        let in_c0 = cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&e);
+        let in_c1 = cache.entities_in_chunk(ChunkPos::new(0, 0, 1)).contains(&e);
 
         assert!(in_c0, "entity should appear in chunk (0,0)");
         assert!(in_c1, "entity should appear in chunk (0,1)");
@@ -283,7 +283,7 @@ mod tests {
 
         for (cx, cz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
             assert!(
-                cache.entities_in_chunk(ChunkPos::new(cx, cz)).contains(&e),
+                cache.entities_in_chunk(ChunkPos::new(cx, 0, cz)).contains(&e),
                 "entity should appear in chunk ({cx},{cz})"
             );
         }
@@ -349,11 +349,11 @@ mod tests {
 
         assert_eq!(cache.registration_count(), 1);
         assert!(
-            !cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&old),
+            !cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&old),
             "old entity should have been cleared by rebuild"
         );
         assert!(
-            cache.entities_in_chunk(ChunkPos::new(0, 0)).contains(&new),
+            cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&new),
             "new entity should be present after rebuild"
         );
     }
@@ -367,7 +367,7 @@ mod tests {
         cache.rebuild(std::iter::once((e, Vec3::new(-4.0, 0.0, -4.0), &aabb)));
 
         assert!(
-            cache.entities_in_chunk(ChunkPos::new(-1, -1)).contains(&e),
+            cache.entities_in_chunk(ChunkPos::new(-1, 0, -1)).contains(&e),
             "entity at negative coords should map to chunk (-1,-1)"
         );
     }

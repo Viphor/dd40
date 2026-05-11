@@ -70,7 +70,7 @@ mod tests {
         app.world_mut()
             .resource_mut::<Messages<GenerateChunk>>()
             .write(GenerateChunk {
-                pos: ChunkPos::new(0, 0),
+                pos: ChunkPos::new(0, 0, 0),
             });
 
         app.update();

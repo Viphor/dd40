@@ -164,7 +164,7 @@ mod tests {
     use dd40_core::chunk::{BlockLocal, Chunk, ChunkPos};
 
     fn pos() -> ChunkPos {
-        ChunkPos::new(0, 0)
+        ChunkPos::new(0, 0, 0)
     }
 
     fn cell(x: u8) -> BlockLocal {

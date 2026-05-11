@@ -230,7 +230,7 @@ mod tests {
     }
 
     fn cache_with_block(lx: usize, ly: usize, lz: usize, block: Block) -> ChunkCache {
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         chunk.set(lx, ly, lz, block);
         let mut cache = ChunkCache::new();
         cache.insert(chunk);
@@ -321,8 +321,8 @@ mod tests {
     #[test]
     fn raycast_crosses_chunk_boundary() {
         let registry = make_registry();
-        let chunk_a = Chunk::new(ChunkPos::new(0, 0));
-        let mut chunk_b = Chunk::new(ChunkPos::new(1, 0));
+        let chunk_a = Chunk::new(ChunkPos::new(0, 0, 0));
+        let mut chunk_b = Chunk::new(ChunkPos::new(1, 0, 0));
         chunk_b.set(2, 64, 0, Block::new(BlockId(1)));
         let mut cache = ChunkCache::new();
         cache.insert(chunk_a);
@@ -404,7 +404,7 @@ mod tests {
         app.insert_resource(registry);
 
         let mut cache = ChunkCache::new();
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         chunk.set(3, 64, 0, Block::new(BlockId(1)));
         chunk.set(0, 64, 3, Block::new(BlockId(1)));
         cache.insert(chunk);

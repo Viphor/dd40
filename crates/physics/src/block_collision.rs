@@ -468,7 +468,7 @@ mod tests {
             );
         }
 
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         for lx in 0..CHUNK_SIZE_X {
             for lz in 0..CHUNK_SIZE_Z {
                 chunk.set(lx, floor_y as usize, lz, Block::new(BlockId(1)));
@@ -559,7 +559,7 @@ mod tests {
             );
         }
 
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         for ly in 0..10usize {
             for lz in 0..CHUNK_SIZE_Z {
                 chunk.set(2, ly, lz, Block::new(BlockId(1)));
@@ -708,14 +708,14 @@ mod tests {
             );
         }
 
-        let mut chunk0 = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk0 = Chunk::new(ChunkPos::new(0, 0, 0));
         for lx in 0..CHUNK_SIZE_X {
             for lz in 0..CHUNK_SIZE_Z {
                 chunk0.set(lx, 0, lz, Block::new(BlockId(1)));
             }
         }
 
-        let mut chunk1 = Chunk::new(ChunkPos::new(1, 0));
+        let mut chunk1 = Chunk::new(ChunkPos::new(1, 0, 0));
         for lx in 0..CHUNK_SIZE_X {
             for lz in 0..CHUNK_SIZE_Z {
                 chunk1.set(lx, 0, lz, Block::new(BlockId(1)));
@@ -757,7 +757,7 @@ mod tests {
             );
         }
 
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         for ly in 0..5usize {
             for lz in 0..CHUNK_SIZE_Z {
                 chunk.set(2, ly, lz, Block::new(BlockId(1)));
@@ -830,7 +830,7 @@ mod tests {
             );
         }
 
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         for ly in 0..10usize {
             for lx in 0..CHUNK_SIZE_X {
                 chunk.set(lx, ly, 2, Block::new(BlockId(1)));

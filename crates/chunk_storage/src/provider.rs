@@ -30,8 +30,12 @@ impl DiskChunkProvider {
     }
 
     /// Returns the canonical file path for a chunk.
+    ///
+    /// Includes the Y axis (always `0` today) so that an eventual switch
+    /// to vertically-split chunks does not invalidate save folders.
     fn chunk_path(&self, pos: ChunkPos) -> std::path::PathBuf {
-        self.dir.join(format!("chunk_{}_{}.bin", pos.x, pos.z))
+        self.dir
+            .join(format!("chunk_{}_{}_{}.bin", pos.x, pos.y, pos.z))
     }
 
     /// Synchronously saves `chunk` to the configured directory.

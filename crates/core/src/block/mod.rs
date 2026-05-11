@@ -6,7 +6,7 @@ pub mod registry;
 
 pub use registry::{BlockDefinition, BlockRegistry};
 
-use crate::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
+use crate::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, ChunkPos};
 
 // ---------------------------------------------------------------------------
 // Collision shape
@@ -73,6 +73,7 @@ impl BlockPos {
     pub fn chunk_pos(&self) -> ChunkPos {
         ChunkPos {
             x: self.x.div_euclid(CHUNK_SIZE_X as BlockCoord),
+            y: self.y.div_euclid(CHUNK_SIZE_Y as BlockCoord),
             z: self.z.div_euclid(CHUNK_SIZE_Z as BlockCoord),
         }
     }
@@ -177,7 +178,7 @@ mod tests {
     fn block_pos_chunk_pos() {
         let pos = BlockPos::new(17, 64, -1);
         let chunk = pos.chunk_pos();
-        assert_eq!(chunk, ChunkPos::new(1, -1));
+        assert_eq!(chunk, ChunkPos::new(1, 0, -1));
     }
 
     #[test]

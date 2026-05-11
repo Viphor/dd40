@@ -151,7 +151,7 @@ impl From<io::Error> for ChunkSerializeError {
 /// use dd40_core::prelude::*;
 /// use dd40_chunk_storage::serialization::serialize_chunk;
 ///
-/// let chunk = Chunk::new(ChunkPos::new(0, 0));
+/// let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
 /// let file = File::create("chunk_0_0.bin").unwrap();
 /// serialize_chunk(&chunk, BufWriter::new(file)).unwrap();
 /// ```
@@ -177,7 +177,7 @@ pub fn serialize_chunk<W: Write>(chunk: &Chunk, writer: W) -> Result<(), ChunkSe
 /// use dd40_core::prelude::*;
 /// use dd40_chunk_storage::serialization::{ChunkVersion, serialize_chunk_versioned};
 ///
-/// let chunk = Chunk::new(ChunkPos::new(0, 0));
+/// let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
 /// let file = File::create("chunk_0_0_v1.bin").unwrap();
 /// serialize_chunk_versioned(&chunk, BufWriter::new(file), ChunkVersion::V1).unwrap();
 /// ```
@@ -192,6 +192,7 @@ pub fn serialize_chunk_versioned<W: Write>(
     writer.write_all(&MAGIC)?;
     writer.write_all(&version.as_u16().to_le_bytes())?;
     writer.write_all(&pos.x.to_le_bytes())?;
+    writer.write_all(&pos.y.to_le_bytes())?;
     writer.write_all(&pos.z.to_le_bytes())?;
 
     // ---- Version-specific body ----
@@ -239,8 +240,9 @@ pub fn deserialize_chunk<R: Read>(mut reader: R) -> Result<Chunk, ChunkSerialize
     let version = ChunkVersion::from_u16(read_u16(&mut reader)?)?;
 
     let chunk_x = read_i32(&mut reader)?;
+    let chunk_y = read_i32(&mut reader)?;
     let chunk_z = read_i32(&mut reader)?;
-    let pos = ChunkPos::new(chunk_x, chunk_z);
+    let pos = ChunkPos::new(chunk_x, chunk_y, chunk_z);
 
     // ---- Version-specific body ----
     match version {
@@ -361,7 +363,7 @@ mod tests {
     /// An all-air chunk should survive a round-trip unchanged.
     #[test]
     fn round_trip_all_air() {
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let original = Chunk::new(pos);
         let restored = round_trip(&original);
 
@@ -372,7 +374,7 @@ mod tests {
     /// A chunk with a single non-air block should round-trip correctly.
     #[test]
     fn round_trip_single_block() {
-        let pos = ChunkPos::new(3, -5);
+        let pos = ChunkPos::new(3, 0, -5);
         let mut original = Chunk::new(pos);
         original.set(7, 64, 3, Block::new(BlockId(1)));
 
@@ -385,7 +387,7 @@ mod tests {
     /// Fill the whole chunk with a non-air block and verify correctness.
     #[test]
     fn round_trip_uniform_fill() {
-        let pos = ChunkPos::new(-1, 2);
+        let pos = ChunkPos::new(-1, 0, 2);
         let mut original = Chunk::new(pos);
         let stone = Block::new(BlockId(1));
         for lx in 0..CHUNK_SIZE_X {
@@ -403,7 +405,7 @@ mod tests {
     /// Realistic terrain: stone below y=64, dirt 64–66, grass at 67, air above.
     #[test]
     fn round_trip_terrain_slice() {
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut original = Chunk::new(pos);
 
         for lx in 0..CHUNK_SIZE_X {
@@ -425,7 +427,7 @@ mod tests {
     /// Every block has a unique ID — worst case for RLE (no compression).
     #[test]
     fn round_trip_worst_case_rle() {
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::new(0, 0, 0);
         let mut original = Chunk::new(pos);
         for i in 0..CHUNK_SIZE {
             let (lx, ly, lz) = flat_to_local(i);
@@ -445,7 +447,7 @@ mod tests {
     /// serialize_chunk (since V1 is the current latest).
     #[test]
     fn versioned_v1_matches_latest() {
-        let chunk = Chunk::new(ChunkPos::new(5, -3));
+        let chunk = Chunk::new(ChunkPos::new(5, 0, -3));
         let mut buf_latest = Vec::new();
         let mut buf_v1 = Vec::new();
         serialize_chunk(&chunk, &mut buf_latest).unwrap();
@@ -456,7 +458,7 @@ mod tests {
     /// A chunk written with an explicit version is readable by deserialize_chunk.
     #[test]
     fn versioned_round_trip_v1() {
-        let pos = ChunkPos::new(-7, 12);
+        let pos = ChunkPos::new(-7, 0, 12);
         let mut original = Chunk::new(pos);
         original.set(0, 0, 0, Block::new(BlockId(42)));
 
@@ -469,7 +471,7 @@ mod tests {
     /// ChunkVersion variant's integer value.
     #[test]
     fn versioned_header_contains_correct_version() {
-        let chunk = Chunk::new(ChunkPos::new(0, 0));
+        let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         let mut buf = Vec::new();
         serialize_chunk_versioned(&chunk, &mut buf, ChunkVersion::V1).unwrap();
         // Version is at bytes 4-5 (little-endian).
@@ -484,7 +486,7 @@ mod tests {
     /// Chunk position is preserved across a round-trip for negative coordinates.
     #[test]
     fn position_preserved_negative_coords() {
-        let pos = ChunkPos::new(-100, -200);
+        let pos = ChunkPos::new(-100, 0, -200);
         let chunk = Chunk::new(pos);
         let restored = round_trip(&chunk);
         assert_eq!(restored.position(), pos);
@@ -494,7 +496,7 @@ mod tests {
     #[test]
     fn rejects_bad_magic() {
         let mut buf = Vec::new();
-        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0)), &mut buf).unwrap();
+        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0, 0)), &mut buf).unwrap();
         buf[0] = 0xFF; // corrupt first magic byte
 
         let err = deserialize_chunk(buf.as_slice()).unwrap_err();
@@ -508,7 +510,7 @@ mod tests {
     #[test]
     fn rejects_unsupported_version() {
         let mut buf = Vec::new();
-        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0)), &mut buf).unwrap();
+        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0, 0)), &mut buf).unwrap();
         // Version is at bytes 4-5 (little-endian). Write version 99.
         buf[4] = 99;
         buf[5] = 0;
@@ -524,7 +526,7 @@ mod tests {
     #[test]
     fn rejects_truncated_stream() {
         let mut buf = Vec::new();
-        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0)), &mut buf).unwrap();
+        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0, 0)), &mut buf).unwrap();
         buf.truncate(10); // keep header, strip entire body
 
         let err = deserialize_chunk(buf.as_slice()).unwrap_err();
@@ -538,26 +540,27 @@ mod tests {
     // Encoding size
     // -----------------------------------------------------------------------
 
-    /// An all-air chunk should encode to exactly 22 bytes:
-    ///   14-byte header + 2 RLE runs × 4 bytes each.
+    /// An all-air chunk should encode to exactly 26 bytes:
+    ///   18-byte header + 2 RLE runs × 4 bytes each.
     ///
+    /// Header = 4 (magic) + 2 (version) + 4 (x) + 4 (y) + 4 (z) = 18.
     /// CHUNK_SIZE = 65536, MAX_RUN = 65535 → 2 runs needed.
     #[test]
     fn compact_encoding_size_air() {
         let mut buf = Vec::new();
-        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0)), &mut buf).unwrap();
+        serialize_chunk(&Chunk::new(ChunkPos::new(0, 0, 0)), &mut buf).unwrap();
         assert_eq!(
             buf.len(),
-            22,
-            "expected 22-byte encoding for all-air chunk, got {} bytes",
+            26,
+            "expected 26-byte encoding for all-air chunk, got {} bytes",
             buf.len()
         );
     }
 
-    /// A fully uniform non-air chunk also encodes to 22 bytes.
+    /// A fully uniform non-air chunk also encodes to 26 bytes.
     #[test]
     fn compact_encoding_uniform_non_air() {
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         for lx in 0..CHUNK_SIZE_X {
             for ly in 0..CHUNK_SIZE_Y {
                 for lz in 0..CHUNK_SIZE_Z {
@@ -570,8 +573,8 @@ mod tests {
         serialize_chunk(&chunk, &mut buf).unwrap();
         assert_eq!(
             buf.len(),
-            22,
-            "expected 22-byte encoding for uniform chunk, got {} bytes",
+            26,
+            "expected 26-byte encoding for uniform chunk, got {} bytes",
             buf.len()
         );
     }

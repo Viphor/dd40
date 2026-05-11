@@ -148,7 +148,7 @@ mod tests {
         app.insert_resource(CharacterSpatialCache::default());
 
         let mut cache = ChunkCache::new();
-        cache.insert(Chunk::new(ChunkPos::new(0, 0)));
+        cache.insert(Chunk::new(ChunkPos::new(0, 0, 0)));
         app.insert_resource(cache);
 
         app.add_plugins(ChunkAuthorityPlugin);
@@ -183,14 +183,14 @@ mod tests {
         app.world_mut()
             .resource_mut::<ChunkCache>()
             .push_predicted(
-                ChunkPos::new(0, 0),
+                ChunkPos::new(0, 0, 0),
                 ChunkChange::new_place(BlockLocal::new(0, 0, 0), BlockId(1)),
             );
 
         app.update();
 
         let cache = app.world().resource::<ChunkCache>();
-        let chunk = cache.get(&ChunkPos::new(0, 0)).unwrap();
+        let chunk = cache.get(&ChunkPos::new(0, 0, 0)).unwrap();
         // Rejected → version stays 0, predicted queue drained, cell
         // remains air (rolled back).
         assert_eq!(chunk.version(), 0);
@@ -208,14 +208,14 @@ mod tests {
         app.world_mut()
             .resource_mut::<ChunkCache>()
             .push_predicted(
-                ChunkPos::new(0, 0),
+                ChunkPos::new(0, 0, 0),
                 ChunkChange::new_place(BlockLocal::new(10, 10, 10), BlockId(1)),
             );
 
         app.update();
 
         let cache = app.world().resource::<ChunkCache>();
-        let chunk = cache.get(&ChunkPos::new(0, 0)).unwrap();
+        let chunk = cache.get(&ChunkPos::new(0, 0, 0)).unwrap();
         assert_eq!(chunk.version(), 1);
         assert_eq!(
             chunk.get_local(BlockLocal::new(10, 10, 10)).block_id,
@@ -230,14 +230,14 @@ mod tests {
         app.world_mut()
             .resource_mut::<ChunkCache>()
             .push_predicted(
-                ChunkPos::new(0, 0),
+                ChunkPos::new(0, 0, 0),
                 ChunkChange::new_place(BlockLocal::new(0, 0, 0), BlockId(2)),
             );
 
         app.update();
 
         let cache = app.world().resource::<ChunkCache>();
-        let chunk = cache.get(&ChunkPos::new(0, 0)).unwrap();
+        let chunk = cache.get(&ChunkPos::new(0, 0, 0)).unwrap();
         assert_eq!(chunk.version(), 1);
         assert_eq!(
             chunk.get_local(BlockLocal::new(0, 0, 0)).block_id,
