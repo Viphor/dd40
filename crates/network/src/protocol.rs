@@ -137,6 +137,57 @@ pub struct PlayerLeftMessage {
     pub player_name: String,
 }
 
+/// Server-broadcast delta of authoritatively-committed changes to a chunk.
+///
+/// Sent from the server to every client that already has the chunk loaded,
+/// once per [`ChunkChanged`] emission from the chunk-authority commit pass.
+///
+/// The client applies the delta only if `base_version == local_version`.
+/// If `base_version > local_version` the client is ahead of the server
+/// (impossible in a healthy session — log + drop). If `base_version <
+/// local_version` the client is behind: it re-issues a [`RequestChunk`]
+/// with its current version so the server can reply with either a
+/// catch-up [`ChunkUpdate`] or a [`ChunkSnapshot`].
+///
+/// [`ChunkChanged`]: dd40_core::chunk::events::ChunkChanged
+/// [`RequestChunk`]: dd40_core::chunk::events::RequestChunk
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct ChunkUpdate {
+    /// Chunk the delta targets.
+    pub pos: ChunkPos,
+    /// Version the chunk was at *before* `changes` were applied. The
+    /// client may apply the delta only if this matches its local version.
+    pub base_version: u64,
+    /// Authoritative changes, in the order the server applied them.
+    pub changes: Vec<ChunkChange>,
+    /// Version after `changes` are applied. Clients store this as their
+    /// new local version on success.
+    pub new_version: u64,
+}
+
+/// Server-sent full snapshot of a chunk.
+///
+/// Sent in response to a [`RequestChunk`] when the server cannot satisfy
+/// the request with a [`ChunkUpdate`] — typically because:
+///
+/// - The client requested with `current_version == 0` (no local copy).
+/// - The client is more than `MaxDeltaBehind` versions behind.
+/// - The chunk's confirmed history has been truncated below the client's
+///   version.
+/// - The client requested with a version newer than the server's (a bug
+///   on the client; the snapshot is sent anyway to recover).
+///
+/// Carries a fully-formed [`Chunk`] including its current version. The
+/// client inserts it via the normal [`ChunkReady`] pipeline.
+///
+/// [`RequestChunk`]: dd40_core::chunk::events::RequestChunk
+/// [`ChunkReady`]: dd40_core::chunk::events::ChunkReady
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct ChunkSnapshot {
+    /// The chunk, at its current authoritative version.
+    pub chunk: Chunk,
+}
+
 // ============================================================================
 // MARKER COMPONENTS
 // ============================================================================
@@ -308,10 +359,10 @@ impl Plugin for ProtocolPlugin {
         app.register_message::<ChunkReady>()
             .add_direction(NetworkDirection::ServerToClient);
 
-        app.register_message::<BlockPlaced>()
+        app.register_message::<ChunkUpdate>()
             .add_direction(NetworkDirection::ServerToClient);
 
-        app.register_message::<BlockRemoved>()
+        app.register_message::<ChunkSnapshot>()
             .add_direction(NetworkDirection::ServerToClient);
 
         app.register_message::<PlayerJoinedMessage>()
