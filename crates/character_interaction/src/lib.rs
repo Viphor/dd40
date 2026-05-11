@@ -10,6 +10,7 @@
 //!
 //! [`Character`]: dd40_character_core::components::Character
 
+pub mod face_drive;
 pub mod interact;
 pub mod mining;
 pub mod placement;

@@ -5,6 +5,7 @@ use dd40_core::plugin::CorePlugin;
 use dd40_core::prelude::*;
 use dd40_item_core::plugin::ItemCorePlugin;
 
+use crate::face_drive::drive_face_from_input;
 use crate::interact::try_interact;
 use crate::mining::{apply_removed_blocks, update_mining};
 pub use dd40_character_core::mining_state::MiningState;
@@ -99,6 +100,7 @@ impl Plugin for CharacterInteractionPlugin {
         app.add_systems(
             Update,
             (
+                drive_face_from_input,
                 update_targeted_block,
                 update_debug_info,
                 try_place_block,
