@@ -1,17 +1,16 @@
 use bevy::prelude::*;
 use bevy::transform::TransformPlugin;
 use dd40_character_core::plugin::CharacterCorePlugin;
-use dd40_core::block::events::{BlockPlaced, BlockRemoved};
 use dd40_core::plugin::CorePlugin;
 use dd40_core::prelude::*;
 use dd40_item_core::plugin::ItemCorePlugin;
 
 use crate::face_drive::drive_face_from_input;
 use crate::interact::try_interact;
-use crate::mining::{apply_removed_blocks, update_mining};
+use crate::mining::update_mining;
 pub use dd40_character_core::mining_state::MiningState;
 pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
-use crate::placement::{apply_placed_blocks, try_place_block};
+use crate::placement::try_place_block;
 use crate::targeting::{
     BlockInteractionConfig, spawn_debug_entity, update_debug_info, update_targeted_block,
 };
@@ -43,23 +42,18 @@ use dd40_core::chunk::ChunkAuthorityAppExt;
 /// effective tool kind/tier and the placeable block. A character with no
 /// [`ActiveItem`] is treated as bare hands holding nothing.
 ///
-/// Registers the following messages:
-/// - [`BlockPlaced`]   — written by the network layer; consumed here.
-/// - [`BlockRemoved`]  — written by the network layer; consumed here.
-///
 /// Block **placement** and **mining** do not go through request messages:
 /// the `try_place_block` and `update_mining` systems push predicted
 /// [`ChunkChange`]s onto the local [`ChunkCache`] directly. The server runs
 /// the same systems against the replicated
 /// [`CharacterInput`][dd40_character_core::components::CharacterInput] and
-/// commits authoritatively via the chunk-authority pipeline.
+/// commits authoritatively via the chunk-authority pipeline. Other clients
+/// observe the change once the resulting `ChunkUpdate` is broadcast.
 ///
 /// [`ChunkChange`]: dd40_core::chunk::ChunkChange
 ///
 /// All gameplay systems run only while [`AppState::Playing`] **and**
-/// [`GameState::Running`]. [`apply_removed_blocks`] runs whenever
-/// [`AppState::Playing`] so that block removals from other players are applied
-/// even while the local game is paused.
+/// [`GameState::Running`].
 ///
 /// # Example
 ///
@@ -98,10 +92,6 @@ impl Plugin for CharacterInteractionPlugin {
         app.insert_resource(BlockInteractionConfig::default())
             .register_type::<BlockInteractionConfig>();
 
-        // ── Messages ──────────────────────────────────────────────────────
-        app.add_message::<BlockPlaced>();
-        app.add_message::<BlockRemoved>();
-
         // ── Startup ───────────────────────────────────────────────────────
         app.add_systems(Startup, spawn_debug_entity);
 
@@ -119,13 +109,8 @@ impl Plugin for CharacterInteractionPlugin {
                 update_mining,
             )
                 .chain()
-                .run_if(playing_running.clone()),
+                .run_if(playing_running),
         );
-
-        app.add_systems(PostUpdate, apply_placed_blocks.run_if(playing_running));
-
-        let playing = in_state(AppState::Playing);
-        app.add_systems(PostUpdate, apply_removed_blocks.run_if(playing));
 
         // Gated on PendingChunkRejections so the registration is harmless
         // on instances without ChunkAuthorityPlugin (e.g. clients).

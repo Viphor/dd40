@@ -12,7 +12,7 @@ pub mod tools;
 pub mod prelude {
     pub use crate::{
         block::{
-            Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, CollisionShape, events::*,
+            Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, CollisionShape,
             registry::BlockRegistrySet,
         },
         builder_extra::AddExtra,

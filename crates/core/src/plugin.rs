@@ -34,10 +34,7 @@ impl Plugin for CorePlugin {
             .add_message::<ChunkChanged>()
             .add_message::<ChunkPredicted>()
             .add_message::<PredictionRejected>()
-            .add_message::<ChunkSnapshotFallback>()
-            .add_message::<BlockPlaced>()
-            .add_message::<BlockRemoved>()
-            .add_message::<BlockChanged>();
+            .add_message::<ChunkSnapshotFallback>();
 
         app.configure_sets(Startup, (ToolRegistrySet, BlockRegistrySet).chain());
 

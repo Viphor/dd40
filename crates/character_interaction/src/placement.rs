@@ -54,7 +54,6 @@ use bevy::prelude::*;
 use dd40_character_core::components::Character;
 use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::targeted_block::TargetedBlock;
-use dd40_core::block::events::BlockPlaced;
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::chunk::{ChunkChange, change::BlockLocal};
 use dd40_core::prelude::*;
@@ -192,39 +191,6 @@ fn placeable_block(active: Option<&ActiveItem>, items: &ItemRegistry) -> Option<
     let stack = active?.0?;
     let def: &ItemDefinition = items.get(stack.item)?;
     def.placeable
-}
-
-/// Listens for [`BlockPlaced`] messages from the network layer and applies
-/// them to the local [`ChunkCache`]. Used to mirror placements made by
-/// remote players that arrive via the legacy network path.
-pub(crate) fn apply_placed_blocks(
-    mut reader: MessageReader<BlockPlaced>,
-    mut cache: ResMut<ChunkCache>,
-) {
-    for placed in reader.read() {
-        let chunk_pos = placed.pos.chunk_pos();
-        let local = placed.pos.chunk_local();
-
-        if local.y < 0 {
-            continue;
-        }
-
-        let Some(chunk) = cache.get_mut(&chunk_pos) else {
-            continue;
-        };
-
-        chunk.set(
-            local.x as usize,
-            local.y as usize,
-            local.z as usize,
-            dd40_core::block::Block::new(placed.block_id),
-        );
-
-        debug!(
-            "Applied confirmed placement of {:?} at {}",
-            placed.block_id, placed.pos
-        );
-    }
 }
 
 #[cfg(test)]

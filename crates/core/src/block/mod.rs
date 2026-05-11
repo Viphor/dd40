@@ -1,7 +1,6 @@
 use bevy::{ecs::component::Component, math::Vec3, reflect::Reflect, transform::components::Transform};
 use serde::{Deserialize, Serialize};
 
-pub mod events;
 pub mod registry;
 //pub mod storage;
 

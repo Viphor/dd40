@@ -48,7 +48,7 @@ use dd40_character_core::components::Character;
 use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::{
-    block::{Block, BlockId, events::BlockRemoved},
+    block::{Block, BlockId},
     chunk::{ChunkChange, cache::ChunkCache, change::BlockLocal},
     prelude::*,
     tools::{ToolKindId, ToolTierId, mining_duration},
@@ -240,33 +240,6 @@ fn active_tool(active: Option<&ActiveItem>, items: &ItemRegistry) -> (ToolKindId
     match items.get(stack.item).and_then(|def| def.tool) {
         Some(tool) => (tool.kind, tool.tier),
         None => (ToolKindId::NONE, ToolTierId::DEFAULT),
-    }
-}
-
-/// Applies confirmed block removals to the local [`ChunkCache`].
-///
-/// Gated only on [`AppState::Playing`] (not [`GameState::Running`]) so that
-/// paused clients still receive removals from other players.
-pub(crate) fn apply_removed_blocks(
-    mut reader: MessageReader<BlockRemoved>,
-    mut cache: ResMut<ChunkCache>,
-) {
-    for removed in reader.read() {
-        let chunk_pos = removed.pos.chunk_pos();
-        let local = removed.pos.chunk_local();
-        if local.y < 0 {
-            continue;
-        }
-        let Some(chunk) = cache.get_mut(&chunk_pos) else {
-            continue;
-        };
-        chunk.set(
-            local.x as usize,
-            local.y as usize,
-            local.z as usize,
-            Block::new(BlockId::AIR),
-        );
-        debug!("Applied confirmed removal at {}", removed.pos);
     }
 }
 
