@@ -78,11 +78,16 @@ impl BlockPos {
         }
     }
 
-    /// Returns the position within the chunk.
+    /// Returns the position within the chunk that contains this block.
+    ///
+    /// All three components are in `[0, CHUNK_SIZE_*)` regardless of the
+    /// world-space sign of `self`. This is the inverse of
+    /// [`BlockPos::chunk_pos`] in the sense that
+    /// `chunk_pos() * CHUNK_SIZE + chunk_local() == self`.
     pub fn chunk_local(&self) -> Self {
         Self {
             x: self.x.rem_euclid(CHUNK_SIZE_X as BlockCoord),
-            y: self.y,
+            y: self.y.rem_euclid(CHUNK_SIZE_Y as BlockCoord),
             z: self.z.rem_euclid(CHUNK_SIZE_Z as BlockCoord),
         }
     }
@@ -186,6 +191,20 @@ mod tests {
         let pos = BlockPos::new(17, 64, -1);
         let local = pos.chunk_local();
         assert_eq!(local, BlockPos::new(1, 64, 15));
+    }
+
+    #[test]
+    fn block_pos_chunk_local_wraps_y_for_non_zero_y_chunks() {
+        use crate::chunk::CHUNK_SIZE_Y;
+        // World y = CHUNK_SIZE_Y + 5 should land in chunk y=1 at local y=5.
+        let pos = BlockPos::new(0, CHUNK_SIZE_Y as i32 + 5, 0);
+        assert_eq!(pos.chunk_pos().y, 1);
+        assert_eq!(pos.chunk_local().y, 5);
+
+        // Negative world y wraps the same way euclidean-mod does for x/z.
+        let pos = BlockPos::new(0, -1, 0);
+        assert_eq!(pos.chunk_pos().y, -1);
+        assert_eq!(pos.chunk_local().y, CHUNK_SIZE_Y as i32 - 1);
     }
 
     #[test]
