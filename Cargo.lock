@@ -2768,13 +2768,14 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "dd40_character_gui",
+ "dd40_character_interaction",
  "dd40_core",
  "dd40_debug_ui",
  "dd40_gui",
  "dd40_integration_character_physics",
  "dd40_network",
  "dd40_physics",
- "dd40_player",
+ "dd40_player_input",
  "dd40_renderer",
  "dd40_vanilla_palette",
  "dd40_world",
@@ -2859,18 +2860,6 @@ dependencies = [
  "bevy",
  "dd40_core",
  "serde",
-]
-
-[[package]]
-name = "dd40_player"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dd40_character_core",
- "dd40_character_interaction",
- "dd40_core",
- "dd40_physics_core",
- "dd40_player_input",
 ]
 
 [[package]]

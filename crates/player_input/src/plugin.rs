@@ -1,5 +1,8 @@
 use bevy::prelude::*;
+use dd40_character_core::components::Player;
+use dd40_character_core::mining_state::MiningState;
 use dd40_character_core::plugin::CharacterCorePlugin;
+use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::plugin::CorePlugin;
 use dd40_physics_core::plugin::PhysicsCorePlugin;
 
@@ -58,6 +61,8 @@ impl Plugin for PlayerInputPlugin {
                     .run_if(playing_and_running.clone()),
             )
             .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)))
+            // ── FreeCam mode entry — clear stale interaction state ────
+            .add_systems(OnEnter(PlayerMode::FreeCam), clear_interaction_state)
             // ── Update — Controller mode only ─────────────────────────
             .add_systems(
                 Update,
@@ -78,6 +83,18 @@ impl Plugin for PlayerInputPlugin {
                 free_cam_movement
                     .run_if(playing_and_running.and(in_state(PlayerMode::FreeCam))),
             );
+    }
+}
+
+/// Resets per-frame interaction state on the local player when entering
+/// [`PlayerMode::FreeCam`] so stale block highlights and mining progress
+/// don't linger after switching out of controller mode.
+fn clear_interaction_state(
+    mut player_query: Query<(&mut TargetedBlock, &mut MiningState), With<Player>>,
+) {
+    if let Ok((mut targeted, mut mining)) = player_query.single_mut() {
+        *targeted = TargetedBlock::default();
+        *mining = MiningState::Idle;
     }
 }
 
