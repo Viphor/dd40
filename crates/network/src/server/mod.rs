@@ -6,6 +6,7 @@ use lightyear::prelude::server::ServerPlugins;
 use crate::{
     protocol::*,
     server::{
+        block_updates::{NetworkRenderDistance, broadcast_chunk_updates},
         character::ServerCharacterPlugin,
         chunk_provider::{receive_chunk_requests, send_chunk_data},
         chunk_requests::{ChunkRequests, add_message_handlers},
@@ -15,6 +16,7 @@ use crate::{
     shared::constants::tick_duration,
 };
 
+pub mod block_updates;
 pub mod character;
 pub mod chunk_provider;
 pub mod chunk_requests;
@@ -50,13 +52,15 @@ impl Plugin for ServerNetworkPlugin {
 
         // Initialise spawn-handshake resources.
         app.init_resource::<WorldSpawnConfig>()
-            .init_resource::<PlayerLocations>();
+            .init_resource::<PlayerLocations>()
+            .init_resource::<NetworkRenderDistance>();
 
         // Add communication systems
         app.register_type::<ChunkRequests>()
             .add_observer(add_message_handlers)
             .add_systems(Update, receive_chunk_requests)
-            .add_systems(Update, send_chunk_data);
+            .add_systems(Update, send_chunk_data)
+            .add_systems(Update, broadcast_chunk_updates);
     }
 }
 
