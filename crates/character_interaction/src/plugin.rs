@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::transform::TransformPlugin;
 use dd40_character_core::plugin::CharacterCorePlugin;
 use dd40_core::block::events::{BlockPlaced, BlockRemoved};
 use dd40_core::plugin::CorePlugin;
@@ -79,7 +80,17 @@ pub struct CharacterInteractionPlugin;
 
 impl Plugin for CharacterInteractionPlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin, CharacterCorePlugin, ItemCorePlugin);
+        // TransformPlugin is required because update_targeted_block reads
+        // each CharacterFace's GlobalTransform; without it, MinimalPlugins-
+        // based binaries (the headless server) leave GlobalTransform at
+        // identity and the raycast originates at world origin.
+        dd40_core::ensure_plugins!(
+            app,
+            TransformPlugin,
+            CorePlugin,
+            CharacterCorePlugin,
+            ItemCorePlugin,
+        );
 
         // ── Resources ─────────────────────────────────────────────────────
         // MiningState and TargetedBlock are per-character Components, attached
