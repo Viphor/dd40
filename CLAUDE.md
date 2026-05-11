@@ -66,7 +66,6 @@ Never write `if !app.is_plugin_added` by hand — always use `ensure_plugins!`.
 | Implementation | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD anchored on `CharacterPosition` |
 | Implementation | `dd40_player_input` | Keyboard/mouse → CharacterInput, first-person camera, `PlayerMode` state |
 | Implementation | `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity |
-| Implementation | `dd40_player` | Convenience wrapper composing `PlayerInputPlugin` + `CharacterInteractionPlugin`; exception to Tier 1 isolation — see `INCONSISTENCIES.md` |
 | Implementation | `dd40_network` | lightyear client-server networking (feature-gated) |
 | Implementation | `dd40_debug_ui` | FPS overlay, orientation gizmo |
 | Implementation | `dd40_gui` | In-game HUD (crosshair) |

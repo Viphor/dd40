@@ -20,7 +20,7 @@ assignees: []
 
 <!-- Describe the change you'd like to see. How should the behaviour or API differ after this improvement?
      Consider:
-     - Which crate(s) are affected (dd40_core, dd40_world, dd40_player, etc.)?
+     - Which crate(s) are affected (dd40_core, dd40_world, dd40_player_input, etc.)?
      - Are any public APIs changing? If so, is this a breaking change?
      - Does this affect system ordering (BlockRegistrySet, WorldGenerationSet, etc.)?
      - Are there doc comments, examples, or tests that also need updating? -->

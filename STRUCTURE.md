@@ -18,8 +18,7 @@ single-page reference.
 **Tier 1 crates must not depend on other Tier 1 crates.** If two implementation
 crates need to share data, that data belongs in a foundation crate.
 
-The sole tracked exception is `dd40_player` — see `INCONSISTENCIES.md` and its
-entry below.
+There are currently no tracked exceptions to this rule.
 
 ---
 
@@ -50,10 +49,6 @@ entry below.
 | `dd40_debug_ui` | FPS overlay, orientation gizmo, custom debug elements | `dd40_core` |
 | `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
 | `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
-| `dd40_player` ¹ | Convenience wrapper: `PlayerInputPlugin` + `CharacterInteractionPlugin` | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_player_input`, `dd40_character_interaction` |
-
-¹ `dd40_player` depends on other Tier 1 crates — an intentional tracked exception.
-See `INCONSISTENCIES.md`.
 
 ### Tier 2 — Binary
 
@@ -341,19 +336,6 @@ src/
 ├── targeting.rs       — DDA ray-cast, BlockInteractionConfig
 ├── placement.rs       — block placement (reads ActiveItem)
 └── mining.rs          — mining state update, block removal
-```
-
----
-
-### `dd40_player`
-
-Convenience wrapper that composes `PlayerInputPlugin` and
-`CharacterInteractionPlugin` into three focused plugins.
-This is a tracked Tier 1 exception — see `INCONSISTENCIES.md`.
-
-```
-src/
-└── lib.rs   — PlayerPlugin, PlayerControlsPlugin, PlayerSpawnPlugin
 ```
 
 ---

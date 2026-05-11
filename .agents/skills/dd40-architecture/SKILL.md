@@ -60,12 +60,6 @@ may depend on.
 - Must use `ensure_plugins!` at the top of every `Plugin::build` to
   auto-satisfy direct runtime dependencies (see below).
 
-**Exception — `dd40_player`:** This crate is a convenience wrapper that
-composes `dd40_player_input` + `dd40_character_interaction` and is the only
-place that needs both physics types and interaction types simultaneously (for
-`update_debug_info`). It intentionally depends on two Tier 1 crates and is
-tracked in `INCONSISTENCIES.md`.
-
 #### Tier 2 — Binary crates
 `dd40_client`, `dd40_server`
 

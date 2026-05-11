@@ -76,7 +76,7 @@ The workspace currently has three tiers of crates:
 **Tier 1 — Implementation** (systems, game behaviour):
 `dd40_physics`, `dd40_vanilla_palette`, `dd40_world`, `dd40_chunk_storage`,
 `dd40_renderer`, `dd40_player_input`, `dd40_character_interaction`,
-`dd40_network`, `dd40_debug_ui`, `dd40_gui`, `dd40_player`
+`dd40_network`, `dd40_debug_ui`, `dd40_gui`
 
 **Tier 2 — Binary**: `dd40_client`, `dd40_server`
 
@@ -85,9 +85,9 @@ Rules when choosing dependencies:
    unless there is a clear reason not to.
 2. Foundation crates may depend on other foundation crates — never circularly.
 3. Implementation crates may depend on any foundation crates but **never on
-   other implementation crates**.
-4. `dd40_player` is a tracked exception to rule 3 — do not follow its example
-   without explicitly noting the inconsistency in `INCONSISTENCIES.md`.
+   other implementation crates**. There are currently no tracked exceptions —
+   if a new feature seems to require one, the shared data probably belongs in
+   a foundation crate instead.
 
 Steps:
 1. Check the `[workspace]` section in the root `Cargo.toml`.
@@ -140,8 +140,9 @@ bevy = { version = "0.18", default-features = false }
 
 Dependency rules:
 - Include only the dd40 crates confirmed in step 2.
-- Never add a Tier 1 implementation crate as a dependency (unless this new
-  crate is also a tracked exception like `dd40_player`).
+- Never add a Tier 1 implementation crate as a dependency. There are
+  currently no tracked exceptions — if it feels like you need one, the
+  shared data probably belongs in a foundation crate.
 - Leave the `features = []` list empty until the user asks to enable specific
   Bevy feature flags.
 
@@ -298,7 +299,7 @@ stop and explain the problem before proceeding.
 
 1. **Tier 1 (Implementation) crates never import other Tier 1 crates.** If
    two implementation systems need to share data, that data belongs in a
-   foundation crate. The sole tracked exception is `dd40_player`.
+   foundation crate. There are currently no tracked exceptions.
 
 2. **Tier 0 (Foundation) crates may depend on other foundation crates** —
    but never circularly. `dd40_core` is the root; every new crate is

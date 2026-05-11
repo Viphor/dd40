@@ -1,12 +1,12 @@
 //! Block targeting, mining, and placement for any [`Character`] entity.
 //!
-//! This crate is the generalised equivalent of `dd40_player`'s old
-//! `block_interaction` module, lifted out of the player-specific crate so that
-//! AI-controlled characters and multiplayer clients can share the same systems.
+//! This crate hosts the systems that used to live in the now-deleted
+//! `dd40_player` wrapper, generalised so that AI-controlled characters
+//! and multiplayer clients share the same code path.
 //!
 //! Add [`CharacterInteractionPlugin`] to your app. Systems run for every entity
 //! that carries a [`Character`] component; the `PlayerMode` gate is the
-//! caller's responsibility (typically set in `dd40_player`).
+//! caller's responsibility (typically set in `dd40_player_input`).
 //!
 //! [`Character`]: dd40_character_core::components::Character
 

@@ -21,7 +21,7 @@ An FPS counter in the top-left corner that shows:
 An orientation gizmo showing the X/Y/Z axes relative to the current camera.
 
 Custom `DebugInfo` elements from other crates (e.g. player position, velocity,
-and chunk coordinates from `dd40_player`).
+and chunk coordinates set by whichever crate owns the local player overlay).
 
 ## Run the Demo
 

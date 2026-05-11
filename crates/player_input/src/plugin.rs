@@ -20,8 +20,8 @@ use dd40_item_core::plugin::ItemCorePlugin;
 /// input.
 ///
 /// Wires all first-person camera, cursor, mode-switching, and chunk-loading
-/// systems.  It does **not** spawn a player entity — use `PlayerSpawnPlugin`
-/// from `dd40_player` for that.
+/// systems.  It does **not** spawn a player entity — the network layer
+/// is responsible for spawning the character.
 ///
 /// Auto-adds [`CorePlugin`], [`PhysicsCorePlugin`], and [`CharacterCorePlugin`]
 /// via [`ensure_plugins!`] if not already present.

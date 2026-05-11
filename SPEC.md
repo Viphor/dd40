@@ -150,11 +150,6 @@ Implementation
 Binary
   dd40_client            — wires implementation plugins for the playable client
   dd40_server            — wires implementation plugins for the headless server
-  dd40_player            — thin convenience plugin: re-exports
-                           PlayerInputPlugin + CharacterInteractionPlugin
-                           for the standard first-person player experience
-                           (kept so existing code that adds PlayerPlugin
-                           continues to work)
 ```
 
 *`CollisionShape` stays in `dd40_core` as part of `BlockDefinition`. Physics
@@ -423,8 +418,6 @@ definitions.
   when adding, moving, or removing public items.
 
 **Ask first:**
-- Renaming or removing public types that `dd40_player` currently re-exports
-  (external downstream risk).
 - Adding a new foundation-to-foundation dependency (check for cycles).
 - Moving `CollisionShape` out of `dd40_core` (significant refactor, not in
   scope here).

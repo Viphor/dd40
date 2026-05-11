@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 /// Ordering anchor for render-frame visual systems.
 ///
-/// Both `dd40_network` and `dd40_player` import this set to enforce a
+/// Both `dd40_network` and `dd40_player_input` import this set to enforce a
 /// deterministic order between frame interpolation and camera-follow without a
 /// direct crate dependency on each other.
 ///

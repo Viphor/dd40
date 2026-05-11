@@ -184,5 +184,6 @@ fn spawn_character(mut commands: Commands) {
 }
 ```
 
-See `crates/network/src/client/spawn.rs` and `crates/player/src/lib.rs` for
-full worked examples.
+See `crates/network/src/client/spawn.rs` and `crates/network/src/server/spawn.rs`
+for full worked examples (the network crate is the only place that spawns
+character entities now that the `dd40_player` wrapper has been removed).

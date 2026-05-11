@@ -10,35 +10,8 @@ Active architectural work is planned in `SPEC.md`.
 
 ## Open Inconsistencies
 
-### 1. `dd40_player` depends on other implementation crates
-
-**Rule violated:** Implementation crates must not depend on other implementation
-crates.
-
-**Current state:** `dd40_player` depends on `dd40_player_input` and
-`dd40_character_interaction`, both of which are Tier 1 implementation crates.
-
-**Rationale for keeping:** `dd40_player` is an intentional convenience wrapper
-that composes the two movement/interaction plugins plus the local player spawn
-and debug-info systems. It holds the only code that needs *both* physics types
-(`Velocity`, `Impulse`) and interaction types (`MiningState`) simultaneously —
-specifically the `update_debug_info` system. Splitting that system further would
-create more coupling, not less.
-
-**Planned resolution:** If `update_debug_info` is moved to a HUD crate that
-depends on both interaction and physics foundation crates directly, `dd40_player`
-could be deleted and callers would compose the plugins themselves.
-
----
-
-### 2. ~~Block crack animation is unimplemented~~ — resolved
-
-**Resolution:** `dd40_character_gui::block_highlight::draw_targeted_block_highlight`
-now draws a gizmo break overlay whose scale and colour interpolate with
-`MiningState::Mining { progress, .. }`. The pure helper
-`break_overlay_for_progress` makes the easing curve unit-testable. A
-textured crack overlay is still future work, but the previous "no
-visualisation at all" gap is closed.
+*(none currently tracked — the previous entries about `dd40_player` and
+the block crack animation are resolved; see the archive table below.)*
 
 ---
 
@@ -78,7 +51,9 @@ would let the spawn system be reused for NPCs or alternative transports.
 | # | Description | Resolved in |
 |---|---|---|
 | — | `dd40_renderer` depended on `dd40_player` for LOD anchor | SPEC.md Task 5.1 — renderer now uses `CharacterPosition` from `dd40_physics_core` |
-| — | `MiningState` lived in `dd40_player` | SPEC.md Task 5.3 — moved to `dd40_character_core::mining_state` |
+| — | `MiningState` lived in `dd40_player` (now-deleted wrapper) | SPEC.md Task 5.3 — moved to `dd40_character_core::mining_state` |
+| — | `dd40_player` was a Tier 1 → Tier 1 dependency exception (wrapper composing input + interaction + debug-info) | core-rewrite — wrapper deleted; `dd40_client` now adds `PlayerInputPlugin` and `CharacterInteractionPlugin` directly. The FreeCam reset moved into `dd40_player_input`; the physics+interaction debug overlay was dropped (a future HUD crate may reinstate it) |
+| — | Block crack animation was unimplemented | core-rewrite — `dd40_character_gui::block_highlight::draw_targeted_block_highlight` now draws a gizmo break overlay scaled to mining progress; `break_overlay_for_progress` keeps the easing curve unit-testable. A textured crack overlay is still future work. |
 | — | `MiningState` was a global `Resource` (singleton bug) | core-rewrite — converted to a `Component` on the `Character` entity, attached via `CharacterBundle` |
 | — | `TargetedBlock` was a global `Resource` in `dd40_character_interaction` (singleton bug) | core-rewrite — moved to `dd40_character_core::targeted_block` and converted to a `Component` |
 | — | `update_targeted_block` queried `Camera3d`, blocking server-side targeting on headless servers | core-rewrite — added `dd40_character_core::face::CharacterFace` child entity; targeting now reads the local player's face `GlobalTransform` |

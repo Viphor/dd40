@@ -102,19 +102,17 @@ crates/
   world/                 — world generation (dd40_world)                              [Tier 1]
   chunk_storage/         — disk-backed chunk persistence (dd40_chunk_storage)         [Tier 1]
   renderer/              — greedy-mesh chunk renderer (dd40_renderer)                 [Tier 1]
-  player_input/       — keyboard/mouse → CharacterInput, camera (dd40_player_input) [Tier 1]
+  player_input/          — keyboard/mouse → CharacterInput, camera (dd40_player_input) [Tier 1]
   character_interaction/ — block targeting, mining, placement (dd40_character_interaction) [Tier 1]
   network/               — lightyear networking (dd40_network)                        [Tier 1]
   debug_ui/              — debug overlay (dd40_debug_ui)                              [Tier 1]
   gui/                   — in-game HUD (dd40_gui)                                     [Tier 1]
-  player/                — convenience wrapper: movement + interaction (dd40_player)  [Tier 1*]
   client/                — default client binary (dd40_client)                        [Tier 2]
   server/                — default server binary (dd40_server)                        [Tier 2]
-docs/            — per-system API documentation with examples
-examples/        — runnable example programs
 ```
 
-*`dd40_player` is a tracked Tier 1 exception — see `INCONSISTENCIES.md`.
+docs/            — per-system API documentation with examples
+examples/        — runnable example programs
 
 ---
 

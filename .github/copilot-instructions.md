@@ -27,7 +27,6 @@ a three-tier model (Foundation → Implementation → Binary):
 - **`dd40_network`** — lightyear networking
 - **`dd40_debug_ui`** — FPS overlay, orientation gizmo
 - **`dd40_gui`** — in-game HUD
-- **`dd40_player`** — convenience wrapper (tracked Tier 1 exception)
 
 **Tier 2 — Binary**: `dd40_client`, `dd40_server`
 
