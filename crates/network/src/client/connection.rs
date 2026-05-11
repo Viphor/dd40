@@ -114,6 +114,7 @@ pub fn on_server_connected(
         MessageSender::<RequestSpawn>::default(),
         MessageSender::<RequestChunk>::default(),
         MessageReceiver::<ChunkReady>::default(),
+        MessageReceiver::<ChunkUpdate>::default(),
         MessageReceiver::<PlayerSpawnLocation>::default(),
         Name::new("ServerConnection"),
     ));

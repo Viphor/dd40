@@ -6,7 +6,7 @@ use lightyear::prelude::client::ClientPlugins;
 use crate::{
     client::{
         character::ClientCharacterPlugin,
-        chunk_provider::{receive_chunk_data, send_chunk_requests},
+        chunk_provider::{apply_chunk_updates, receive_chunk_data, send_chunk_requests},
         connection::{DDClient, connect, on_server_connected},
         loading::register_connection_loading_item,
         spawn::{
@@ -72,7 +72,7 @@ impl Plugin for ClientNetworkPlugin {
 
         // Communication systems.
         app.add_systems(PreUpdate, send_chunk_requests);
-        app.add_systems(PostUpdate, receive_chunk_data);
+        app.add_systems(PostUpdate, (receive_chunk_data, apply_chunk_updates));
 
         // Spawn-location and chunk-tracking systems run after chunk data has
         // been forwarded so notifications are written before we drain them.
