@@ -97,24 +97,22 @@ fn dda_raycast(
 
         if let Some(chunk) = cache.get(&chunk_pos) {
             let local = pos.chunk_local();
-            if local.y >= 0 {
-                if let Some(block) =
-                    chunk.get(local.x as usize, local.y as usize, local.z as usize)
-                {
-                    if block.block_id != BlockId::AIR && registry.is_solid(&block) {
-                        let face = match last_axis {
-                            LastAxis::X => {
-                                if step.x > 0 { BlockFace::West } else { BlockFace::East }
-                            }
-                            LastAxis::Y => {
-                                if step.y > 0 { BlockFace::Bottom } else { BlockFace::Top }
-                            }
-                            LastAxis::Z => {
-                                if step.z > 0 { BlockFace::North } else { BlockFace::South }
-                            }
-                        };
-                        return Some((pos, face, block.block_id));
-                    }
+            if let Some(block) =
+                chunk.get(local.x as usize, local.y as usize, local.z as usize)
+            {
+                if block.block_id != BlockId::AIR && registry.is_solid(&block) {
+                    let face = match last_axis {
+                        LastAxis::X => {
+                            if step.x > 0 { BlockFace::West } else { BlockFace::East }
+                        }
+                        LastAxis::Y => {
+                            if step.y > 0 { BlockFace::Bottom } else { BlockFace::Top }
+                        }
+                        LastAxis::Z => {
+                            if step.z > 0 { BlockFace::North } else { BlockFace::South }
+                        }
+                    };
+                    return Some((pos, face, block.block_id));
                 }
             }
         }
@@ -329,6 +327,54 @@ mod tests {
         cache.insert(chunk_b);
         let hit = raycast_pos(Vec3::new(14.5, 64.5, 0.5), Vec3::X, 10.0, &cache, &registry);
         assert_eq!(hit, Some(BlockPos::new(18, 64, 0)));
+    }
+
+    #[test]
+    fn raycast_crosses_y_chunk_boundary_downward() {
+        // A ray cast straight down from a point inside chunk (0, 1, 0)
+        // must traverse the chunk-Y boundary and hit a block in
+        // chunk (0, 0, 0).
+        use dd40_core::chunk::CHUNK_SIZE_Y;
+        let registry = make_registry();
+        let chunk_above = Chunk::new(ChunkPos::new(0, 1, 0));
+        let mut chunk_below = Chunk::new(ChunkPos::new(0, 0, 0));
+        // Block at world y = CHUNK_SIZE_Y - 4, i.e. local y = CHUNK_SIZE_Y - 4
+        // in the lower chunk.
+        chunk_below.set(0, CHUNK_SIZE_Y - 4, 0, Block::new(BlockId(1)));
+        let mut cache = ChunkCache::new();
+        cache.insert(chunk_above);
+        cache.insert(chunk_below);
+
+        let origin = Vec3::new(0.5, CHUNK_SIZE_Y as f32 + 5.0, 0.5);
+        let hit = raycast_pos(origin, Vec3::NEG_Y, 20.0, &cache, &registry);
+        assert_eq!(
+            hit,
+            Some(BlockPos::new(0, CHUNK_SIZE_Y as i32 - 4, 0)),
+            "ray from chunk(0,1,0) should hit block in chunk(0,0,0) below the Y boundary",
+        );
+    }
+
+    #[test]
+    fn raycast_crosses_y_chunk_boundary_upward() {
+        // A ray cast straight up from chunk (0, 0, 0) must traverse the
+        // chunk-Y boundary and hit a block in chunk (0, 1, 0).
+        use dd40_core::chunk::CHUNK_SIZE_Y;
+        let registry = make_registry();
+        let chunk_below = Chunk::new(ChunkPos::new(0, 0, 0));
+        let mut chunk_above = Chunk::new(ChunkPos::new(0, 1, 0));
+        // Block at local y = 3 in upper chunk (world y = CHUNK_SIZE_Y + 3).
+        chunk_above.set(0, 3, 0, Block::new(BlockId(1)));
+        let mut cache = ChunkCache::new();
+        cache.insert(chunk_below);
+        cache.insert(chunk_above);
+
+        let origin = Vec3::new(0.5, CHUNK_SIZE_Y as f32 - 5.0, 0.5);
+        let hit = raycast_pos(origin, Vec3::Y, 20.0, &cache, &registry);
+        assert_eq!(
+            hit,
+            Some(BlockPos::new(0, CHUNK_SIZE_Y as i32 + 3, 0)),
+            "ray from chunk(0,0,0) should hit block in chunk(0,1,0) above the Y boundary",
+        );
     }
 
     #[test]
