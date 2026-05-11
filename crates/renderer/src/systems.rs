@@ -176,7 +176,6 @@ pub fn update_lod_levels(
 /// [`AsyncComputeTaskPool`]: bevy::tasks::AsyncComputeTaskPool
 /// [`apply_mesh_tasks`]: crate::systems::apply_mesh_tasks
 pub fn spawn_mesh_tasks(
-    mut commands: Commands,
     mut render_state: ResMut<ChunkRenderState>,
     mut pending: ResMut<PendingMeshTasks>,
     chunk_cache: Res<ChunkCache>,
@@ -211,11 +210,10 @@ pub fn spawn_mesh_tasks(
             continue;
         }
 
-        // --- Despawn the old mesh entity on the main thread (fast) -----------
-        if let Some(old_entity) = render_state.mesh_entity(&pos) {
-            commands.entity(old_entity).despawn();
-        }
-        render_state.set_mesh_entity(pos, None);
+        // The OLD mesh entity is intentionally left in place — it is
+        // despawned in apply_mesh_tasks only once the new mesh is ready.
+        // Despawning here would leave a one-or-two-frame gap where the
+        // chunk has no geometry on screen, which players see as flicker.
 
         // --- Look up chunk data ----------------------------------------------
         let Some(chunk) = chunk_cache.get(&pos) else {
@@ -335,6 +333,13 @@ pub fn apply_mesh_tasks(
             Some(data) => {
                 let pos = data.pos;
                 pending.in_flight.remove(&pos);
+
+                // Capture the previous mesh entity so we can despawn it
+                // *after* the new one is in place. Despawning earlier
+                // (e.g. in spawn_mesh_tasks) leaves a one-or-two-frame
+                // gap where the chunk has no geometry on screen.
+                let old_entity = render_state.mesh_entity(&pos);
+
                 if let Some(mesh) = data.mesh {
                     let mesh_handle = meshes.add(mesh);
 
@@ -355,9 +360,16 @@ pub fn apply_mesh_tasks(
                         .id();
 
                     render_state.set_mesh_entity(pos, Some(entity));
+                } else {
+                    // Chunk produced no geometry (all-air / fully occluded).
+                    // Clear the stored entity so a future rebuild does not
+                    // think a mesh is still associated with this chunk.
+                    render_state.set_mesh_entity(pos, None);
                 }
-                // For all-air chunks render_state already has mesh_entity=None
-                // from spawn_mesh_tasks; nothing more to do.
+
+                if let Some(old) = old_entity {
+                    commands.entity(old).despawn();
+                }
             }
         }
     }
@@ -435,6 +447,44 @@ mod tests {
             dirty,
             vec![pos],
             "dirty bit must remain set when spawn was skipped"
+        );
+    }
+
+    /// Regression: dispatching a fresh mesh task for an already-meshed
+    /// chunk must not despawn or clear its existing mesh entity. Only
+    /// `apply_mesh_tasks` may despawn the old entity, after the new one
+    /// is in place. Without this, players see a one-or-two-frame flicker
+    /// where the chunk vanishes entirely while the async task runs.
+    #[test]
+    fn spawn_does_not_clear_existing_mesh_entity() {
+        AsyncComputeTaskPool::get_or_init(TaskPool::default);
+
+        let mut app = App::new();
+        app.init_resource::<ChunkRenderState>();
+        app.init_resource::<PendingMeshTasks>();
+        app.init_resource::<BlockRegistry>();
+
+        let mut cache = ChunkCache::default();
+        let pos = ChunkPos::new(0, 0);
+        cache.insert(Chunk::new(pos));
+        app.insert_resource(cache);
+
+        let placeholder = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .set_mesh_entity(pos, Some(placeholder));
+
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .mark_dirty(pos);
+        app.add_systems(Update, spawn_mesh_tasks);
+        app.update();
+
+        let render_state = app.world().resource::<ChunkRenderState>();
+        assert_eq!(
+            render_state.mesh_entity(&pos),
+            Some(placeholder),
+            "spawn must preserve the existing mesh entity to avoid flicker"
         );
     }
 }
