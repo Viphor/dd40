@@ -144,6 +144,17 @@ This design allows world generation and gameplay code to focus on logic, not ren
 
 ## Development Guidelines
 
+### Plan First, Implement on Request
+
+**Always assume the user wants to plan first, unless they specifically tell you to implement.**
+
+For any non-trivial request — new crates, new systems, multi-file changes,
+architectural changes — produce a plan (in `plan.md` in the session folder if
+one is available, otherwise inline) and stop. Do not start writing code,
+scaffolding crates, or editing files until the user explicitly says to
+implement (e.g. "go ahead", "implement it", "start", "do it"). Trivial
+single-file fixes, typo corrections, and direct questions are exempt.
+
 ### Before Writing Code
 
 **If any of the requirements are ambiguous, then ask clarifying questions before writing any code.**
