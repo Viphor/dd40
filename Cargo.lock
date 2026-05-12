@@ -2903,6 +2903,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "dd40_core",
+ "dd40_item_core",
 ]
 
 [[package]]

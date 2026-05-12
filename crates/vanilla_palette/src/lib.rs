@@ -35,9 +35,11 @@ use bevy::prelude::*;
 use dd40_core::plugin::CorePlugin;
 
 pub mod blocks;
+pub mod items;
 pub mod tools;
 
 pub use blocks::{VanillaBlocks, VanillaBlocksPlugin};
+pub use items::{VanillaItems, VanillaItemsPlugin};
 pub use tools::{VanillaToolKinds, VanillaToolTiers, VanillaToolsPlugin};
 
 // ── Plugin ────────────────────────────────────────────────────────────────────
@@ -63,6 +65,6 @@ pub struct VanillaPalettePlugin;
 impl Plugin for VanillaPalettePlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin);
-        app.add_plugins((VanillaToolsPlugin, VanillaBlocksPlugin));
+        app.add_plugins((VanillaToolsPlugin, VanillaBlocksPlugin, VanillaItemsPlugin));
     }
 }
