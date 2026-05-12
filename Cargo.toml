@@ -17,6 +17,7 @@ members = [
     "crates/renderer",
     "crates/vanilla_palette",
     "crates/item_core",
+    "crates/inventory_core",
     "crates/integration_character_physics",
 ]
 resolver = "2"
@@ -38,4 +39,5 @@ dd40_network = { path = "crates/network" }
 dd40_chunk_storage = { path = "crates/chunk_storage" }
 dd40_vanilla_palette = { path = "crates/vanilla_palette" }
 dd40_item_core = { path = "crates/item_core" }
+dd40_inventory_core = { path = "crates/inventory_core" }
 dd40_integration_character_physics = { path = "crates/integration_character_physics" }

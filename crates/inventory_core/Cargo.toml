@@ -1,0 +1,10 @@
+[package]
+name = "dd40_inventory_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dd40_core = { workspace = true }
+dd40_item_core = { workspace = true }
+bevy = { workspace = true, default-features = false }
+serde = { version = "1.0", features = ["derive"] }
