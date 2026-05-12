@@ -12,7 +12,8 @@ all relevant dd40 crates. It is not intended to be imported as a library.
 | Plugin | Provided by |
 |---|---|
 | `CorePlugin` | `dd40_core` |
-| `PlayerInputPlugin` | `dd40_player` |
+| `PlayerInputPlugin` | `dd40_player_input` |
+| `CharacterInteractionPlugin` | `dd40_character_interaction` |
 | `RendererPlugin` | `dd40_renderer` |
 | `ClientNetworkPlugin` | `dd40_network` |
 | `DebugUiPlugin` | `dd40_debug_ui` |

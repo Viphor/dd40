@@ -69,16 +69,15 @@ fn collect_chunk_responses(
         match message {
             ChunkResponse::Loaded(chunk) => {
                 debug!(
-                    "DiskStoragePlugin: loaded chunk at ({}, {})",
-                    chunk.position().x,
-                    chunk.position().z
+                    "DiskStoragePlugin: loaded chunk at {}",
+                    chunk.position()
                 );
                 ready.write(ChunkReady { chunk });
             }
             ChunkResponse::Request(pos) => {
                 debug!(
-                    "DiskStoragePlugin: no chunk found at ({}, {}), Generating new chunk",
-                    pos.x, pos.z
+                    "DiskStoragePlugin: no chunk found at {}, generating new chunk",
+                    pos
                 );
                 requests.write(GenerateChunk { pos });
             }

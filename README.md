@@ -38,9 +38,9 @@ then launch the client — it will connect automatically.
 
 ## Writing your own client or server
 
-Every subsystem in dd40 is an independently swappable crate. All non-core
-crates depend only on `dd40_core`; you can use any subset of them, replace any
-one of them, or write your own from scratch.
+Every subsystem in dd40 is an independently swappable crate organised in a
+three-tier model (foundation → implementation → binary). You can use any subset
+of them, replace any one of them, or write your own from scratch.
 
 ### Minimal custom server example
 
@@ -94,19 +94,25 @@ See [STRUCTURE.md](STRUCTURE.md) for the full crate breakdown.
 
 ```
 crates/
-  core/          — shared types, block registry, physics (dd40_core)
-  world/         — world generation (dd40_world)
-  chunk_storage/ — disk-backed chunk persistence (dd40_chunk_storage)
-  renderer/      — greedy-mesh chunk renderer (dd40_renderer)
-  player/        — player input, camera, block interaction (dd40_player)
-  network/       — lightyear networking (dd40_network)
-  debug_ui/      — debug overlay (dd40_debug_ui)
-  gui/           — in-game HUD (dd40_gui)
-  client/        — default client binary (dd40_client)
-  server/        — default server binary (dd40_server)
+  core/                  — block registry, chunk pipeline, state (dd40_core)         [Tier 0]
+  physics_core/          — physics types, components, system sets (dd40_physics_core) [Tier 0]
+  character_core/        — character types, input bridge, render sets (dd40_character_core) [Tier 0]
+  physics/               — gravity, block collision, char collision (dd40_physics)    [Tier 1]
+  vanilla_palette/       — vanilla block/tool definitions (dd40_vanilla_palette)      [Tier 1]
+  world/                 — world generation (dd40_world)                              [Tier 1]
+  chunk_storage/         — disk-backed chunk persistence (dd40_chunk_storage)         [Tier 1]
+  renderer/              — greedy-mesh chunk renderer (dd40_renderer)                 [Tier 1]
+  player_input/          — keyboard/mouse → CharacterInput, camera (dd40_player_input) [Tier 1]
+  character_interaction/ — block targeting, mining, placement (dd40_character_interaction) [Tier 1]
+  network/               — lightyear networking (dd40_network)                        [Tier 1]
+  debug_ui/              — debug overlay (dd40_debug_ui)                              [Tier 1]
+  gui/                   — in-game HUD (dd40_gui)                                     [Tier 1]
+  client/                — default client binary (dd40_client)                        [Tier 2]
+  server/                — default server binary (dd40_server)                        [Tier 2]
+```
+
 docs/            — per-system API documentation with examples
 examples/        — runnable example programs
-```
 
 ---
 

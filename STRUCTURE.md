@@ -8,34 +8,54 @@ single-page reference.
 
 ---
 
-## Dependency rules
+## Three-tier dependency model
 
-1. Every non-core crate may depend **only** on `dd40_core` and external
-   libraries. No non-core crate may import another dd40 crate.
-2. `dd40_core` may depend only on external libraries.
-3. `dd40_client` and `dd40_server` are configuration crates — they are the
-   only crates allowed to depend on multiple dd40 crates at once.
+| Tier | Description | May depend on |
+|---|---|---|
+| **Tier 0 — Foundation** | Types, components, system sets — no game behaviour | Other foundation crates, external libraries |
+| **Tier 1 — Implementation** | Systems and concrete game behaviour | Any foundation crates, external libraries. Must call `ensure_plugins!` |
+| **Tier 2 — Binary** | Client and server binaries | Any dd40 crate |
+**Tier 1 crates must not depend on other Tier 1 crates.** If two implementation
+crates need to share data, that data belongs in a foundation crate.
+
+There are currently no tracked exceptions to this rule.
 
 ---
 
 ## Crate inventory
 
-| Crate | Binary? | Role | Depends on (dd40) |
-|---|---|---|---|
-| `dd40_core` | — | Shared types, registry, physics, messages/events | — |
-| `dd40_vanilla_palette` | — | Vanilla blocks, tool kinds, and tool tiers | `dd40_core` |
-| `dd40_world` | — | World generation | `dd40_core` |
-| `dd40_chunk_storage` | — | Disk-backed chunk persistence | `dd40_core` |
-| `dd40_renderer` | — | Greedy-mesh chunk renderer, LOD | `dd40_core` ¹ |
-| `dd40_player` | — | Player input, camera, block interaction, mining | `dd40_core` |
-| `dd40_network` | — | lightyear transport, protocol, replication | `dd40_core` |
-| `dd40_debug_ui` | — | Debug overlay (FPS, stats, orientation gizmo) | `dd40_core` |
-| `dd40_gui` | — | In-game HUD (crosshair, etc.) | `dd40_core` |
-| `dd40_client` | ✓ | Default playable client | all relevant |
-| `dd40_server` | ✓ | Default headless server | all relevant |
+### Tier 0 — Foundation
 
-¹ `dd40_renderer` currently also depends on `dd40_player` (inconsistency — see
-`INCONSISTENCIES.md`).
+| Crate | Role | Depends on (dd40) |
+|---|---|---|
+| `dd40_core` | Block registry, chunk pipeline, app state, tools, messages | — |
+| `dd40_physics_core` | Physics types, components, system sets | `dd40_core` |
+| `dd40_character_core` | Character types, input bridge, `MiningState`, `TargetedBlock`, `PlayerId`, render sets | `dd40_core` |
+| `dd40_item_core` | Item registry, `ActiveItem`, `RequestActiveItem`, `ActiveItemChanged` | `dd40_core` |
+
+### Tier 1 — Implementation
+
+| Crate | Role | Depends on (dd40) |
+|---|---|---|
+| `dd40_physics` | Gravity integration, block collision, character collision | `dd40_core`, `dd40_physics_core` |
+| `dd40_integration_character_physics` | Bridges `CharacterInput` → physics `Impulse` (the only crate that knows about both `dd40_character_core` and `dd40_physics_core`) | `dd40_core`, `dd40_character_core`, `dd40_physics_core` |
+| `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999) | `dd40_core` |
+| `dd40_world` | World generation (generic over `WorldGenerator` trait) | `dd40_core` |
+| `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) | `dd40_core` |
+| `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD | `dd40_core`, `dd40_physics_core` |
+| `dd40_player_input` | Keyboard/mouse → `CharacterInput`, first-person camera, `PlayerMode` | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
+| `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
+| `dd40_network` | lightyear client-server networking (feature-gated) | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
+| `dd40_debug_ui` | FPS overlay, orientation gizmo, custom debug elements | `dd40_core` |
+| `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
+| `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
+
+### Tier 2 — Binary
+
+| Crate | Plugins wired |
+|---|---|
+| `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin` |
+| `dd40_server` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `DiskStoragePlugin`, `WorldPlugin`, `ServerNetworkPlugin` |
 
 ---
 
@@ -43,47 +63,177 @@ single-page reference.
 
 ### `dd40_core`
 
-Foundation crate. Supplies the shared vocabulary every other crate speaks.
-The physics engine is the single intentional piece of game logic here — almost
-every character-related crate needs it, and extracting it into a separate crate
-would just force every consumer to take an extra dependency anyway.
+Foundation crate. Supplies the shared vocabulary every other crate speaks:
+block types, the registry, chunk data structures, app/game state, tool system,
+and all messages that flow between subsystems.
 
 ```
 src/
 ├── lib.rs             — public re-exports and prelude
-├── plugin.rs          — CorePlugin (ToolRegistry, system-set ordering)
+├── plugin.rs          — CorePlugin (system-set ordering, message registration)
 ├── state.rs           — AppState, GameState
 ├── loading.rs         — LoadingPlugin, LoadingTracker, LoadingSet
 ├── common.rs          — log_plugin() helper
 ├── debug.rs           — DebugInfo component
+├── macros.rs          — ensure_plugins! macro
 ├── tools.rs           — ToolKindId, ToolTierId, ToolRegistry, ToolRegistrySet,
-│                        EquippedTool, mining_duration()
+│                        mining_duration()
 ├── block/
-│   ├── mod.rs         — Block, BlockId, BlockPos, BlockCoord
-│   ├── registry.rs    — BlockDefinition (toughness, preferred_tool, is_destructible),
-│   │                    BlockRegistry, BlockRegistrySet
+│   ├── mod.rs         — Block, BlockId, BlockPos, BlockCoord, CollisionShape
+│   ├── registry.rs    — BlockDefinition, BlockRegistry, BlockRegistrySet
 │   └── events.rs      — PlaceBlockRequest, BlockPlaced, BlockRemoved, BlockChanged,
 │                        StartMiningRequest, AbortMiningRequest, MineBlockRequest
 ├── chunk/
 │   ├── mod.rs         — Chunk, ChunkPos, CHUNK_SIZE_* constants
 │   ├── cache.rs       — ChunkCache, ChunkCachePlugin
 │   └── events.rs      — GenerateChunk, RequestChunk, ChunkReady
-├── character/
-│   ├── mod.rs         — Character, Player, MovementSpeed, JumpImpulse, SpawnPosition,
-│   │                    CharacterBundle, CharacterRenderSet
-│   ├── builder.rs     — CharacterBuilder
-│   ├── controller.rs  — CharacterController, CharacterInput
-│   ├── plugin.rs      — CharacterPlugin
-│   └── physics/
-│       ├── mod.rs            — PhysicsPlugin, PhysicsSet, CollisionShape, CharacterCollider,
-│       │                       PhysicsBody, PhysicsConfig, Velocity, GravityScale,
-│       │                       Grounded, Impulse, Aabb, CharacterPosition
-│       ├── integration.rs    — gravity + velocity integration
-│       ├── block_collision.rs — O(1) voxel AABB resolution
-│       ├── character_collision.rs — character-vs-character push-apart
-│       └── spatial_cache.rs  — CharacterSpatialCache
 └── world/
     └── mod.rs         — WorldGenerationSet system set
+```
+
+---
+
+### `dd40_physics_core`
+
+Foundation crate. Defines all physics types, components, and system sets.
+No game logic — only the shared vocabulary for physics behaviour.
+
+```
+src/
+├── lib.rs
+├── plugin.rs          — PhysicsCorePlugin
+├── prelude.rs         — re-exports of all stable public types
+├── components.rs      — PhysicsBody, CharacterPosition, Velocity, GravityScale,
+│                        Grounded, Impulse, CharacterCollider, Aabb
+├── resources/
+│   ├── mod.rs         — PhysicsConfig (gravity, ground_friction, air_friction,
+│   │                    terminal_velocity)
+│   └── spatial_cache.rs — CharacterSpatialCache
+└── system_sets.rs     — PhysicsSet (InputSync → Integrate → BlockCollision →
+                         CharacterCollision → Finalise)
+```
+
+---
+
+### `dd40_character_core`
+
+Foundation crate. Defines character-related types, the input bridge,
+`MiningState`, `TargetedBlock`, `PlayerId`, the per-character face anchor,
+and the render-frame system set.
+
+```
+src/
+├── lib.rs
+├── plugin.rs          — CharacterCorePlugin
+├── prelude.rs         — re-exports of all stable public types
+├── components.rs      — Character, Player, PlayerId, MovementSpeed, JumpImpulse,
+│                        SpawnPosition
+├── bundles.rs         — CharacterBundle (incl. MiningState, TargetedBlock)
+├── builder.rs         — CharacterBuilder (spawn / attach attach a face child)
+├── controller.rs      — CharacterController, CharacterInput (types only;
+│                        the apply_character_controller system lives in
+│                        dd40_integration_character_physics)
+├── face.rs            — CharacterFace, CameraRotation, MouseSensitivity,
+│                        DEFAULT_FACE_OFFSET — eye/head anchor that lives on
+│                        a child entity of every Character
+├── mining_state.rs    — MiningState (per-character Component)
+├── targeted_block.rs  — TargetedBlock (per-character Component), BlockFace
+└── system_sets.rs     — CharacterRenderSet (FrameInterpolation → CameraSync)
+```
+
+#### `CharacterBuilder` and the extension-trait pattern
+
+`CharacterBuilder` is the **only** sanctioned way to spawn a character.
+Every spawn site (single-player, server, predicted client) goes through
+it.  Bypassing the builder risks forgetting to insert `Transform` before
+`PhysicsBody`, which silently leaves `CharacterPosition` at `Vec3::ZERO`.
+
+The builder owns three in-crate methods (which only need types from
+`dd40_character_core` itself):
+
+- `with_player()` — adds the `Player` marker.
+- `with_controller()` — adds `(CharacterInput, CharacterController, JumpImpulse)`.
+- `with_extra(|e| ...)` / `add_extra(|e| ...)` — pushes an arbitrary
+  insertion closure onto the builder.
+
+External capability crates extend the builder via **extension traits
+implemented as a blanket impl on any `T: AddExtra`**.  This lets a crate
+add a `with_*()` method to `CharacterBuilder` without any of the
+character-core crates needing to depend on it.  The pattern:
+
+```rust
+// In your capability crate (depends on dd40_core only):
+use dd40_core::builder_extra::AddExtra;
+
+pub trait CharacterFooExt: Sized {
+    fn with_foo(self, cfg: FooConfig) -> Self;
+}
+
+impl<T: AddExtra> CharacterFooExt for T {
+    fn with_foo(mut self, cfg: FooConfig) -> Self {
+        self.add_extra(move |e| { e.insert((Foo, cfg)); });
+        self
+    }
+}
+```
+
+Existing extension traits in the workspace:
+
+| Crate | Trait | Methods |
+|---|---|---|
+| `dd40_physics_core` | `CharacterPhysicsExt` | `with_physics()`, `with_physics_config(cfg)` |
+| `dd40_network` (server) | `CharacterServerNetworkExt` | `with_server_replication(client_id, spawn_pos, owner)` |
+| `dd40_network` (client) | `CharacterClientNetworkExt` | `with_predicted_local_player(initial_pos)` |
+
+A typical full chain:
+
+```rust
+CharacterBuilder::new("Player")
+    .transform(Transform::from_translation(spawn_pos))
+    .with_physics()
+    .with_controller()
+    .with_player()
+    .spawn(&mut commands);
+```
+
+---
+
+### `dd40_item_core`
+
+Foundation crate. Defines the item registry, the per-character
+`ActiveItem` component, and the inventory-facing messages
+(`RequestActiveItem`, `ActiveItemChanged`).  Contains no game logic and
+no inventory layout — implementation crates such as
+`dd40_vanilla_inventory` provide the storage and selection systems.
+
+```
+src/
+├── lib.rs
+├── plugin.rs        — ItemCorePlugin
+├── prelude.rs       — re-exports of all stable public types
+├── registry.rs      — ItemId, ItemDefinition, ItemRegistry, ItemRegistrySet,
+│                       ToolBehavior
+├── active_item.rs   — ActiveItem (per-character Component), ItemStack
+└── messages.rs      — RequestActiveItem (Message), ActiveItemChanged (Event),
+                        ItemSelector
+```
+
+---
+
+### `dd40_physics`
+
+Implementation crate. Contains all physics simulation systems:
+gravity integration, block-collision resolution, and character-vs-character
+push-apart. Inserts a `TentativePosition` component (internal to this crate)
+on every `PhysicsBody` entity via an observer.
+
+```
+src/
+├── lib.rs
+├── plugin.rs             — PhysicsPlugin (wires sub-plugins; ensure_plugins!)
+├── integration.rs        — gravity + velocity → tentative position
+├── block_collision.rs    — O(1) voxel AABB resolution
+└── character_collision.rs — character-vs-character push-apart
 ```
 
 ---
@@ -91,27 +241,22 @@ src/
 ### `dd40_vanilla_palette`
 
 All vanilla game content: block definitions, tool kinds, and tool tiers.
-Nothing in this crate is required by the engine — it is purely content that
-ships with the default game configuration.  Modders can add their own palette
-crate alongside this one without touching core.
+Nothing here is required by the engine — it is purely content that ships
+with the default game configuration.
 
 ```
 src/
 ├── lib.rs       — VanillaPalettePlugin (composes VanillaToolsPlugin + VanillaBlocksPlugin)
 ├── blocks.rs    — VanillaBlocks constants, VanillaBlocksPlugin
-│                  (stone, dirt, grass, sand, wood, leaves — with toughness and
-│                   preferred_tool values; registered in BlockRegistrySet)
 └── tools.rs     — VanillaToolKinds / VanillaToolTiers constants, VanillaToolsPlugin
-                   (HAND, PICKAXE, AXE, SHOVEL, HOE, SHEARS + WOOD/STONE/IRON/DIAMOND/GOLD
-                    tiers; registered in ToolRegistrySet)
 ```
 
 ---
 
 ### `dd40_world`
 
-World generation. Generic over the generator type so the algorithm can be swapped
-without touching this crate.
+World generation. Generic over the generator type so the algorithm can be
+swapped without touching this crate.
 
 ```
 src/
@@ -119,21 +264,21 @@ src/
 ├── plugin.rs          — WorldPlugin<G: WorldGenerator + Resource + Clone>
 └── generators/
     ├── mod.rs         — WorldGenerator trait
-    └── flat.rs        — FlatWorldGenerator (no Default — callers supply BlockId layers)
+    └── flat.rs        — FlatWorldGenerator
 ```
 
 ---
 
 ### `dd40_chunk_storage`
 
-Disk-backed chunk persistence. Reads/writes chunks as binary files. Delegates
-missing chunks to the generation pipeline via `GenerateChunk` messages.
+Disk-backed chunk persistence. Delegates missing chunks to the generation
+pipeline via `GenerateChunk` messages.
 
 ```
 src/
 ├── lib.rs             — plugin wiring, channel newtypes, dispatch/collect systems
 ├── plugin.rs          — DiskStoragePlugin
-├── provider.rs        — DiskChunkProvider (async file I/O)
+├── provider.rs        — DiskChunkProvider (async file I/O via crossbeam channels)
 └── serialization/
     ├── mod.rs         — versioned entry point
     └── v1.rs          — version-1 bincode format
@@ -144,7 +289,8 @@ src/
 ### `dd40_renderer`
 
 Greedy-mesh chunk renderer. Listens for `ChunkReady` messages and produces
-optimised Bevy meshes off the main thread.
+optimised Bevy meshes off the main thread. LOD is anchored to
+`CharacterPosition` (from `dd40_physics_core`).
 
 ```
 src/
@@ -161,30 +307,47 @@ src/
 
 ---
 
-### `dd40_player`
+### `dd40_player_input`
 
-Player input, camera, and block interaction (including mining).
+Translates keyboard and mouse input into `CharacterInput` on the player entity,
+drives the first-person camera, and manages the `PlayerMode` state.
 
 ```
 src/
-├── lib.rs                     — PlayerInputPlugin, player spawning, camera follow, input mapping
-└── block_interaction/
-    ├── mod.rs                 — BlockInteractionPlugin, BlockInteractionConfig
-    ├── targeting.rs           — TargetedBlock (pos + face + block_id), BlockFace, DDA ray-cast
-    ├── placement.rs           — HeldBlock, placement
-    └── mining.rs              — MiningState, update_mining, apply_removed_blocks
+├── lib.rs
+├── plugin.rs          — PlayerInputPlugin
+├── components.rs      — PlayerMode, CameraRotation, MouseSensitivity
+├── state.rs           — PlayerMode state transitions
+└── systems.rs         — input mapping, camera follow systems
+```
+
+---
+
+### `dd40_character_interaction`
+
+Block targeting (DDA ray-cast), mining, and placement for any `Character`
+entity. Re-exports `MiningState`, `TargetedBlock`, and `BlockFace` from
+`dd40_character_core` for backwards compatibility.
+
+```
+src/
+├── lib.rs             — CharacterInteractionPlugin, public re-exports
+├── plugin.rs          — system wiring, ensure_plugins!
+├── targeting.rs       — DDA ray-cast, BlockInteractionConfig
+├── placement.rs       — block placement (reads ActiveItem)
+└── mining.rs          — mining state update, block removal
 ```
 
 ---
 
 ### `dd40_network`
 
-lightyear-based networking. Feature-flagged `client`/`server`.
+lightyear-based networking, feature-gated `client`/`server`.
 
 ```
 src/
 ├── lib.rs
-├── protocol.rs        — shared protocol definitions (messages + directions)
+├── protocol.rs        — shared protocol (messages + directions)
 ├── shared/
 │   ├── mod.rs
 │   ├── character.rs
@@ -196,7 +359,7 @@ src/
 │   ├── character.rs   — frame interpolation, visual correction
 │   ├── chunk_provider.rs
 │   ├── block_placement.rs
-│   ├── block_mining.rs — send_{start,abort,mine}_block; receive_removed_blocks
+│   ├── block_mining.rs
 │   ├── loading.rs
 │   └── spawn.rs
 └── server/
@@ -207,7 +370,7 @@ src/
     ├── chunk_provider.rs
     ├── chunk_requests.rs
     ├── block_placement.rs
-    ├── block_mining.rs — MiningSession component; receive_{start,abort,mine}_block
+    ├── block_mining.rs — MiningSession component
     ├── user.rs
     └── spawn.rs       — WorldSpawnConfig, PlayerLocations
 ```
@@ -216,7 +379,8 @@ src/
 
 ### `dd40_debug_ui`
 
-Debug overlay.
+Debug overlay with FPS counter, orientation gizmo, and a host for custom
+`DebugInfo` elements.
 
 ```
 src/
@@ -229,7 +393,9 @@ src/
 
 ### `dd40_gui`
 
-In-game HUD.
+In-game HUD with no character coupling. Visuals that depend on
+character vocabulary (e.g. the targeted-block highlight) live in
+`dd40_character_gui` instead.
 
 ```
 src/
@@ -240,14 +406,31 @@ src/
 
 ---
 
+### `dd40_character_gui`
+
+Gizmo and HUD rendering for character-related state: the targeted-block
+highlight and the mining break overlay. Wired into `dd40_client` only
+— never the headless server.
+
+```
+src/
+├── lib.rs
+├── plugin.rs           — CharacterGuiPlugin
+└── block_highlight.rs  — BlockHighlightConfig + draw_targeted_block_highlight
+                          (outline + mining break animation)
+```
+
+---
+
 ### `dd40_client`
 
 Default client binary. Configuration only.
 
 ```
 src/
-└── main.rs   — DefaultPlugins + CorePlugin + VanillaPalettePlugin + PlayerInputPlugin
-               + RendererPlugin + ClientNetworkPlugin + DebugUiPlugin + GuiPlugin
+└── main.rs   — DefaultPlugins + CorePlugin + PhysicsPlugin + VanillaPalettePlugin
+               + PlayerInputPlugin + RendererPlugin + ClientNetworkPlugin
+               + DebugUiPlugin + GuiPlugin + CharacterGuiPlugin
 ```
 
 ---
@@ -258,6 +441,6 @@ Default server binary. Configuration only.
 
 ```
 src/
-└── main.rs   — MinimalPlugins + CorePlugin + VanillaPalettePlugin + WorldPlugin
-               + DiskStoragePlugin + ServerNetworkPlugin
+└── main.rs   — MinimalPlugins + CorePlugin + PhysicsPlugin + VanillaPalettePlugin
+               + DiskStoragePlugin + WorldPlugin + ServerNetworkPlugin
 ```

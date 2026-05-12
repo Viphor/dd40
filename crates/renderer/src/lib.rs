@@ -85,13 +85,14 @@ pub mod render_state;
 pub mod systems;
 
 use bevy::prelude::*;
-use dd40_core::prelude::AppState;
+use dd40_core::{plugin::CorePlugin, prelude::AppState};
+use dd40_physics_core::plugin::PhysicsCorePlugin;
 
 use lod::LodConfig;
 use mesh_task::PendingMeshTasks;
 use render_state::ChunkRenderState;
 use systems::{
-    apply_mesh_tasks, mark_dirty_on_block_change, mark_dirty_on_block_removed,
+    apply_mesh_tasks, mark_dirty_on_chunk_changed, mark_dirty_on_chunk_predicted,
     mark_dirty_on_chunk_ready, spawn_mesh_tasks, update_lod_levels,
 };
 
@@ -125,8 +126,10 @@ pub struct RebuildChunksSet;
 /// - [`PendingMeshTasks`] resource (default-initialized).
 /// - [`LodConfig`] resource (default-initialized, unless already present).
 /// - [`mark_dirty_on_chunk_ready`] in `PreUpdate`.
-/// - [`mark_dirty_on_block_change`] in `PreUpdate` (reacts to [`BlockPlaced`]).
-/// - [`mark_dirty_on_block_removed`] in `PreUpdate` (reacts to [`BlockRemoved`]).
+/// - [`mark_dirty_on_chunk_predicted`] in `PreUpdate` (reacts to
+///   [`ChunkPredicted`] — optimistic local prediction).
+/// - [`mark_dirty_on_chunk_changed`] in `PreUpdate` (reacts to
+///   [`ChunkChanged`] — authoritative confirmation).
 /// - [`update_lod_levels`] in `Update` (inside [`UpdateLodSet`]).
 /// - [`spawn_mesh_tasks`] in `Update` (inside [`RebuildChunksSet`], after
 ///   [`UpdateLodSet`]).
@@ -141,12 +144,14 @@ pub struct RebuildChunksSet;
 /// [`ChunkCache`]: dd40_core::chunk::cache::ChunkCache
 /// [`ChunkCachePlugin`]: dd40_core::chunk::cache::ChunkCachePlugin
 /// [`ChunkReady`]: dd40_core::chunk::events::ChunkReady
-/// [`BlockPlaced`]: dd40_core::block::events::BlockPlaced
-/// [`BlockRemoved`]: dd40_core::block::events::BlockRemoved
+/// [`ChunkPredicted`]: dd40_core::chunk::events::ChunkPredicted
+/// [`ChunkChanged`]: dd40_core::chunk::events::ChunkChanged
 pub struct RendererPlugin;
 
 impl Plugin for RendererPlugin {
     fn build(&self, app: &mut App) {
+        dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
+
         // Insert resources only if they haven't been added already so the
         // caller can override them before adding the plugin.
         app.init_resource::<ChunkRenderState>();
@@ -168,8 +173,8 @@ impl Plugin for RendererPlugin {
             PreUpdate,
             (
                 mark_dirty_on_chunk_ready,
-                mark_dirty_on_block_change,
-                mark_dirty_on_block_removed,
+                mark_dirty_on_chunk_predicted,
+                mark_dirty_on_chunk_changed,
             ),
         );
 

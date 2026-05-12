@@ -6,9 +6,9 @@
 
 use bevy::math::Curve;
 use bevy::prelude::*;
-pub use dd40_core::prelude::PlaceBlockRequest;
-pub use dd40_core::block::events::{AbortMiningRequest, MineBlockRequest, StartMiningRequest};
-use dd40_core::{character::Character, prelude::*};
+use dd40_character_core::components::Character;
+use dd40_core::prelude::*;
+use dd40_physics_core::prelude::Velocity;
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +38,12 @@ pub struct EventChannel;
 /// The controlling client mirrors the same logic on its [`Predicted`] entity
 /// for client-side prediction.
 ///
+/// The action triple ([`attack`](Self::attack) / [`interact`](Self::interact)
+/// / [`place`](Self::place)) is intentionally split: keeping policy ("does
+/// right-click interact or place?") out of the protocol lets the local-player
+/// input layer decide per right-click while the interaction/placement systems
+/// stay agnostic.
+///
 /// [`Predicted`]: lightyear::prelude::client::Predicted
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Reflect)]
 pub struct PlayerInput {
@@ -53,10 +59,14 @@ pub struct PlayerInput {
     ///
     /// [`MovementSpeed`]: dd40_core::character::MovementSpeed
     pub sprint: bool,
-    /// Whether the player wants to place a block this tick.
-    pub place_block: bool,
-    /// Whether the player wants to remove a block this tick.
-    pub remove_block: bool,
+    /// Continuous primary-action intent. Held while the player wants to
+    /// mine (and, eventually, melee-attack).
+    pub attack: bool,
+    /// One-shot secondary-action intent — interact with the targeted
+    /// block (lever, button, container).
+    pub interact: bool,
+    /// One-shot intent to place a block from the player's active item.
+    pub place: bool,
 }
 
 impl Default for PlayerInput {
@@ -67,8 +77,9 @@ impl Default for PlayerInput {
             yaw: 0.0,
             jump: false,
             sprint: false,
-            place_block: false,
-            remove_block: false,
+            attack: false,
+            interact: false,
+            place: false,
         }
     }
 }
@@ -124,6 +135,57 @@ pub struct PlayerJoinedMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerLeftMessage {
     pub player_name: String,
+}
+
+/// Server-broadcast delta of authoritatively-committed changes to a chunk.
+///
+/// Sent from the server to every client that already has the chunk loaded,
+/// once per [`ChunkChanged`] emission from the chunk-authority commit pass.
+///
+/// The client applies the delta only if `base_version == local_version`.
+/// If `base_version > local_version` the client is ahead of the server
+/// (impossible in a healthy session — log + drop). If `base_version <
+/// local_version` the client is behind: it re-issues a [`RequestChunk`]
+/// with its current version so the server can reply with either a
+/// catch-up [`ChunkUpdate`] or a [`ChunkSnapshot`].
+///
+/// [`ChunkChanged`]: dd40_core::chunk::events::ChunkChanged
+/// [`RequestChunk`]: dd40_core::chunk::events::RequestChunk
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct ChunkUpdate {
+    /// Chunk the delta targets.
+    pub pos: ChunkPos,
+    /// Version the chunk was at *before* `changes` were applied. The
+    /// client may apply the delta only if this matches its local version.
+    pub base_version: u64,
+    /// Authoritative changes, in the order the server applied them.
+    pub changes: Vec<ChunkChange>,
+    /// Version after `changes` are applied. Clients store this as their
+    /// new local version on success.
+    pub new_version: u64,
+}
+
+/// Server-sent full snapshot of a chunk.
+///
+/// Sent in response to a [`RequestChunk`] when the server cannot satisfy
+/// the request with a [`ChunkUpdate`] — typically because:
+///
+/// - The client requested with `current_version == 0` (no local copy).
+/// - The client is more than `MaxDeltaBehind` versions behind.
+/// - The chunk's confirmed history has been truncated below the client's
+///   version.
+/// - The client requested with a version newer than the server's (a bug
+///   on the client; the snapshot is sent anyway to recover).
+///
+/// Carries a fully-formed [`Chunk`] including its current version. The
+/// client inserts it via the normal [`ChunkReady`] pipeline.
+///
+/// [`RequestChunk`]: dd40_core::chunk::events::RequestChunk
+/// [`ChunkReady`]: dd40_core::chunk::events::ChunkReady
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct ChunkSnapshot {
+    /// The chunk, at its current authoritative version.
+    pub chunk: Chunk,
 }
 
 // ============================================================================
@@ -244,9 +306,24 @@ impl Plugin for ProtocolPlugin {
         // between client and server via lightyear's input pipeline.
         app.add_plugins(lightyear::prelude::input::native::InputPlugin::<PlayerInput>::default());
 
-        // Register components with replication
-        app.register_component::<NetworkCharacter>();
-        app.register_component::<Character>();
+        // Register components with replication.
+        //
+        // `NetworkCharacter` and `Character` are markers that never change,
+        // so `replicate_once` sends them once at spawn instead of every tick.
+        // Neither needs prediction: the markers are present on the Confirmed
+        // entity and the client-side predicted-entity systems filter on
+        // `With<Predicted>` (the only Predicted entity is the local
+        // character) rather than on the markers.
+        app.register_component::<NetworkCharacter>()
+            .with_replication_config(ComponentReplicationConfig {
+                replicate_once: true,
+                ..Default::default()
+            });
+        app.register_component::<Character>()
+            .with_replication_config(ComponentReplicationConfig {
+                replicate_once: true,
+                ..Default::default()
+            });
 
         app.register_component::<PlayerPosition>()
             .add_prediction()
@@ -257,11 +334,12 @@ impl Plugin for ProtocolPlugin {
         // restoring position but not velocity causes the re-simulation to
         // immediately diverge, producing visible drift especially during jumps
         // and gravity-driven falls.
-        app.register_component::<Velocity>()
-            .add_prediction();
+        app.register_component::<Velocity>().add_prediction();
 
+        // Rotation is NOT predicted — the controlling client writes it locally
+        // each PostUpdate frame from the camera, so it is always perfectly
+        // smooth.  Other clients receive it with linear interpolation.
         app.register_component::<PlayerRotation>()
-            .add_prediction()
             .add_linear_interpolation();
 
         app.register_component::<PlayerSpeed>();
@@ -271,18 +349,6 @@ impl Plugin for ProtocolPlugin {
         app.register_message::<RequestChunk>()
             .add_direction(NetworkDirection::ClientToServer);
 
-        app.register_message::<PlaceBlockRequest>()
-            .add_direction(NetworkDirection::ClientToServer);
-
-        app.register_message::<StartMiningRequest>()
-            .add_direction(NetworkDirection::ClientToServer);
-
-        app.register_message::<AbortMiningRequest>()
-            .add_direction(NetworkDirection::ClientToServer);
-
-        app.register_message::<MineBlockRequest>()
-            .add_direction(NetworkDirection::ClientToServer);
-
         app.register_message::<RequestSpawn>()
             .add_direction(NetworkDirection::ClientToServer);
 
@@ -290,13 +356,10 @@ impl Plugin for ProtocolPlugin {
         app.register_message::<PlayerSpawnLocation>()
             .add_direction(NetworkDirection::ServerToClient);
 
-        app.register_message::<ChunkReady>()
+        app.register_message::<ChunkUpdate>()
             .add_direction(NetworkDirection::ServerToClient);
 
-        app.register_message::<BlockPlaced>()
-            .add_direction(NetworkDirection::ServerToClient);
-
-        app.register_message::<BlockRemoved>()
+        app.register_message::<ChunkSnapshot>()
             .add_direction(NetworkDirection::ServerToClient);
 
         app.register_message::<PlayerJoinedMessage>()
@@ -345,7 +408,7 @@ pub fn global_to_chunk_local(global_pos: &BlockPos) -> (ChunkPos, (u8, u8, u8)) 
     let local_y = global_pos.y as u8; // Assuming y is always 0-255
     let local_z = global_pos.z.rem_euclid(16) as u8;
 
-    (ChunkPos::new(chunk_x, chunk_z), (local_x, local_y, local_z))
+    (ChunkPos::new(chunk_x, 0, chunk_z), (local_x, local_y, local_z))
 }
 
 /// Helper function to convert chunk position and local position to global block position.
@@ -373,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_chunk_local_to_global() {
-        let chunk_pos = ChunkPos::new(2, -3);
+        let chunk_pos = ChunkPos::new(2, 0, -3);
         let local_pos = (5, 100, 7);
         let global_pos = chunk_local_to_global(&chunk_pos, local_pos);
 
@@ -408,7 +471,8 @@ mod tests {
         assert_eq!(input.yaw, 0.0);
         assert!(!input.jump);
         assert!(!input.sprint);
-        assert!(!input.place_block);
-        assert!(!input.remove_block);
+        assert!(!input.attack);
+        assert!(!input.interact);
+        assert!(!input.place);
     }
 }

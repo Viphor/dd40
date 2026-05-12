@@ -29,13 +29,11 @@
 //!   [`VisualCorrectionOffset`].
 
 use bevy::{prelude::*, time::Fixed};
-use dd40_core::{
-    character::{
-        CharacterRenderSet, Player, builder::CharacterBuilder, controller::CharacterInput,
-        physics::PhysicsSet,
-    },
-    prelude::CharacterPosition,
+use dd40_character_core::{
+    builder::CharacterBuilder, controller::CharacterInput, system_sets::CharacterRenderSet,
 };
+use dd40_physics_core::character_ext::CharacterPhysicsExt;
+use dd40_physics_core::prelude::{CharacterPosition, PhysicsSet};
 use lightyear::prelude::{
     Interpolated, Predicted,
     client::input::InputSystems,
@@ -43,9 +41,10 @@ use lightyear::prelude::{
     is_in_rollback,
 };
 
+use crate::character_ext::CharacterClientNetworkExt;
 use crate::{
-    protocol::{NetworkCharacter, PlayerInput, PlayerPosition},
-    shared::character::{apply_input_to_controller, character_bundle},
+    protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation},
+    shared::character::apply_input_to_controller,
 };
 
 // ============================================================================
@@ -59,13 +58,24 @@ use crate::{
 /// `previous`) and [`record_and_sync_post_physics`] (writes `current`).
 /// Read each render frame by [`apply_frame_interpolation`].
 #[derive(Component)]
-struct PhysicsInterpolationData {
+pub struct PhysicsInterpolationData {
     /// Physics position at the **start** of the most recent tick (end of the
     /// previous tick), used as the interpolation origin.
-    previous: Vec3,
+    pub(crate) previous: Vec3,
     /// Physics position at the **end** of the most recent tick, used as the
     /// interpolation target.
-    current: Vec3,
+    pub(crate) current: Vec3,
+}
+
+impl PhysicsInterpolationData {
+    /// Creates a new [`PhysicsInterpolationData`] with both `previous` and
+    /// `current` seeded to `pos`, suitable for the first tick after spawn.
+    pub fn new(pos: Vec3) -> Self {
+        Self {
+            previous: pos,
+            current: pos,
+        }
+    }
 }
 
 /// A decaying world-space offset added to [`Transform`] each render frame to
@@ -95,42 +105,47 @@ const VISUAL_CORRECTION_DECAY: f32 = 15.0;
 // OBSERVERS
 // ============================================================================
 
-/// Attaches local-player components to a newly-created [`Predicted`] character.
+/// Attaches local-player components to a newly-replicated character body.
 ///
-/// lightyear creates the `Predicted` entity with all replicated components
-/// (including [`PlayerPosition`]) already in place before the `Predicted`
-/// marker is added, so by the time this observer fires the spawn position is
-/// available.
+/// Triggered on `Add<NetworkCharacter>`, which fires once per replicated
+/// character body — never for the face child or other replicated children
+/// (which don't carry the `NetworkCharacter` marker). This guarantees we
+/// don't accidentally treat a child entity as a character body and double
+/// up `InputMarker` insertions.
 ///
-/// We explicitly set both [`CharacterPosition`] and [`PhysicsInterpolationData`]
-/// from the replicated [`PlayerPosition`] so the first render frame shows the
-/// entity at the correct spawn location rather than at the origin.
-fn on_predicted_character_added(
-    trigger: On<Add, Predicted>,
+/// The observer fires for both copies that arrive on the client:
+/// * The **Confirmed** entity (server-replicated truth) — skipped here; it
+///   exists only as a rollback checkpoint.
+/// * The **Predicted** entity (local player's controllable copy) — gets the
+///   full character bundle plus local-player extras (`InputMarker`,
+///   `Player`, `PhysicsInterpolationData`).
+///
+/// Once remote-character rendering lands, an `Has<Interpolated>` branch can
+/// be added here to set up read-only render state for other players.
+fn on_network_character_added(
+    trigger: On<Add, NetworkCharacter>,
     mut commands: Commands,
-    position_query: Query<&PlayerPosition>,
+    query: Query<(&PlayerPosition, Has<Predicted>)>,
 ) {
-    let initial_pos = position_query
-        .get(trigger.entity)
-        .map(|p| p.to_vec3())
-        .unwrap_or(Vec3::ZERO);
+    let Ok((player_pos, is_predicted)) = query.get(trigger.entity) else {
+        return;
+    };
 
-    commands.entity(trigger.entity).insert((
-        InputMarker::<PlayerInput>::default(),
-        Player,
-        CharacterBuilder::new("ThePlayer").build(),
-        character_bundle(),
-        // Override the on_add-initialised CharacterPosition with the actual
-        // server-confirmed spawn position.
-        CharacterPosition(initial_pos),
-        PhysicsInterpolationData {
-            previous: initial_pos,
-            current: initial_pos,
-        },
-    ));
+    if !is_predicted {
+        return;
+    }
+
+    let initial_pos = player_pos.to_vec3();
+    let mut entity_cmds = commands.entity(trigger.entity);
+    CharacterBuilder::new("ThePlayer")
+        .transform(Transform::from_translation(initial_pos))
+        .with_physics()
+        .with_controller()
+        .with_predicted_local_player(initial_pos)
+        .attach(&mut entity_cmds);
 
     info!(
-        "Attached InputMarker + Player to predicted character {:?}",
+        "Built local-player character on Predicted entity {:?}",
         trigger.entity
     );
 }
@@ -151,11 +166,7 @@ fn on_predicted_character_added(
 fn bridge_input_to_action_state(
     mut query: Query<
         (&CharacterInput, &mut ActionState<PlayerInput>),
-        (
-            With<NetworkCharacter>,
-            With<Predicted>,
-            With<InputMarker<PlayerInput>>,
-        ),
+        (With<Predicted>, With<InputMarker<PlayerInput>>),
     >,
 ) {
     for (char_input, mut action) in &mut query {
@@ -165,8 +176,9 @@ fn bridge_input_to_action_state(
             sprint: char_input.sprint,
             pitch: char_input.pitch,
             yaw: char_input.yaw,
-            place_block: false,
-            remove_block: false,
+            attack: char_input.attack,
+            interact: char_input.interact,
+            place: char_input.place,
         };
     }
 }
@@ -192,7 +204,7 @@ fn restore_and_record_previous(
             &mut PhysicsInterpolationData,
             Option<&VisualCorrectionOffset>,
         ),
-        (With<NetworkCharacter>, With<Predicted>),
+        With<Predicted>,
     >,
 ) {
     for (entity, player_pos, mut char_pos, mut interp, existing_correction) in &mut query {
@@ -225,10 +237,7 @@ fn restore_and_record_previous(
 /// Must run **before** [`PhysicsSet::Integrate`] so the physics step uses the
 /// current tick's input.
 fn client_apply_inputs(
-    mut query: Query<
-        (&ActionState<PlayerInput>, &mut CharacterInput),
-        (With<NetworkCharacter>, With<Predicted>),
-    >,
+    mut query: Query<(&ActionState<PlayerInput>, &mut CharacterInput), With<Predicted>>,
 ) {
     for (action, mut char_input) in &mut query {
         apply_input_to_controller(action, &mut char_input);
@@ -247,7 +256,7 @@ fn record_and_sync_post_physics(
             &mut PlayerPosition,
             &mut PhysicsInterpolationData,
         ),
-        (With<NetworkCharacter>, With<Predicted>),
+        With<Predicted>,
     >,
 ) {
     for (char_pos, mut player_pos, mut interp) in &mut query {
@@ -279,7 +288,7 @@ fn apply_frame_interpolation(
             Option<&mut VisualCorrectionOffset>,
             &mut Transform,
         ),
-        (With<NetworkCharacter>, With<Predicted>),
+        With<Predicted>,
     >,
 ) {
     let overstep = fixed_time.overstep_fraction();
@@ -308,11 +317,49 @@ fn apply_frame_interpolation(
 fn sync_interpolated_position_to_transform(
     mut query: Query<
         (&PlayerPosition, &mut Transform),
-        (With<NetworkCharacter>, With<Interpolated>),
+        With<Interpolated>,
     >,
 ) {
     for (pos, mut transform) in &mut query {
         transform.translation = pos.to_vec3();
+    }
+}
+
+/// Applies the interpolated [`PlayerRotation`] to remote players' [`Transform`]
+/// each render frame so other clients see smooth head rotation.
+///
+/// Runs only for [`Interpolated`] entities — the controlling client's predicted
+/// entity has its camera rotation driven directly by `mouse_look`, not by
+/// `PlayerRotation`.
+fn apply_interpolated_rotation(
+    mut query: Query<
+        (&PlayerRotation, &mut Transform),
+        With<Interpolated>,
+    >,
+) {
+    for (rot, mut transform) in &mut query {
+        transform.rotation = Quat::from_euler(EulerRot::YXZ, rot.yaw, rot.pitch, 0.0);
+    }
+}
+
+/// Writes the local player's current camera orientation into [`PlayerRotation`]
+/// so the server can replicate it to other clients.
+///
+/// Runs in `PostUpdate` — after `player_input` (Update) has already copied the
+/// latest `CameraRotation` into `CharacterInput`, and after lightyear's
+/// replication receive (PreUpdate) may have overwritten the component with a
+/// stale server-confirmed value.  Running here guarantees the render pass
+/// always sees the locally-driven, zero-lag rotation rather than a rolled-back
+/// one.
+fn sync_local_rotation(
+    mut query: Query<
+        (&CharacterInput, &mut PlayerRotation),
+        With<Predicted>,
+    >,
+) {
+    for (char_input, mut player_rot) in &mut query {
+        player_rot.pitch = char_input.pitch;
+        player_rot.yaw = char_input.yaw;
     }
 }
 
@@ -328,7 +375,7 @@ pub struct ClientCharacterPlugin;
 
 impl Plugin for ClientCharacterPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_predicted_character_added);
+        app.add_observer(on_network_character_added);
 
         // Bridge CharacterInput → ActionState in FixedPreUpdate so lightyear
         // buffers the current frame's input (including the one-shot jump flag)
@@ -358,7 +405,13 @@ impl Plugin for ClientCharacterPlugin {
             (
                 apply_frame_interpolation.in_set(CharacterRenderSet::FrameInterpolation),
                 sync_interpolated_position_to_transform,
+                apply_interpolated_rotation,
             ),
         );
+
+        // Write the current camera orientation into PlayerRotation every frame,
+        // after player_input (Update) has refreshed CharacterInput and after
+        // lightyear's replication receive (PreUpdate) may have overwritten it.
+        app.add_systems(PostUpdate, sync_local_rotation);
     }
 }

@@ -6,7 +6,7 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::character::physics::CollisionShape;
+use super::CollisionShape;
 use crate::tools::ToolKindId;
 
 /// System set for block registration systems.
@@ -136,7 +136,6 @@ impl BlockDefinition {
     /// ```
     /// use bevy::math::Vec3;
     /// use dd40_core::prelude::*;
-    /// use dd40_core::character::physics::CollisionShape;
     ///
     /// let slab = BlockDefinition::new(BlockId(1000), "oak_slab")
     ///     .with_collision_shape(CollisionShape::Box {

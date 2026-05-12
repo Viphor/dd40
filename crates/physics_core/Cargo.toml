@@ -1,0 +1,9 @@
+[package]
+name = "dd40_physics_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true, default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+dd40_core = { workspace = true }

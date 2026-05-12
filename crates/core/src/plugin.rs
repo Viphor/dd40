@@ -1,14 +1,11 @@
 use bevy::{prelude::*, state::app::StatesPlugin};
 
 use crate::{
-    character::plugin::CharacterPlugin,
-    chunk::cache::ChunkCachePlugin,
-    loading::LoadingPlugin,
-    prelude::*,
-    tools::{ToolRegistry, configure_tool_registry_ordering},
+    chunk::cache::ChunkCachePlugin, loading::LoadingPlugin, prelude::*, tools::ToolRegistry,
 };
 
 /// Bevy plugin that registers core types with the reflection system.
+#[derive(Default)]
 pub struct CorePlugin;
 
 impl Plugin for CorePlugin {
@@ -17,35 +14,29 @@ impl Plugin for CorePlugin {
             app.add_plugins(StatesPlugin);
         }
 
-        app.add_plugins((CharacterPlugin, LoadingPlugin))
+        app.add_plugins(LoadingPlugin)
             .init_state::<AppState>()
             .init_state::<GameState>()
             .insert_resource(BlockRegistry::new())
             .insert_resource(ToolRegistry::new())
+            .init_resource::<MaxDeltaBehind>()
             .register_type::<BlockId>()
             .register_type::<Block>()
             .register_type::<BlockRegistry>()
+            .register_type::<CollisionShape>()
             .register_type::<ToolRegistry>()
             .register_type::<ChunkPos>()
             .register_type::<BlockPos>()
+            .register_type::<MaxDeltaBehind>()
             .add_message::<ChunkReady>()
             .add_message::<RequestChunk>()
             .add_message::<GenerateChunk>()
-            .add_message::<BlockPlaced>()
-            .add_message::<BlockRemoved>()
-            .add_message::<BlockChanged>()
-            .add_message::<StartMiningRequest>()
-            .add_message::<AbortMiningRequest>()
-            .add_message::<MineBlockRequest>();
+            .add_message::<ChunkChanged>()
+            .add_message::<ChunkPredicted>()
+            .add_message::<PredictionRejected>()
+            .add_message::<ChunkSnapshotFallback>();
 
-        // System set ordering: tools must be registered before blocks (block
-        // definitions may reference ToolKindId), and both must finish before
-        // world generation reads the registry.
-        configure_tool_registry_ordering(app);
-        app.configure_sets(
-            Startup,
-            (BlockRegistrySet, WorldGenerationSet.after(BlockRegistrySet)),
-        );
+        app.configure_sets(Startup, (ToolRegistrySet, BlockRegistrySet).chain());
 
         app.add_plugins(ChunkCachePlugin);
     }

@@ -2724,6 +2724,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
+name = "dd40_character_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "serde",
+]
+
+[[package]]
+name = "dd40_character_gui"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_core",
+]
+
+[[package]]
+name = "dd40_character_interaction"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_core",
+ "dd40_item_core",
+ "dd40_physics_core",
+]
+
+[[package]]
 name = "dd40_chunk_storage"
 version = "0.1.0"
 dependencies = [
@@ -2738,11 +2767,15 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
+ "dd40_character_gui",
+ "dd40_character_interaction",
  "dd40_core",
  "dd40_debug_ui",
  "dd40_gui",
+ "dd40_integration_character_physics",
  "dd40_network",
- "dd40_player",
+ "dd40_physics",
+ "dd40_player_input",
  "dd40_renderer",
  "dd40_vanilla_palette",
  "dd40_world",
@@ -2777,12 +2810,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_integration_character_physics"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_core",
+ "dd40_physics",
+ "dd40_physics_core",
+]
+
+[[package]]
+name = "dd40_item_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "serde",
+]
+
+[[package]]
 name = "dd40_network"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "crossbeam-channel",
+ "dd40_character_core",
  "dd40_core",
+ "dd40_physics_core",
  "lightyear",
  "rand 0.8.5",
  "serde",
@@ -2790,11 +2845,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "dd40_player"
+name = "dd40_physics"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "dd40_core",
+ "dd40_physics_core",
+]
+
+[[package]]
+name = "dd40_physics_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "serde",
+]
+
+[[package]]
+name = "dd40_player_input"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_character_core",
+ "dd40_core",
+ "dd40_item_core",
+ "dd40_physics_core",
 ]
 
 [[package]]
@@ -2803,7 +2879,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "dd40_core",
- "dd40_player",
+ "dd40_physics_core",
 ]
 
 [[package]]
@@ -2811,9 +2887,12 @@ name = "dd40_server"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "dd40_character_interaction",
  "dd40_chunk_storage",
  "dd40_core",
+ "dd40_integration_character_physics",
  "dd40_network",
+ "dd40_physics",
  "dd40_vanilla_palette",
  "dd40_world",
 ]

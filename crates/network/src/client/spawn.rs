@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use bevy::{platform::collections::HashSet, prelude::*};
-use dd40_core::{character::Player, prelude::*};
+use dd40_character_core::components::Player;
+use dd40_core::prelude::*;
 
 use crate::{
     PlayerPosition,
@@ -124,7 +125,7 @@ pub(crate) fn receive_spawn_location(
 
     // Build the 3×3 grid of expected chunk positions.
     let pending: HashSet<ChunkPos> = (-1_i32..=1)
-        .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, centre.z + dz)))
+        .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, 0, centre.z + dz)))
         .collect();
 
     debug!(
@@ -137,7 +138,10 @@ pub(crate) fn receive_spawn_location(
         pending: pending.clone(),
     });
 
-    requester.write_batch(pending.iter().map(|pos| RequestChunk { pos: *pos }));
+    requester.write_batch(pending.iter().map(|pos| RequestChunk {
+        pos: *pos,
+        current_version: 0,
+    }));
 
     // Register the loading gate and start the timeout from now.
     if !tracker.contains(LOADING_KEY_INITIAL_CHUNKS) {
@@ -216,9 +220,9 @@ mod tests {
 
     #[test]
     fn initial_chunks_gate_contains_nine_positions() {
-        let centre = ChunkPos::new(0, 0);
+        let centre = ChunkPos::new(0, 0, 0);
         let pending: HashSet<ChunkPos> = (-1_i32..=1)
-            .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, centre.z + dz)))
+            .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, 0, centre.z + dz)))
             .collect();
         let gate = InitialChunksGate { pending };
         assert_eq!(gate.pending.len(), 9);

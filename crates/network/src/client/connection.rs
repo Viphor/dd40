@@ -4,7 +4,7 @@ use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
-use dd40_core::prelude::{BlockPlaced, ChunkReady, LoadingTracker, RequestChunk};
+use dd40_core::prelude::{LoadingTracker, RequestChunk};
 use lightyear::{
     link::Link,
     netcode::NetcodeClient,
@@ -113,9 +113,8 @@ pub fn on_server_connected(
     commands.entity(entity).insert((
         MessageSender::<RequestSpawn>::default(),
         MessageSender::<RequestChunk>::default(),
-        MessageSender::<PlaceBlockRequest>::default(),
-        MessageReceiver::<ChunkReady>::default(),
-        MessageReceiver::<BlockPlaced>::default(),
+        MessageReceiver::<ChunkSnapshot>::default(),
+        MessageReceiver::<ChunkUpdate>::default(),
         MessageReceiver::<PlayerSpawnLocation>::default(),
         Name::new("ServerConnection"),
     ));

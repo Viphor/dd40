@@ -1,8 +1,0 @@
-[package]
-name = "dd40_player"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-bevy = { workspace = true, default-features = false, features = ["bevy_gizmos"] }
-dd40_core = { workspace = true }

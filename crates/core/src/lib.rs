@@ -1,40 +1,30 @@
 pub mod block;
-pub mod character;
+pub mod builder_extra;
 pub mod chunk;
 pub mod common;
 pub mod debug;
 pub mod loading;
+pub mod macros;
 pub mod plugin;
 pub mod state;
 pub mod tools;
-pub mod world;
 
 pub mod prelude {
     pub use crate::{
         block::{
-            Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, events::*,
+            Block, BlockDefinition, BlockId, BlockPos, BlockRegistry, CollisionShape,
             registry::BlockRegistrySet,
         },
-        character::{
-            CharacterRenderSet,
-            JumpImpulse,
-            controller::{CharacterController, CharacterInput},
-            physics::{
-                Aabb, CharacterCollider, CharacterPosition, CharacterSpatialCache, CollisionShape,
-                GravityScale, Grounded, Impulse, PhysicsBody, PhysicsConfig, PhysicsPlugin,
-                PhysicsSet, Velocity,
-            },
-        },
+        builder_extra::AddExtra,
         chunk::{
-            CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk, ChunkPos,
-            cache::ChunkCache, events::*,
+            BlockLocal, CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, Chunk,
+            ChunkChange, ChunkPos, MaxDeltaBehind, cache::ChunkCache, events::*,
         },
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
         tools::{
-            EquippedTool, ToolKindId, ToolKindDefinition, ToolRegistry, ToolRegistrySet,
-            ToolTierId, ToolTierDefinition, mining_duration,
+            ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet,
+            ToolTierDefinition, ToolTierId, mining_duration,
         },
-        world::WorldGenerationSet,
     };
 }

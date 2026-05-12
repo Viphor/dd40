@@ -4,7 +4,7 @@ use bevy::{platform::collections::HashSet, prelude::*};
 use dd40_core::prelude::*;
 use lightyear::prelude::{LinkOf, MessageReceiver, MessageSender, ReplicationSender, SendUpdatesMode};
 
-use crate::protocol::{PlaceBlockRequest, PlayerSpawnLocation, RequestSpawn};
+use crate::protocol::{ChunkSnapshot, ChunkUpdate, PlayerSpawnLocation, RequestSpawn};
 
 /// Tracks which chunk positions have already been requested for a given client
 /// connection so that the chunk pipeline never issues duplicate loads.
@@ -34,12 +34,11 @@ pub(crate) fn add_message_handlers(trigger: On<Add, LinkOf>, mut commands: Comma
             SendUpdatesMode::SinceLastAck,
             false,
         ),
-        MessageSender::<ChunkReady>::default(),
-        MessageSender::<BlockPlaced>::default(),
+        MessageSender::<ChunkSnapshot>::default(),
+        MessageSender::<ChunkUpdate>::default(),
         MessageSender::<PlayerSpawnLocation>::default(),
         MessageReceiver::<RequestSpawn>::default(),
         MessageReceiver::<RequestChunk>::default(),
-        MessageReceiver::<PlaceBlockRequest>::default(),
         ChunkRequests::default(),
         Name::new("Client"),
     ));

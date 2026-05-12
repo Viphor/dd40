@@ -15,7 +15,7 @@ or both (default).
 src/
 ├── lib.rs             — public re-exports: ClientNetworkPlugin, ServerNetworkPlugin, protocol types
 ├── protocol.rs        — shared protocol: PlayerInput, PlayerPosition, PlayerRotation, PlayerSpeed,
-│                        NetworkCharacter, PlaceBlockRequest, PlayerSpawnLocation,
+│                        NetworkCharacter, PlayerSpawnLocation,
 │                        PlayerJoinedMessage, PlayerLeftMessage, channels, ProtocolPlugin
 │
 ├── shared/
@@ -29,7 +29,6 @@ src/
 │   ├── connection.rs  — DDClient config, lightyear client setup
 │   ├── character.rs   — frame interpolation, visual correction of predicted position
 │   ├── chunk_provider.rs — receives chunk data from server and writes ChunkReady messages
-│   ├── block_placement.rs — forwards PlaceBlockRequest to server
 │   ├── loading.rs     — loading tracker integration (waits for server connection)
 │   └── spawn.rs       — spawns the local player entity on PlayerSpawnLocation receipt
 │
@@ -40,7 +39,6 @@ src/
     ├── character.rs   — replicates character components to clients
     ├── chunk_provider.rs — streams chunk data to clients on request
     ├── chunk_requests.rs — handles client chunk requests and triggers loading
-    ├── block_placement.rs — validates and applies PlaceBlockRequest, broadcasts result
     ├── user.rs        — tracks connected peer state
     └── spawn.rs       — WorldSpawnConfig resource, PlayerLocations resource, spawn-on-connect logic
 ```

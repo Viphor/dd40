@@ -16,6 +16,7 @@
 //! [`systems::spawn_mesh_tasks`]: crate::systems::spawn_mesh_tasks
 //! [`systems::apply_mesh_tasks`]: crate::systems::apply_mesh_tasks
 
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::tasks::Task;
 use dd40_core::chunk::ChunkPos;
@@ -74,4 +75,20 @@ pub struct PendingMeshTasks {
     /// In-flight tasks.  Each entry is a handle to a background computation
     /// that will eventually yield a [`MeshData`].
     pub tasks: Vec<Task<MeshData>>,
+    /// Set of chunk positions that currently have an in-flight task.
+    ///
+    /// Used by [`spawn_mesh_tasks`] to deduplicate: when a chunk is marked
+    /// dirty while a previous mesh task for the same chunk is still
+    /// running, the new spawn is skipped (and the dirty flag is left set
+    /// so the chunk is retried next frame). Without this guard, multiple
+    /// tasks for the same chunk could complete out of order, letting a
+    /// stale task overwrite a fresh one and leave a stale mesh on screen.
+    ///
+    /// Entries are inserted in [`spawn_mesh_tasks`] when a task is
+    /// dispatched and removed in [`apply_mesh_tasks`] when the matching
+    /// task completes.
+    ///
+    /// [`spawn_mesh_tasks`]: crate::systems::spawn_mesh_tasks
+    /// [`apply_mesh_tasks`]: crate::systems::apply_mesh_tasks
+    pub in_flight: HashSet<ChunkPos>,
 }

@@ -8,14 +8,27 @@ dd40 is an open-source Rust implementation of a Minecraft-inspired voxel game bu
 
 ### 1. Modular Crate-Based Structure
 
-The project is organized as a Cargo workspace with multiple specialized crates:
+The project is organized as a Cargo workspace with 16 specialized crates in
+a three-tier model (Foundation → Implementation → Binary):
 
-- **`dd40_core`** - Core types, block registry system, vanilla blocks, and reflection setup
-- **`dd40_world`** - World generation, chunk management, and automatic block rendering
-- **`dd40_player`** - Player controller and movement systems
-- **`dd40_debug_ui`** - Debug UI elements (FPS counter, debug overlays)
-- **`dd40_client`** - Game client with rendering
-- **`dd40_server`** - Headless server for multiplayer
+**Tier 0 — Foundation** (types, components, system sets — no game logic):
+- **`dd40_core`** — block registry, chunk pipeline, app state, tool system
+- **`dd40_physics_core`** — physics types, components, `PhysicsSet`
+- **`dd40_character_core`** — character types, `CharacterInput`, `MiningState`, `PlayerId`, `CharacterRenderSet`
+
+**Tier 1 — Implementation** (systems, game behaviour):
+- **`dd40_physics`** — gravity, block collision, character collision
+- **`dd40_vanilla_palette`** — vanilla block/tool definitions (IDs 0–999)
+- **`dd40_world`** — world generation
+- **`dd40_chunk_storage`** — disk-backed chunk persistence
+- **`dd40_renderer`** — greedy-mesh chunk renderer (replaces `BlockRenderingPlugin`)
+- **`dd40_player_input`** — keyboard/mouse → `CharacterInput`, first-person camera
+- **`dd40_character_interaction`** — block targeting, mining, placement
+- **`dd40_network`** — lightyear networking
+- **`dd40_debug_ui`** — FPS overlay, orientation gizmo
+- **`dd40_gui`** — in-game HUD
+
+**Tier 2 — Binary**: `dd40_client`, `dd40_server`
 
 **Most logic should be able to be extended through adding new crates.** This applies to:
 - Block types (via the block registry system)
@@ -24,6 +37,23 @@ The project is organized as a Cargo workspace with multiple specialized crates:
 - Gameplay mechanics
 - UI elements
 - Network protocols
+
+### 1.5. Flexibility Over Convenience
+
+**dd40 always favours flexibility and the ability to extend functionality from other crates.** This is the project's core design principle, especially for code in `dd40_core` and other foundation crates. The whole point of this implementation is to be moddable and to let downstream crates change behaviour without forking the engine.
+
+When designing core systems:
+
+- Prefer **extension points** (trait-object hooks, registries, validator chains, plugin-driven system sets) over hard-coded logic that downstream crates would have to fork to change.
+- If a system has a single concrete behaviour today but is conceptually open-ended (e.g. "validate a chunk change", "decide what to do on death", "rank inventory slots"), expose it as a registered list of behaviours rather than inlining the one we happen to need.
+- Accept a small amount of indirection cost for a large gain in extensibility. A `Vec<Box<dyn Validator>>` is fine. A trait registry is fine. An extra plugin add-call from the binary is fine.
+- The cost of *not* doing this is that someone wanting to change the behaviour has to either fork the crate or carry an upstream patch — both unacceptable for the project's modding goals.
+
+**Concrete examples in the codebase:**
+- `BlockRegistry` is a runtime registry, not a hard-coded enum.
+- The chunk authority commit pass uses a registered chain of `ChunkChangeValidator`s, not an inlined match against built-in change types — so e.g. a character-collision check can live in a downstream crate that owns the relevant resources.
+
+When you find yourself adding `if change == X { hard_coded_check(); }` inside a foundation crate, stop and ask whether the check should be a registered hook instead.
 
 ### 2. Extensible Block Registry System
 
@@ -40,8 +70,7 @@ The block registry is a **core extensibility mechanism** that allows any crate t
 **Example of adding custom blocks via a new crate:**
 ```rust
 use bevy::prelude::*;
-use dd40_core::prelude::*;
-use dd40_core::character::physics::CollisionShape;
+use dd40_core::prelude::*;  // includes CollisionShape
 
 pub const MY_CUSTOM_BLOCK: BlockId = BlockId(1000);
 pub const MY_SLAB_BLOCK: BlockId = BlockId(1001);
@@ -82,11 +111,13 @@ impl Plugin for MyBlocksPlugin {
 ### 3. Plugin-Based Architecture
 
 Every subsystem is a Bevy plugin:
-- `CorePlugin` - Registers reflection types and core resources
-- `WorldPlugin` - Handles world generation
-- `BlockRenderingPlugin` - Automatic block rendering
-- `PlayerPlugin` - Player spawning and control
-- `DebugUiPlugin` - Debug UI elements
+- `CorePlugin` — registers types, resources, messages, system-set ordering
+- `PhysicsPlugin` — gravity, block collision, character collision
+- `VanillaPalettePlugin` — registers vanilla blocks and tools
+- `WorldPlugin` — handles world generation
+- `RendererPlugin` — greedy-mesh chunk rendering (LOD-aware)
+- `PlayerInputPlugin` — player movement, camera, block interaction
+- `DebugUiPlugin` — FPS overlay, orientation gizmo
 
 New functionality should be added as plugins to maintain modularity.
 

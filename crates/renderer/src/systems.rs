@@ -44,10 +44,10 @@ use bevy::{
 };
 use dd40_core::{
     block::{BlockId, BlockRegistry},
-    character::Player,
-    chunk::events::ChunkReady,
+    chunk::events::{ChunkChanged, ChunkPredicted, ChunkReady},
     chunk::{ChunkPos, cache::ChunkCache},
 };
+use dd40_physics_core::prelude::CharacterPosition;
 
 use crate::{
     chunk_mesh::build_chunk_quads,
@@ -89,58 +89,62 @@ pub fn mark_dirty_on_chunk_ready(
     }
 }
 
-pub fn mark_dirty_on_block_change(
-    mut reader: MessageReader<dd40_core::block::events::BlockPlaced>,
+/// Reads incoming [`ChunkPredicted`] messages and marks the corresponding
+/// chunks dirty so the renderer remeshes them with the optimistic state.
+///
+/// Runs in `PreUpdate` so dirty flags are set before the `Update` rebuild
+/// pass.
+pub fn mark_dirty_on_chunk_predicted(
+    mut reader: MessageReader<ChunkPredicted>,
     mut render_state: ResMut<ChunkRenderState>,
 ) {
     for msg in reader.read() {
-        let pos = msg.pos.chunk_pos();
-        render_state.mark_dirty(pos);
+        render_state.mark_dirty(msg.pos);
         trace!(
-            "Renderer: marked chunk {:?} dirty (BlockPlaced at {})",
-            pos, msg.pos
+            "Renderer: marked chunk {:?} dirty (ChunkPredicted, change={:?})",
+            msg.pos, msg.change,
         );
     }
 }
 
-/// Reads incoming [`BlockRemoved`] messages and marks the corresponding chunk
-/// dirty in [`ChunkRenderState`] so that exposed faces are rebuilt.
+/// Reads incoming [`ChunkChanged`] messages and marks the corresponding
+/// chunks dirty so the renderer remeshes them with the authoritative state.
 ///
-/// Runs in `PreUpdate` alongside [`mark_dirty_on_block_change`].
-///
-/// [`BlockRemoved`]: dd40_core::block::events::BlockRemoved
-pub fn mark_dirty_on_block_removed(
-    mut reader: MessageReader<dd40_core::block::events::BlockRemoved>,
+/// Runs in `PreUpdate` alongside [`mark_dirty_on_chunk_predicted`].
+pub fn mark_dirty_on_chunk_changed(
+    mut reader: MessageReader<ChunkChanged>,
     mut render_state: ResMut<ChunkRenderState>,
 ) {
     for msg in reader.read() {
-        let pos = msg.pos.chunk_pos();
-        render_state.mark_dirty(pos);
+        render_state.mark_dirty(msg.pos);
         trace!(
-            "Renderer: marked chunk {:?} dirty (BlockRemoved at {})",
-            pos, msg.pos
+            "Renderer: marked chunk {:?} dirty (ChunkChanged, version={}, {} change(s))",
+            msg.pos,
+            msg.new_version,
+            msg.changes.len(),
         );
     }
 }
 
 /// Iterates over every chunk tracked by [`ChunkRenderState`] and updates its
-/// [`LodLevel`] based on the player's current chunk position.
+/// [`LodLevel`] based on the nearest physics body's current chunk position.
 ///
 /// When a chunk's LOD level changes the entry is automatically marked dirty by
 /// [`ChunkRenderState::update_lod`], so the mesh will be rebuilt this frame.
 ///
-/// If no player entity exists the system is a no-op.
+/// If no [`CharacterPosition`] entity exists the system is a no-op.
 pub fn update_lod_levels(
-    player_query: Query<&Transform, With<Player>>,
+    anchor_query: Query<&CharacterPosition>,
     mut render_state: ResMut<ChunkRenderState>,
     lod_config: Res<LodConfig>,
     chunk_cache: Res<ChunkCache>,
 ) {
-    let Ok(player_transform) = player_query.single() else {
+    let Ok(anchor) = anchor_query.single() else {
         return;
     };
 
-    let player_chunk = chunk_pos_from_transform(player_transform);
+    let anchor_transform = Transform::from_translation(anchor.0);
+    let player_chunk = chunk_pos_from_transform(&anchor_transform);
 
     // Collect the chunk positions we need to update.  We cannot iterate and
     // mutate `render_state` simultaneously, so we snapshot the positions first.
@@ -172,7 +176,6 @@ pub fn update_lod_levels(
 /// [`AsyncComputeTaskPool`]: bevy::tasks::AsyncComputeTaskPool
 /// [`apply_mesh_tasks`]: crate::systems::apply_mesh_tasks
 pub fn spawn_mesh_tasks(
-    mut commands: Commands,
     mut render_state: ResMut<ChunkRenderState>,
     mut pending: ResMut<PendingMeshTasks>,
     chunk_cache: Res<ChunkCache>,
@@ -198,11 +201,19 @@ pub fn spawn_mesh_tasks(
     let task_pool = AsyncComputeTaskPool::get();
 
     for pos in dirty {
-        // --- Despawn the old mesh entity on the main thread (fast) -----------
-        if let Some(old_entity) = render_state.mesh_entity(&pos) {
-            commands.entity(old_entity).despawn();
+        // If a meshing task for this chunk is already in flight, skip
+        // re-spawning. Otherwise multiple tasks for the same chunk could
+        // complete out of order and a stale task would overwrite a fresh
+        // one. Leave the dirty flag set so we retry next frame after the
+        // current task completes.
+        if pending.in_flight.contains(&pos) {
+            continue;
         }
-        render_state.set_mesh_entity(pos, None);
+
+        // The OLD mesh entity is intentionally left in place — it is
+        // despawned in apply_mesh_tasks only once the new mesh is ready.
+        // Despawning here would leave a one-or-two-frame gap where the
+        // chunk has no geometry on screen, which players see as flicker.
 
         // --- Look up chunk data ----------------------------------------------
         let Some(chunk) = chunk_cache.get(&pos) else {
@@ -284,6 +295,7 @@ pub fn spawn_mesh_tasks(
         });
 
         pending.tasks.push(task);
+        pending.in_flight.insert(pos);
 
         // Clear dirty immediately — the task is now in-flight.
         render_state.clear_dirty(pos);
@@ -309,9 +321,10 @@ pub fn apply_mesh_tasks(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Drain completed tasks, keep pending ones.
-    let mut still_pending: Vec<_> = Vec::with_capacity(pending.tasks.len());
+    let drained: Vec<_> = pending.tasks.drain(..).collect();
+    let mut still_pending: Vec<_> = Vec::with_capacity(drained.len());
 
-    for mut task in pending.tasks.drain(..) {
+    for mut task in drained {
         match block_on(future::poll_once(&mut task)) {
             None => {
                 // Task not finished yet — keep it for next frame.
@@ -319,6 +332,14 @@ pub fn apply_mesh_tasks(
             }
             Some(data) => {
                 let pos = data.pos;
+                pending.in_flight.remove(&pos);
+
+                // Capture the previous mesh entity so we can despawn it
+                // *after* the new one is in place. Despawning earlier
+                // (e.g. in spawn_mesh_tasks) leaves a one-or-two-frame
+                // gap where the chunk has no geometry on screen.
+                let old_entity = render_state.mesh_entity(&pos);
+
                 if let Some(mesh) = data.mesh {
                     let mesh_handle = meshes.add(mesh);
 
@@ -339,9 +360,16 @@ pub fn apply_mesh_tasks(
                         .id();
 
                     render_state.set_mesh_entity(pos, Some(entity));
+                } else {
+                    // Chunk produced no geometry (all-air / fully occluded).
+                    // Clear the stored entity so a future rebuild does not
+                    // think a mesh is still associated with this chunk.
+                    render_state.set_mesh_entity(pos, None);
                 }
-                // For all-air chunks render_state already has mesh_entity=None
-                // from spawn_mesh_tasks; nothing more to do.
+
+                if let Some(old) = old_entity {
+                    commands.entity(old).despawn();
+                }
             }
         }
     }
@@ -356,4 +384,107 @@ fn chunk_pos_from_transform(transform: &Transform) -> ChunkPos {
     use dd40_core::block::BlockPos;
     let bp = BlockPos::from(transform);
     bp.chunk_pos()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::tasks::TaskPool;
+    use dd40_core::block::BlockRegistry;
+    use dd40_core::chunk::Chunk;
+
+    /// Regression: marking a chunk dirty while a previous mesh task for the
+    /// same chunk is still in flight must not spawn a second task. Without
+    /// this guard, two tasks for the same chunk could complete out of order
+    /// and a stale task would overwrite a fresh one — the symptom users see
+    /// as "block disappears from collision/targeting but the mesh is stale".
+    #[test]
+    fn spawn_skips_chunk_with_in_flight_task() {
+        AsyncComputeTaskPool::get_or_init(TaskPool::default);
+
+        let mut app = App::new();
+        app.init_resource::<ChunkRenderState>();
+        app.init_resource::<PendingMeshTasks>();
+        app.init_resource::<BlockRegistry>();
+
+        let mut cache = ChunkCache::default();
+        let pos = ChunkPos::new(0, 0, 0);
+        cache.insert(Chunk::new(pos));
+        app.insert_resource(cache);
+
+        // First dirty + spawn → one task in flight.
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .mark_dirty(pos);
+        app.add_systems(Update, spawn_mesh_tasks);
+        app.update();
+
+        let pending = app.world().resource::<PendingMeshTasks>();
+        assert_eq!(pending.tasks.len(), 1, "first spawn should dispatch a task");
+        assert!(
+            pending.in_flight.contains(&pos),
+            "in_flight should track the dispatched task"
+        );
+
+        // Mark dirty again before the first task can complete.
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .mark_dirty(pos);
+        app.update();
+
+        let pending = app.world().resource::<PendingMeshTasks>();
+        assert_eq!(
+            pending.tasks.len(),
+            1,
+            "second spawn must not dispatch a duplicate task while one is in flight"
+        );
+
+        // Dirty bit must remain set so the chunk is retried after the
+        // current task finishes.
+        let render_state = app.world().resource::<ChunkRenderState>();
+        let dirty: Vec<ChunkPos> = render_state.dirty_chunks().collect();
+        assert_eq!(
+            dirty,
+            vec![pos],
+            "dirty bit must remain set when spawn was skipped"
+        );
+    }
+
+    /// Regression: dispatching a fresh mesh task for an already-meshed
+    /// chunk must not despawn or clear its existing mesh entity. Only
+    /// `apply_mesh_tasks` may despawn the old entity, after the new one
+    /// is in place. Without this, players see a one-or-two-frame flicker
+    /// where the chunk vanishes entirely while the async task runs.
+    #[test]
+    fn spawn_does_not_clear_existing_mesh_entity() {
+        AsyncComputeTaskPool::get_or_init(TaskPool::default);
+
+        let mut app = App::new();
+        app.init_resource::<ChunkRenderState>();
+        app.init_resource::<PendingMeshTasks>();
+        app.init_resource::<BlockRegistry>();
+
+        let mut cache = ChunkCache::default();
+        let pos = ChunkPos::new(0, 0, 0);
+        cache.insert(Chunk::new(pos));
+        app.insert_resource(cache);
+
+        let placeholder = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .set_mesh_entity(pos, Some(placeholder));
+
+        app.world_mut()
+            .resource_mut::<ChunkRenderState>()
+            .mark_dirty(pos);
+        app.add_systems(Update, spawn_mesh_tasks);
+        app.update();
+
+        let render_state = app.world().resource::<ChunkRenderState>();
+        assert_eq!(
+            render_state.mesh_entity(&pos),
+            Some(placeholder),
+            "spawn must preserve the existing mesh entity to avoid flicker"
+        );
+    }
 }

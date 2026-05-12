@@ -1,5 +1,3 @@
-pub mod block_mining;
-pub mod block_placement;
 pub mod character;
 pub mod chunk_provider;
 pub mod connection;

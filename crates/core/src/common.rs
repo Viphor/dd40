@@ -81,12 +81,16 @@ pub fn log_plugin() -> LogPlugin {
                 level: Level::DEBUG,
             },
             Filter {
-                module: "dd40_player",
+                module: "dd40_player_input",
+                level: Level::DEBUG,
+            },
+            Filter {
+                module: "dd40_character_interaction",
                 level: Level::DEBUG,
             },
             Filter {
                 module: "dd40_network",
-                level: Level::TRACE,
+                level: Level::DEBUG,
             },
             Filter {
                 module: "dd40_chunk_storage",

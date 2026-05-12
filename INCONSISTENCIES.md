@@ -4,95 +4,66 @@ This document records known deviations from the stated architecture and
 suggestions for improvement. It is the planning backlog for architectural
 clean-up — not a bug tracker.
 
----
-
-## Inconsistencies
-
-### 1. `dd40_renderer` depends on `dd40_player`
-
-**Rule violated:** Non-core crates must depend only on `dd40_core`.
-
-**Current state:** `dd40_renderer` imports `dd40_player` to read the player
-world position for LOD (level-of-detail) distance calculations.
-
-**Fix:** Add a lightweight `PlayerPosition` marker resource or component to
-`dd40_core` (distinct from the physics `CharacterPosition`) that any crate can
-write and the renderer can read. The renderer then depends only on `dd40_core`,
-and `dd40_player` writes the value without the renderer knowing about it.
+Active architectural work is planned in `SPEC.md`.
 
 ---
 
-### 2. `PlayerLocations` is keyed by lightyear `PeerId`
+## Open Inconsistencies
 
-**Rule violated:** Core game concepts should not be coupled to network identity.
-
-**Current state:** `dd40_network::server::spawn::PlayerLocations` stores last-known
-spawn positions keyed by `lightyear::prelude::PeerId`. This couples spawn
-management to the transport layer, making it impossible to reuse for NPCs,
-animals, or alternative transports.
-
-**Fix:** Introduce a game-level identity type (e.g., `PlayerId(u64)`) in
-`dd40_core` and key `PlayerLocations` (or a successor resource) by that type.
-The network layer maps `PeerId -> PlayerId` at connection time. This also opens
-the door to a future `dd40_spawn` crate that manages spawn points independently
-of the network stack.
-
----
-
-### 3. `MiningState` lives in `dd40_player`, not `dd40_core`
-
-**Rule violated (partial):** `MiningState` is a resource that the HUD and
-renderer will eventually need to read (for progress bars and block-crack
-animations). If they read it directly, they'd need to depend on `dd40_player`,
-violating the single-dependency rule.
-
-**Current state:** `MiningState` is defined in
-`dd40_player::block_interaction::mining` and is publicly exported.
-
-**Fix:** Move `MiningState` to `dd40_core` so that `dd40_renderer`, `dd40_gui`,
-and any custom HUD crate can read it without taking a dependency on
-`dd40_player`. The mining system in `dd40_player` would then write the value as
-it does today.
-
----
-
-### 4. Block crack animation is unimplemented
-
-**Current state:** The mining system tracks `progress` in `MiningState` (range
-`0.0–1.0`) but no renderer or HUD currently visualises it. The crack texture
-overlay familiar from Minecraft is not yet implemented.
-
-**Fix:** Once `MiningState` is moved to `dd40_core` (see item 3), the renderer
-can read `progress` and overlay a crack texture on the targeted block.
+*(none currently tracked — the previous entries about `dd40_player` and
+the block crack animation are resolved; see the archive table below.)*
 
 ---
 
 ## Suggestions
 
-### A. Extract `dd40_physics` as a standalone crate
-
-The physics engine is already treated as a special case inside `dd40_core`. If
-it grows significantly, or if users want to swap it out, consider extracting it
-into `dd40_physics`. Every crate that currently reads physics types from core
-would then add `dd40_physics` as a second dependency — acceptable because
-physics is genuinely foundational.
-
-### B. Add a `WorldGenerator` trait re-export to `dd40_core`
+### A. Add a `WorldGenerator` trait re-export to `dd40_core`
 
 `WorldGenerator` is currently defined in `dd40_world::generators`. A crate that
 only wants to implement a custom generator must depend on `dd40_world`, pulling
 in the flat-generator code as dead weight. Moving the trait to `dd40_core`
 would let custom generators depend on core alone.
 
-### C. Formalise the `ChunkProvider` contract in `dd40_core`
+### B. Formalise the `ChunkProvider` contract in `dd40_core`
 
 The chunk request/response contract (`RequestChunk` -> `ChunkReady`) is already
 defined in `dd40_core`, but there is no explicit `ChunkProvider` trait. A trait
 would let tooling and documentation surface the contract clearly and make it
 easier to write and test alternative backends.
 
-### D. Add a loading-screen crate
+### C. Add a loading-screen crate
 
 `LoadingTracker` in `dd40_core` tracks async initialisation but there is no
 crate that renders a loading screen against it. A `dd40_loading_screen` crate
 would complete the loop without adding game-logic dependencies to core.
+
+### D. Key `PlayerLocations` by `PlayerId` instead of `PeerId`
+
+`dd40_network::server::spawn::PlayerLocations` stores last-known spawn positions
+keyed by lightyear's `PeerId`, coupling spawn management to the transport layer.
+`PlayerId(u64)` now exists in `dd40_character_core`. Migrating the key type
+would let the spawn system be reused for NPCs or alternative transports.
+
+---
+
+## Resolved (archived)
+
+| # | Description | Resolved in |
+|---|---|---|
+| — | `dd40_renderer` depended on `dd40_player` for LOD anchor | SPEC.md Task 5.1 — renderer now uses `CharacterPosition` from `dd40_physics_core` |
+| — | `MiningState` lived in `dd40_player` (now-deleted wrapper) | SPEC.md Task 5.3 — moved to `dd40_character_core::mining_state` |
+| — | `dd40_player` was a Tier 1 → Tier 1 dependency exception (wrapper composing input + interaction + debug-info) | core-rewrite — wrapper deleted; `dd40_client` now adds `PlayerInputPlugin` and `CharacterInteractionPlugin` directly. The FreeCam reset moved into `dd40_player_input`; the physics+interaction debug overlay was dropped (a future HUD crate may reinstate it) |
+| — | Block crack animation was unimplemented | core-rewrite — `dd40_character_gui::block_highlight::draw_targeted_block_highlight` now draws a gizmo break overlay scaled to mining progress; `break_overlay_for_progress` keeps the easing curve unit-testable. A textured crack overlay is still future work. |
+| — | `MiningState` was a global `Resource` (singleton bug) | core-rewrite — converted to a `Component` on the `Character` entity, attached via `CharacterBundle` |
+| — | `TargetedBlock` was a global `Resource` in `dd40_character_interaction` (singleton bug) | core-rewrite — moved to `dd40_character_core::targeted_block` and converted to a `Component` |
+| — | `update_targeted_block` queried `Camera3d`, blocking server-side targeting on headless servers | core-rewrite — added `dd40_character_core::face::CharacterFace` child entity; targeting now reads the local player's face `GlobalTransform` |
+| — | `HeldBlock` was a global `Resource` (singleton bug) coupling placement to a single block | core-rewrite — deleted; placement now reads the placeable block from each character's `ActiveItem` via `ItemRegistry` |
+| — | `EquippedTool` newtype wrapped `(ToolKindId, ToolTierId)` and was never attached to any entity | core-rewrite — collapsed into raw primitives; mining reads tool kind/tier from each character's `ActiveItem` |
+| — | Physics systems lived in `dd40_core` | SPEC.md Phase 1 — extracted to `dd40_physics_core` + `dd40_physics` |
+| — | Character types lived in `dd40_core` | SPEC.md Phase 2 — extracted to `dd40_character_core` |
+| — | Block interaction and movement systems were player-gated | SPEC.md Phase 3 — `dd40_character_interaction` and `dd40_player_input` created, filters changed to `With<Character>` |
+| — | `PlayerId(u64)` did not exist | SPEC.md Task 5.2 — added to `dd40_character_core::components` |
+| — | `BlockPlaced` / `BlockRemoved` events were broadcast ad-hoc per change kind | versioned-chunk-cache — replaced by the unified `ChunkChange` enum and the local `ChunkChanged { pos, changes, new_version }` message emitted by the authority commit pass / client reconciler |
+| — | `PlaceBlockRequest` / `StartMiningRequest` / `AbortMiningRequest` / `MineBlockRequest` lived as separate lightyear messages | versioned-chunk-cache — replaced by predicted `ChunkChange`s on the chunk itself; clients push, the server's authority plugin commits and broadcasts `ChunkUpdate` |
+| — | `ChunkPos` was 2D, blocking vertical chunk splits in serialization paths | versioned-chunk-cache (Phase 7.5) — added `y` axis throughout; on-disk filenames are `chunk_X_Y_Z.bin`, physics + raycast walk Y boundaries |
+| — | Disk format was unversioned | versioned-chunk-cache (Phase 6) — `ChunkVersion::V1` and `V1Versioned` introduced; reader auto-detects, writer chooses via `DD40_CHUNK_STORAGE__SAVE_HISTORY` env var |

@@ -1,0 +1,13 @@
+[package]
+name = "dd40_integration_character_physics"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true, default-features = false, features = [] }
+dd40_core = { workspace = true }
+dd40_character_core = { workspace = true }
+dd40_physics_core = { workspace = true }
+
+[dev-dependencies]
+dd40_physics = { workspace = true }

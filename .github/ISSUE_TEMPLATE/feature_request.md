@@ -19,7 +19,7 @@ assignees: []
 
 <!-- Optional but encouraged: describe how you think this could be implemented.
      For example:
-     - Which crate(s) would be affected (dd40_core, dd40_world, dd40_player, etc.)?
+     - Which crate(s) would be affected (dd40_core, dd40_world, dd40_player_input, etc.)?
      - Would a new crate or plugin be appropriate?
      - Are there new block types, systems, or registry entries involved?
      - Any Bevy ECS patterns (events, messages, observers) you have in mind? -->

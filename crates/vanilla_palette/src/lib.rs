@@ -32,6 +32,7 @@
 //! [`BlockRegistrySet`]: dd40_core::block::registry::BlockRegistrySet
 
 use bevy::prelude::*;
+use dd40_core::plugin::CorePlugin;
 
 pub mod blocks;
 pub mod tools;
@@ -61,6 +62,7 @@ pub struct VanillaPalettePlugin;
 
 impl Plugin for VanillaPalettePlugin {
     fn build(&self, app: &mut App) {
+        dd40_core::ensure_plugins!(app, CorePlugin);
         app.add_plugins((VanillaToolsPlugin, VanillaBlocksPlugin));
     }
 }

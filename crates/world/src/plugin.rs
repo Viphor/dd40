@@ -18,9 +18,7 @@ impl<G: WorldGenerator + Resource + Clone> WorldPlugin<G> {
 
 impl<G: WorldGenerator + Resource + Clone> Plugin for WorldPlugin<G> {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<CorePlugin>() {
-            panic!("WorldPlugin requires CorePlugin to be added first");
-        }
+        dd40_core::ensure_plugins!(app, CorePlugin);
 
         app.insert_resource(self.generator.clone())
             .add_systems(PostUpdate, generate_chunks::<G>);

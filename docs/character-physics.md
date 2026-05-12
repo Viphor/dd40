@@ -1,18 +1,26 @@
 # Character and Physics System
 
-Character components and the physics engine live in `dd40_core::character` and
-`dd40_core::character::physics`. The physics engine is the single intentional
-piece of game logic in `dd40_core` — see `STRUCTURE.md` for the rationale.
+Character components live in `dd40_character_core` and physics components live
+in `dd40_physics_core`. Both are Tier 0 foundation crates — they define types
+and system sets only, with no game logic.
 
 ---
 
 ## Character components
+
+All character types are in `dd40_character_core::prelude`.
 
 ### `Character`
 Marker component. Identifies any entity as a character (player or NPC).
 
 ### `Player`
 Marker component. Identifies the locally controlled player entity.
+
+### `PlayerId`
+```rust
+pub struct PlayerId(pub u64);
+```
+Stable identifier that survives network reconnects.
 
 ### `MovementSpeed`
 ```rust
@@ -33,7 +41,7 @@ Convenience bundle: `Character + MovementSpeed + Transform + Name`.
 pub struct SpawnPosition(pub Vec3);
 ```
 Resource. Written by the network or spawn system to indicate where to place
-the player entity. Read by `dd40_player` when spawning.
+the player entity.
 
 ---
 
@@ -49,12 +57,15 @@ pub struct CharacterInput {
     pub sprint:   bool,
 }
 ```
-Written by `dd40_player` (or the network layer for remote characters). Read by
-the physics integration system each tick.
+Written by `dd40_player_input` (or the network layer for remote characters).
+Read by the physics integration system each tick. Network systems that write
+`CharacterInput` must do so in `PhysicsSet::InputSync`.
 
 ---
 
 ## Physics components
+
+All physics types are in `dd40_physics_core::prelude`.
 
 ### `PhysicsBody`
 Marker. Entities with this component participate in the physics simulation.
@@ -96,54 +107,59 @@ and character-vs-character push-apart.
 ### `Aabb`
 Axis-aligned bounding box helper. Used internally by the collision solver.
 
+---
+
+## Physics resources
+
+All physics resources are in `dd40_physics_core::resources`.
+
+### `PhysicsConfig`
+```rust
+pub struct PhysicsConfig {
+    pub gravity:           f32,  // downward acceleration (default 20.0)
+    pub ground_friction:   f32,  // horizontal damping when grounded (default 1.0)
+    pub air_friction:      f32,  // horizontal damping when airborne (default 0.0002)
+    pub terminal_velocity: f32,  // maximum fall speed (default 60.0)
+}
+```
+Override by inserting this resource before `PhysicsCorePlugin`.
+
 ### `CharacterSpatialCache`
 Resource. A spatial index of all character AABB positions, rebuilt each physics
 tick. Used by the character-vs-character push-apart stage.
 
 ---
 
-## Physics resources
-
-### `PhysicsConfig`
-```rust
-pub struct PhysicsConfig {
-    pub gravity: f32,           // downward acceleration (default 20.0)
-    pub terminal_velocity: f32, // maximum fall speed (default 50.0)
-}
-```
-Override by inserting this resource before `CorePlugin`.
-
----
-
 ## System sets
 
 ### `PhysicsSet`
-Four ordered stages, all in `FixedUpdate`:
+Five ordered stages, all in `FixedUpdate` (from `dd40_physics_core::system_sets`):
 
 | Stage | What runs there |
 |---|---|
+| `PhysicsSet::InputSync` | Network / remote input writes `CharacterInput` here |
 | `PhysicsSet::Integrate` | Apply gravity + velocity → tentative position |
 | `PhysicsSet::BlockCollision` | Sweep tentative position against the block grid |
 | `PhysicsSet::CharacterCollision` | Push overlapping character colliders apart |
 | `PhysicsSet::Finalise` | Write resolved `CharacterPosition` back to `Transform` |
 
 ### `CharacterRenderSet`
-Two ordered stages in `Update`:
+Two ordered stages in `Update` (from `dd40_character_core::system_sets`):
 
 | Stage | What runs there |
 |---|---|
 | `CharacterRenderSet::FrameInterpolation` | Write the smoothed visual `Transform` |
 | `CharacterRenderSet::CameraSync` | Follow the smoothed `Transform` with the camera |
 
-Both `dd40_network` and `dd40_player` import this set so they can declare
-deterministic ordering without a direct dependency on each other.
+Both `dd40_network` and `dd40_player_input` import this set so they can
+declare deterministic ordering without a direct dependency on each other.
 
 ---
 
 ## Collision shapes
 
 Set via `BlockDefinition::with_collision_shape(shape)` when registering a block.
-Shapes are defined in `dd40_core::character::physics::CollisionShape`.
+Shapes are defined in `dd40_core::prelude::CollisionShape`.
 
 | Variant | When to use |
 |---|---|
@@ -156,10 +172,8 @@ Shapes are defined in `dd40_core::character::physics::CollisionShape`.
 ## Building a character entity
 
 ```rust
-use dd40_core::prelude::*;
-use dd40_core::character::{
-    builder::CharacterBuilder, physics::{CharacterCollider, PhysicsBody, Velocity, GravityScale},
-};
+use dd40_character_core::prelude::*;
+use dd40_physics_core::prelude::*;
 
 fn spawn_character(mut commands: Commands) {
     CharacterBuilder::new("Alice")
@@ -170,5 +184,6 @@ fn spawn_character(mut commands: Commands) {
 }
 ```
 
-See `crates/network/src/client/spawn.rs` and
-`crates/player/src/lib.rs` for full worked examples.
+See `crates/network/src/client/spawn.rs` and `crates/network/src/server/spawn.rs`
+for full worked examples (the network crate is the only place that spawns
+character entities now that the `dd40_player` wrapper has been removed).

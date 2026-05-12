@@ -308,7 +308,7 @@ mod tests {
     fn empty_chunk_no_quads_lod0() {
         let registry = air_registry();
         let cache = ChunkCache::default();
-        let chunk = Chunk::new(ChunkPos::new(0, 0));
+        let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         let quads = build_chunk_quads(&chunk, LodLevel::Lod0, &registry, &cache);
         assert!(quads.is_empty(), "all-air chunk should produce no quads");
     }
@@ -317,7 +317,7 @@ mod tests {
     fn empty_chunk_no_quads_lod1() {
         let registry = air_registry();
         let cache = ChunkCache::default();
-        let chunk = Chunk::new(ChunkPos::new(0, 0));
+        let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         let quads = build_chunk_quads(&chunk, LodLevel::Lod1, &registry, &cache);
         assert!(quads.is_empty());
     }
@@ -326,7 +326,7 @@ mod tests {
     fn empty_chunk_no_quads_lod2() {
         let registry = air_registry();
         let cache = ChunkCache::default();
-        let chunk = Chunk::new(ChunkPos::new(0, 0));
+        let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         let quads = build_chunk_quads(&chunk, LodLevel::Lod2, &registry, &cache);
         assert!(quads.is_empty());
     }

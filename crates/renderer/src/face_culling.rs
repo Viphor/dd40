@@ -234,7 +234,7 @@ fn neighbour_is_transparent(
         (cp.z, nz as usize)
     };
 
-    let neighbour_pos = ChunkPos { x: ncx, z: ncz };
+    let neighbour_pos = ChunkPos { x: ncx, y: cp.y, z: ncz };
 
     match cache.get(&neighbour_pos) {
         Some(neighbour_chunk) => {
@@ -321,7 +321,7 @@ mod tests {
     fn air_block_has_no_visible_faces() {
         let registry = registry_with_stone();
         let cache = ChunkCache::default();
-        let chunk = Chunk::new(ChunkPos::new(0, 0));
+        let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         // All blocks default to air.
         let faces = visible_faces(&chunk, 8, 128, 8, &registry, &cache);
         // Air is not renderable → no faces.
@@ -337,7 +337,7 @@ mod tests {
     fn non_renderable_block_no_faces() {
         let registry = registry_with_stone();
         let cache = ChunkCache::default();
-        let mut chunk = Chunk::new(ChunkPos::new(0, 0));
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
         // Write an air block (non-renderable) explicitly.
         chunk.set(5, 5, 5, Block::new(BlockId::AIR));
         let faces = visible_faces(&chunk, 5, 5, 5, &registry, &cache);
@@ -398,7 +398,7 @@ mod tests {
         // is absent from the cache.
         let registry = registry_with_stone();
         let cache = ChunkCache::default();
-        let chunk = Chunk::new(ChunkPos::new(0, 0));
+        let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
 
         // nx = -1 is outside the chunk in the -X direction.
         // No neighbour chunk in the cache → should be transparent.
@@ -410,7 +410,7 @@ mod tests {
     fn y_out_of_bounds_is_transparent() {
         let registry = registry_with_stone();
         let cache = ChunkCache::default();
-        let chunk = Chunk::new(ChunkPos::new(0, 0));
+        let chunk = Chunk::new(ChunkPos::new(0, 0, 0));
 
         // ny = -1 is below the world → transparent.
         assert!(neighbour_is_transparent(

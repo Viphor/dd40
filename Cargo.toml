@@ -1,9 +1,14 @@
 [workspace]
 members = [
     "crates/core",
+    "crates/physics_core",
+    "crates/physics",
+    "crates/character_core",
+    "crates/player_input",
+    "crates/character_interaction",
     "crates/gui",
+    "crates/character_gui",
     "crates/world",
-    "crates/player",
     "crates/client",
     "crates/server",
     "crates/debug_ui",
@@ -11,17 +16,26 @@ members = [
     "crates/chunk_storage",
     "crates/renderer",
     "crates/vanilla_palette",
+    "crates/item_core",
+    "crates/integration_character_physics",
 ]
 resolver = "2"
 
 [workspace.dependencies]
 bevy = { version = "0.18", default-features = false }
 dd40_core = { path = "crates/core" }
+dd40_physics_core = { path = "crates/physics_core" }
+dd40_physics = { path = "crates/physics" }
+dd40_character_core = { path = "crates/character_core" }
+dd40_player_input = { path = "crates/player_input" }
+dd40_character_interaction = { path = "crates/character_interaction" }
 dd40_gui = { path = "crates/gui" }
+dd40_character_gui = { path = "crates/character_gui" }
 dd40_world = { path = "crates/world" }
-dd40_player = { path = "crates/player" }
 dd40_renderer = { path = "crates/renderer" }
 dd40_debug_ui = { path = "crates/debug_ui" }
 dd40_network = { path = "crates/network" }
 dd40_chunk_storage = { path = "crates/chunk_storage" }
 dd40_vanilla_palette = { path = "crates/vanilla_palette" }
+dd40_item_core = { path = "crates/item_core" }
+dd40_integration_character_physics = { path = "crates/integration_character_physics" }

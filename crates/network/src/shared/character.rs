@@ -1,7 +1,4 @@
-use dd40_core::{
-    character::controller::CharacterInput,
-    prelude::{Aabb, CharacterCollider, CharacterController, JumpImpulse, PhysicsBody},
-};
+use dd40_character_core::controller::CharacterInput;
 use lightyear::prelude::input::native::ActionState;
 
 use crate::protocol::PlayerInput;
@@ -26,22 +23,69 @@ pub(crate) fn apply_input_to_controller(
     char_input.sprint = action.0.sprint;
     char_input.pitch = action.0.pitch;
     char_input.yaw = action.0.yaw;
+    char_input.attack = action.0.attack;
+    char_input.interact = action.0.interact;
+    char_input.place = action.0.place;
 }
 
-pub(crate) fn character_bundle() -> (
-    CharacterInput,
-    PhysicsBody,
-    CharacterCollider,
-    Aabb,
-    JumpImpulse,
-    CharacterController,
-) {
-    (
-        CharacterInput::default(),
-        PhysicsBody,
-        CharacterCollider,
-        Aabb::player(),
-        JumpImpulse::default(),
-        CharacterController::default(),
-    )
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::math::Vec3;
+
+    fn action(input: PlayerInput) -> ActionState<PlayerInput> {
+        ActionState(input)
+    }
+
+    #[test]
+    fn propagates_movement_and_camera() {
+        let mut ci = CharacterInput::default();
+        apply_input_to_controller(
+            &action(PlayerInput {
+                movement: Vec3::new(1.0, 0.0, 2.0),
+                pitch: 0.5,
+                yaw: -1.5,
+                jump: true,
+                sprint: true,
+                ..Default::default()
+            }),
+            &mut ci,
+        );
+        assert_eq!(ci.movement, Vec3::new(1.0, 0.0, 2.0));
+        assert_eq!(ci.pitch, 0.5);
+        assert_eq!(ci.yaw, -1.5);
+        assert!(ci.jump);
+        assert!(ci.sprint);
+    }
+
+    #[test]
+    fn propagates_action_triple() {
+        let mut ci = CharacterInput::default();
+        apply_input_to_controller(
+            &action(PlayerInput {
+                attack: true,
+                interact: true,
+                place: true,
+                ..Default::default()
+            }),
+            &mut ci,
+        );
+        assert!(ci.attack);
+        assert!(ci.interact);
+        assert!(ci.place);
+    }
+
+    #[test]
+    fn clears_action_triple_when_input_is_false() {
+        let mut ci = CharacterInput {
+            attack: true,
+            interact: true,
+            place: true,
+            ..Default::default()
+        };
+        apply_input_to_controller(&action(PlayerInput::default()), &mut ci);
+        assert!(!ci.attack, "stale attack must be cleared");
+        assert!(!ci.interact, "stale interact must be cleared");
+        assert!(!ci.place, "stale place must be cleared");
+    }
 }
