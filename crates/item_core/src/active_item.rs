@@ -16,6 +16,8 @@
 //! A character without an [`ActiveItem`] component, or with `ActiveItem(None)`,
 //! is considered to be holding nothing — bare hands.
 
+use std::num::NonZero;
+
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -24,34 +26,38 @@ use crate::registry::ItemId;
 /// A non-empty stack of identical items.
 ///
 /// Inventory slots that are empty store `Option::None` rather than a stack
-/// with `count = 0`; a `count = 0` stack is an invariant violation.
+/// with `count = 0`; the [`NonZero`] count makes the
+/// "empty stack" state unrepresentable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Serialize, Deserialize)]
 pub struct ItemStack {
     /// Which item this stack holds.
     pub item: ItemId,
     /// How many copies are in the stack.
     ///
-    /// Must satisfy `1 <= count <= ItemDefinition::max_stack` for the
-    /// referenced item.  Inventory crates are responsible for enforcing this
-    /// invariant; consumers may assume it holds.
-    pub count: u16,
+    /// Always `>= 1`.  Inventory crates are responsible for capping this
+    /// at the item's [`ItemDefinition::max_stack`][crate::registry::ItemDefinition::max_stack];
+    /// consumers may assume it falls within `1..=max_stack`.
+    pub count: NonZero<u16>,
 }
 
 impl ItemStack {
     /// Creates a stack of `count` copies of `item`.
     ///
-    /// # Panics
-    ///
-    /// Panics in debug builds if `count == 0` — use `Option::None` to
-    /// represent "no stack".
-    pub fn new(item: ItemId, count: u16) -> Self {
-        debug_assert!(count > 0, "ItemStack must have count >= 1; use Option::None for empty");
+    /// Use [`ItemStack::try_new`] when `count` is a runtime [`u16`] that
+    /// might be zero.
+    pub fn new(item: ItemId, count: NonZero<u16>) -> Self {
         Self { item, count }
+    }
+
+    /// Creates a stack from a runtime [`u16`] count, returning [`None`] if
+    /// `count == 0`.
+    pub fn try_new(item: ItemId, count: u16) -> Option<Self> {
+        NonZero::new(count).map(|count| Self { item, count })
     }
 
     /// Convenience constructor for a single-item stack.
     pub fn single(item: ItemId) -> Self {
-        Self::new(item, 1)
+        Self::new(item, NonZero::<u16>::MIN)
     }
 }
 
@@ -69,7 +75,9 @@ impl ItemStack {
 ///
 /// `ActiveItem(None)` (or no component at all) means bare hands — no tool
 /// bonus, nothing to place.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize)]
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
 #[reflect(Component)]
 pub struct ActiveItem(pub Option<ItemStack>);
 
@@ -89,6 +97,10 @@ impl ActiveItem {
 mod tests {
     use super::*;
 
+    fn nz(n: u16) -> NonZero<u16> {
+        NonZero::new(n).expect("non-zero literal")
+    }
+
     #[test]
     fn default_active_item_is_empty() {
         let active = ActiveItem::default();
@@ -101,13 +113,13 @@ mod tests {
         let active = ActiveItem::single(ItemId(5));
         let stack = active.0.unwrap();
         assert_eq!(stack.item, ItemId(5));
-        assert_eq!(stack.count, 1);
+        assert_eq!(stack.count, nz(1));
         assert_eq!(active.item(), Some(ItemId(5)));
     }
 
     #[test]
-    #[should_panic(expected = "count >= 1")]
-    fn zero_count_stack_panics_in_debug() {
-        let _ = ItemStack::new(ItemId(1), 0);
+    fn try_new_zero_count_returns_none() {
+        assert!(ItemStack::try_new(ItemId(1), 0).is_none());
+        assert_eq!(ItemStack::try_new(ItemId(1), 5).unwrap().count, nz(5));
     }
 }

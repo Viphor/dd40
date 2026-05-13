@@ -32,6 +32,7 @@ There are currently no tracked exceptions to this rule.
 | `dd40_physics_core` | Physics types, components, system sets | `dd40_core` |
 | `dd40_character_core` | Character types, input bridge, `MiningState`, `TargetedBlock`, `PlayerId`, render sets | `dd40_core` |
 | `dd40_item_core` | Item registry, `ActiveItem`, `RequestActiveItem`, `ActiveItemChanged` | `dd40_core` |
+| `dd40_inventory_core` | `Inventory` component, `InventoryChanged` event, `CharacterInventoryExt` builder extension | `dd40_core`, `dd40_item_core` |
 
 ### Tier 1 — Implementation
 
@@ -216,6 +217,28 @@ src/
 ├── active_item.rs   — ActiveItem (per-character Component), ItemStack
 └── messages.rs      — RequestActiveItem (Message), ActiveItemChanged (Event),
                         ItemSelector
+```
+
+---
+
+### `dd40_inventory_core`
+
+Foundation crate. Defines a passive inventory container that any
+character entity can carry: the `Inventory` component, the
+`InventoryChanged` entity event with per-slot diffs, and the
+`CharacterInventoryExt` builder extension. Contains no hotbar,
+selection, equipment, or UI logic — a future Tier 1 inventory-interaction
+crate is expected to drain `RequestActiveItem` from `dd40_item_core`
+using `Inventory::find_slot`.
+
+```
+src/
+├── lib.rs
+├── plugin.rs        — InventoryCorePlugin
+├── prelude.rs       — re-exports of all stable public types
+├── inventory.rs     — Inventory (Component), InventoryChanged (EntityEvent),
+│                       SlotChange, InsertError, find_slot
+└── character_ext.rs — CharacterInventoryExt: blanket on AddExtra
 ```
 
 ---

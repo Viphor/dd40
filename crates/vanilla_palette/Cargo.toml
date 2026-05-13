@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 dd40_core = { workspace = true }
+dd40_item_core = { workspace = true }
 bevy = { workspace = true, default-features = false, features = ["bevy_color"] }

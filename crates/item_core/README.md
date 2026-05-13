@@ -38,6 +38,9 @@ src/
 
 ## ID allocation
 
-- `ItemId(0)` — `ItemId::EMPTY` sentinel for empty inventory slots.
 - `1..1000` reserved for vanilla items (`dd40_vanilla_palette`).
 - `1000..` for modded items.
+
+"Empty" is *not* an `ItemId` — inventory slots and `ActiveItem` use
+`Option<ItemStack>` to express emptiness so the type system enforces
+that every `ItemId` in scope refers to a real item.
