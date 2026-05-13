@@ -94,7 +94,7 @@ impl bevy::ecs::entity::MapEntities for PlayerInput {
 // MESSAGES
 // ============================================================================
 
-/// Request chunks around a center position
+// Request chunks around a center position
 // #[derive(Debug, Clone, Serialize, Deserialize)]
 // pub struct RequestChunks {
 //     /// Center position (usually player position)

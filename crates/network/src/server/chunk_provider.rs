@@ -29,6 +29,7 @@ use crate::{
 /// - **`current_version < server_version` but beyond
 ///   [`MaxDeltaBehind`]** → fire [`ChunkSnapshotFallback`] and send a
 ///   full snapshot.
+#[allow(clippy::type_complexity)]
 pub(crate) fn receive_chunk_requests(
     chunk_cache: Res<ChunkCache>,
     max_delta: Res<MaxDeltaBehind>,

@@ -154,24 +154,25 @@ fn update_fps_text(
     mut query: Query<(&mut Text, &mut TextColor), With<FpsText>>,
 ) {
     for (mut text, mut color) in &mut query {
-        if let Some(fps) = diagnostics.get(&FrameTimeDiagnosticsPlugin::FPS) {
-            if let Some(value) = fps.smoothed() {
-                **text = format!("FPS: {:.0}", value);
+        if let Some(fps) = diagnostics.get(&FrameTimeDiagnosticsPlugin::FPS)
+            && let Some(value) = fps.smoothed()
+        {
+            **text = format!("FPS: {:.0}", value);
 
-                // Color-code based on performance
-                color.0 = if value >= 60.0 {
-                    Color::srgb(0.0, 1.0, 0.0) // Green for good FPS
-                } else if value >= 30.0 {
-                    Color::srgb(1.0, 1.0, 0.0) // Yellow for moderate FPS
-                } else {
-                    Color::srgb(1.0, 0.0, 0.0) // Red for low FPS
-                };
-            }
+            // Color-code based on performance
+            color.0 = if value >= 60.0 {
+                Color::srgb(0.0, 1.0, 0.0) // Green for good FPS
+            } else if value >= 30.0 {
+                Color::srgb(1.0, 1.0, 0.0) // Yellow for moderate FPS
+            } else {
+                Color::srgb(1.0, 0.0, 0.0) // Red for low FPS
+            };
         }
     }
 }
 
 /// Updates the block statistics text every frame.
+#[allow(clippy::type_complexity)]
 fn update_block_stats_text(
     chunk_cache: Res<chunk::cache::ChunkCache>,
     mut loaded_query: Query<
@@ -206,7 +207,7 @@ fn update_block_stats_text(
 
     // Update rendered blocks text
     for mut text in &mut rendered_query {
-        **text = format!("Rendered Blocks: --");
+        **text = "Rendered Blocks: --".to_string();
     }
 
     // Update culling efficiency text

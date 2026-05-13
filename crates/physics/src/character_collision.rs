@@ -46,6 +46,7 @@ use crate::integration::TentativePosition;
 ///
 /// Runs at the **beginning** of [`PhysicsSet::CharacterCollision`], before the
 /// pair-scan, so positions are always up-to-date.
+#[allow(clippy::type_complexity)]
 pub(crate) fn update_character_spatial_cache(
     mut cache: ResMut<CharacterSpatialCache>,
     query: Query<(Entity, &TentativePosition, &Aabb), (With<CharacterCollider>, With<PhysicsBody>)>,
@@ -59,6 +60,7 @@ pub(crate) fn update_character_spatial_cache(
 /// Only the X and Z components of the penetration vector are applied.
 ///
 /// Runs in [`PhysicsSet::CharacterCollision`] during [`FixedUpdate`].
+#[allow(clippy::type_complexity)]
 fn resolve_character_collisions(
     cache: Res<CharacterSpatialCache>,
     mut query: Query<

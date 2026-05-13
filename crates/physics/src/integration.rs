@@ -39,6 +39,7 @@ pub(crate) struct TentativePosition(pub(crate) Vec3);
 /// [`Transform`] is not touched here — it is written by the rendering layer.
 ///
 /// Runs in [`PhysicsSet::Integrate`] during [`FixedUpdate`].
+#[allow(clippy::type_complexity)]
 fn integrate(
     time: Res<Time>,
     config: Res<PhysicsConfig>,

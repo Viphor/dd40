@@ -155,8 +155,8 @@ impl<'de> Deserialize<'de> for ChunkData {
                 A: serde::de::SeqAccess<'de>,
             {
                 let mut blocks = [Block::default(); CHUNK_SIZE];
-                for i in 0..CHUNK_SIZE {
-                    blocks[i] = seq
+                for (i, block) in blocks.iter_mut().enumerate() {
+                    *block = seq
                         .next_element()?
                         .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
                 }

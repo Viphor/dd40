@@ -9,10 +9,11 @@ use dd40_core::prelude::BlockPos;
 /// block-crack overlay.
 ///
 /// Defaults to [`MiningState::Idle`].
-#[derive(Component, Debug, Clone, Reflect)]
+#[derive(Component, Debug, Clone, Reflect, Default)]
 #[reflect(Component)]
 pub enum MiningState {
     /// No mining in progress.
+    #[default]
     Idle,
     /// Actively mining a block.
     Mining {
@@ -21,10 +22,4 @@ pub enum MiningState {
         progress: f32,
         required_duration: f32,
     },
-}
-
-impl Default for MiningState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
