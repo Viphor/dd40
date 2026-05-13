@@ -24,6 +24,7 @@
 //! `&mut Inventory`.  Read-only access is via [`Inventory::slots`].
 
 use std::fmt;
+use std::num::NonZero;
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,10 @@ use dd40_item_core::registry::{ItemId, ItemRegistry};
 /// states may be empty (e.g. a [`take_slot`][Inventory::take_slot] gives
 /// `previous = Some(_)`, `current = None`; a strict insert into an empty
 /// slot gives the inverse).
+/// `SlotChange` derives [`PartialEq`] / [`Eq`] across all fields, but
+/// implements [`PartialOrd`] / [`Ord`] **keyed only on
+/// [`slot`][Self::slot]** — sorting a `Vec<SlotChange>` therefore yields
+/// changes in ascending slot order regardless of stack contents.
 #[derive(Debug, Clone, PartialEq, Eq, Reflect, Serialize, Deserialize)]
 pub struct SlotChange {
     /// Index of the slot that changed.
@@ -49,6 +54,18 @@ pub struct SlotChange {
     pub current: Option<ItemStack>,
 }
 
+impl PartialOrd for SlotChange {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SlotChange {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.slot.cmp(&other.slot)
+    }
+}
+
 /// Entity-targeted event triggered after every successful mutation of an
 /// [`Inventory`].
 ///
@@ -56,12 +73,16 @@ pub struct SlotChange {
 /// [`Commands::trigger_targets`][bevy::prelude::Commands::trigger_targets]
 /// so observers reach the holder via `trigger.target()`.
 ///
-/// # Ordering and batching
+/// # Batching and ordering
 ///
-/// `changes` is **always** sorted by ascending slot index, and contains one
-/// entry per slot the call modified.  An [`insert_stack`][Inventory::insert_stack]
-/// that fills three slots produces one event with three entries — never
-/// three separate events.
+/// `changes` contains exactly **one entry per slot the call modified** —
+/// duplicate slot entries never appear.  An
+/// [`insert_stack`][Inventory::insert_stack] that fills three slots
+/// produces one event with three entries — never three separate events.
+///
+/// The order of entries within `changes` is **unspecified**.  Callers
+/// that need ordered output should sort the vector (e.g. by
+/// [`SlotChange::slot`]); [`SlotChange`] derives [`Ord`] for this reason.
 ///
 /// No-op calls (failed strict insert, take from an empty slot, etc.) fire
 /// **no** event.  "Event observed" is therefore a reliable signal that
@@ -173,7 +194,7 @@ impl Inventory {
             .iter()
             .filter_map(|s| s.as_ref())
             .filter(|s| s.item == item)
-            .map(|s| s.count as u32)
+            .map(|s| u32::from(s.count.get()))
             .sum()
     }
 
@@ -285,11 +306,13 @@ impl Inventory {
         }
         let cell = self.slots.get_mut(slot)?;
         let stack = cell.as_mut()?;
-        if n >= stack.count {
+        if n >= stack.count.get() {
             cell.take()
         } else {
-            let taken = ItemStack::new(stack.item, n);
-            stack.count -= n;
+            let remaining = stack.count.get() - n;
+            let taken_count = NonZero::new(n).expect("n > 0 checked above");
+            let taken = ItemStack::new(stack.item, taken_count);
+            stack.count = NonZero::new(remaining).expect("remaining > 0 since n < count");
             Some(taken)
         }
     }
@@ -408,14 +431,14 @@ impl Inventory {
         commands: &mut Commands,
         entity: Entity,
     ) -> Option<ItemStack> {
-        let previous = self.slots.get(slot).and_then(|s| s.clone());
         // Out of bounds → no-op.
         if slot >= self.slots.len() {
             return None;
         }
+        let previous = self.slots.get(slot).cloned().flatten();
         if previous == stack {
-            // Nothing changed; still write so the existing value is preserved
-            // but emit no event.
+            // Identical contents — return the previous value but emit no
+            // event since nothing observable changed.
             return previous;
         }
         let current_clone = stack.clone();
@@ -435,63 +458,65 @@ impl Inventory {
 
     fn insert_stack_inner(
         &mut self,
-        mut stack: ItemStack,
+        stack: ItemStack,
         registry: &ItemRegistry,
     ) -> (Option<ItemStack>, Vec<SlotChange>) {
-        let max_stack = registry
-            .get(stack.item)
-            .map(|def| def.max_stack)
-            .unwrap_or(1)
-            .max(1);
-
+        let item = stack.item;
+        let max_stack: u16 = registry
+            .get(item)
+            .map(|def| def.max_stack.get())
+            .unwrap_or(1);
+        // Working count is platform-`u16` so it can reach zero as we drain;
+        // `ItemStack::count` itself stays `NonZero<u16>`.
+        let mut remaining: u16 = stack.count.get();
         let mut changes: Vec<SlotChange> = Vec::new();
-        let mut record_change =
-            |slot: usize, previous: Option<ItemStack>, current: Option<ItemStack>| {
-                if previous != current {
-                    changes.push(SlotChange {
-                        slot,
-                        previous,
-                        current,
-                    });
-                }
-            };
 
         // Pass 1 — top up existing partial stacks of the same item.
         for (idx, cell) in self.slots.iter_mut().enumerate() {
-            if stack.count == 0 {
+            if remaining == 0 {
                 break;
             }
             let Some(existing) = cell.as_mut() else {
                 continue;
             };
-            if existing.item != stack.item || existing.count >= max_stack {
+            let existing_count = existing.count.get();
+            if existing.item != item || existing_count >= max_stack {
                 continue;
             }
-            let previous = Some(existing.clone());
-            let space = max_stack - existing.count;
-            let moved = space.min(stack.count);
-            existing.count += moved;
-            stack.count -= moved;
-            let current = Some(existing.clone());
-            record_change(idx, previous, current);
+            let previous = Some(*existing);
+            let space = max_stack - existing_count;
+            let moved = space.min(remaining);
+            let new_count = existing_count + moved;
+            existing.count = NonZero::new(new_count).expect("existing was non-zero");
+            remaining -= moved;
+            changes.push(SlotChange {
+                slot: idx,
+                previous,
+                current: Some(*existing),
+            });
         }
 
         // Pass 2 — place remainder into empty slots.
         for (idx, cell) in self.slots.iter_mut().enumerate() {
-            if stack.count == 0 {
+            if remaining == 0 {
                 break;
             }
             if cell.is_some() {
                 continue;
             }
-            let take = max_stack.min(stack.count);
-            let placed = ItemStack::new(stack.item, take);
-            *cell = Some(placed.clone());
-            stack.count -= take;
-            record_change(idx, None, Some(placed));
+            let take = max_stack.min(remaining);
+            let take_nz = NonZero::new(take).expect("max_stack >= 1 and remaining > 0");
+            let placed = ItemStack::new(item, take_nz);
+            *cell = Some(placed);
+            remaining -= take;
+            changes.push(SlotChange {
+                slot: idx,
+                previous: None,
+                current: Some(placed),
+            });
         }
 
-        let leftover = if stack.count == 0 { None } else { Some(stack) };
+        let leftover = NonZero::new(remaining).map(|count| ItemStack { item, count });
         (leftover, changes)
     }
 
@@ -533,16 +558,21 @@ mod tests {
     use dd40_core::tools::{ToolKindId, ToolTierId};
     use dd40_item_core::registry::ItemDefinition;
 
+    /// Test helper — wraps a literal in [`NonZero<u16>`].
+    fn nz(n: u16) -> NonZero<u16> {
+        NonZero::new(n).expect("nz literal must be non-zero")
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────
 
     fn registry_with_basics() -> ItemRegistry {
         let mut reg = ItemRegistry::new();
         // ItemId(1): stackable resource, max 64
-        reg.register(ItemDefinition::new(ItemId(1), "stone").with_max_stack(64));
+        reg.register(ItemDefinition::new(ItemId(1), "stone").with_max_stack(nz(64)));
         // ItemId(2): non-stackable, max 1
-        reg.register(ItemDefinition::new(ItemId(2), "tool").with_max_stack(1));
+        reg.register(ItemDefinition::new(ItemId(2), "tool").with_max_stack(nz(1)));
         // ItemId(3): stackable to 16
-        reg.register(ItemDefinition::new(ItemId(3), "egg").with_max_stack(16));
+        reg.register(ItemDefinition::new(ItemId(3), "egg").with_max_stack(nz(16)));
         reg
     }
 
@@ -577,7 +607,7 @@ mod tests {
     fn iter_skips_empties_and_yields_indices() {
         let mut inv = Inventory::with_capacity(4);
         inv.set_slot_without_event(1, Some(ItemStack::single(ItemId(1))));
-        inv.set_slot_without_event(3, Some(ItemStack::new(ItemId(2), 1)));
+        inv.set_slot_without_event(3, Some(ItemStack::new(ItemId(2), nz(1))));
         let collected: Vec<_> = inv.iter().map(|(i, s)| (i, s.item)).collect();
         assert_eq!(collected, vec![(1, ItemId(1)), (3, ItemId(2))]);
     }
@@ -585,8 +615,8 @@ mod tests {
     #[test]
     fn count_of_sums_across_slots() {
         let mut inv = Inventory::with_capacity(4);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 30)));
-        inv.set_slot_without_event(2, Some(ItemStack::new(ItemId(1), 12)));
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(30))));
+        inv.set_slot_without_event(2, Some(ItemStack::new(ItemId(1), nz(12))));
         inv.set_slot_without_event(3, Some(ItemStack::single(ItemId(2))));
         assert_eq!(inv.count_of(ItemId(1)), 42);
         assert_eq!(inv.count_of(ItemId(2)), 1);
@@ -608,9 +638,9 @@ mod tests {
     #[test]
     fn take_slot_without_event_empties_the_slot() {
         let mut inv = Inventory::with_capacity(2);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 5)));
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(5))));
         let taken = inv.take_slot_without_event(0).expect("stack present");
-        assert_eq!(taken.count, 5);
+        assert_eq!(taken.count.get(), 5);
         assert!(inv.slot(0).is_none());
     }
 
@@ -623,27 +653,27 @@ mod tests {
     #[test]
     fn take_slot_n_splits_when_n_lt_count() {
         let mut inv = Inventory::with_capacity(1);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 10)));
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(10))));
         let taken = inv.take_slot_n_without_event(0, 3).expect("split ok");
-        assert_eq!(taken.count, 3);
-        assert_eq!(inv.slot(0).unwrap().count, 7);
+        assert_eq!(taken.count.get(), 3);
+        assert_eq!(inv.slot(0).unwrap().count.get(), 7);
     }
 
     #[test]
     fn take_slot_n_clears_when_n_ge_count() {
         let mut inv = Inventory::with_capacity(1);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 4)));
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(4))));
         let taken = inv.take_slot_n_without_event(0, 99).expect("drain");
-        assert_eq!(taken.count, 4);
+        assert_eq!(taken.count.get(), 4);
         assert!(inv.slot(0).is_none());
     }
 
     #[test]
     fn take_slot_n_zero_is_noop() {
         let mut inv = Inventory::with_capacity(1);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 5)));
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(5))));
         assert!(inv.take_slot_n_without_event(0, 0).is_none());
-        assert_eq!(inv.slot(0).unwrap().count, 5);
+        assert_eq!(inv.slot(0).unwrap().count.get(), 5);
     }
 
     #[test]
@@ -661,43 +691,43 @@ mod tests {
     fn insert_stack_into_empty_uses_first_slot() {
         let reg = registry_with_basics();
         let mut inv = Inventory::with_capacity(3);
-        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(1), 5), &reg);
+        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(1), nz(5)), &reg);
         assert!(leftover.is_none());
-        assert_eq!(inv.slot(0).unwrap().count, 5);
+        assert_eq!(inv.slot(0).unwrap().count.get(), 5);
     }
 
     #[test]
     fn insert_stack_merges_into_partial() {
         let reg = registry_with_basics();
         let mut inv = Inventory::with_capacity(3);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 60)));
-        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(1), 3), &reg);
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(60))));
+        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(1), nz(3)), &reg);
         assert!(leftover.is_none());
-        assert_eq!(inv.slot(0).unwrap().count, 63);
+        assert_eq!(inv.slot(0).unwrap().count.get(), 63);
     }
 
     #[test]
     fn insert_stack_overflows_into_next_empty() {
         let reg = registry_with_basics();
         let mut inv = Inventory::with_capacity(3);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 60)));
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(60))));
         // 60 + 10 = 70 > max 64 → 4 stays in slot 0, 6 spills to slot 1
-        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(1), 10), &reg);
+        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(1), nz(10)), &reg);
         assert!(leftover.is_none());
-        assert_eq!(inv.slot(0).unwrap().count, 64);
-        assert_eq!(inv.slot(1).unwrap().count, 6);
+        assert_eq!(inv.slot(0).unwrap().count.get(), 64);
+        assert_eq!(inv.slot(1).unwrap().count.get(), 6);
     }
 
     #[test]
     fn insert_stack_returns_leftover_when_full() {
         let reg = registry_with_basics();
         let mut inv = Inventory::with_capacity(1);
-        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 64)));
+        inv.set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(64))));
         let leftover = inv
-            .insert_stack_without_event(ItemStack::new(ItemId(1), 5), &reg)
+            .insert_stack_without_event(ItemStack::new(ItemId(1), nz(5)), &reg)
             .expect("leftover");
-        assert_eq!(leftover.count, 5);
-        assert_eq!(inv.slot(0).unwrap().count, 64);
+        assert_eq!(leftover.count.get(), 5);
+        assert_eq!(inv.slot(0).unwrap().count.get(), 64);
     }
 
     #[test]
@@ -705,11 +735,11 @@ mod tests {
         let reg = registry_with_basics();
         let mut inv = Inventory::with_capacity(3);
         // 3 of a non-stackable item (max_stack = 1) should occupy 3 slots.
-        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(2), 3), &reg);
+        let leftover = inv.insert_stack_without_event(ItemStack::new(ItemId(2), nz(3)), &reg);
         assert!(leftover.is_none());
-        assert_eq!(inv.slot(0).unwrap().count, 1);
-        assert_eq!(inv.slot(1).unwrap().count, 1);
-        assert_eq!(inv.slot(2).unwrap().count, 1);
+        assert_eq!(inv.slot(0).unwrap().count.get(), 1);
+        assert_eq!(inv.slot(1).unwrap().count.get(), 1);
+        assert_eq!(inv.slot(2).unwrap().count.get(), 1);
     }
 
     #[test]
@@ -753,25 +783,25 @@ mod tests {
         // wooden pickaxe (low tier)
         reg.register(
             ItemDefinition::new(ItemId(10), "wood_pick")
-                .with_max_stack(1)
+                .with_max_stack(nz(1))
                 .with_tool(pickaxe, ToolTierId(1)),
         );
         // iron pickaxe (high tier)
         reg.register(
             ItemDefinition::new(ItemId(11), "iron_pick")
-                .with_max_stack(1)
+                .with_max_stack(nz(1))
                 .with_tool(pickaxe, ToolTierId(3)),
         );
         // axe (different kind)
         reg.register(
             ItemDefinition::new(ItemId(12), "axe")
-                .with_max_stack(1)
+                .with_max_stack(nz(1))
                 .with_tool(ToolKindId(2), ToolTierId(2)),
         );
         // dirt block, placeable
         reg.register(
             ItemDefinition::new(ItemId(20), "dirt")
-                .with_max_stack(64)
+                .with_max_stack(nz(64))
                 .with_placeable(BlockId(7)),
         );
         reg
@@ -820,7 +850,7 @@ mod tests {
     fn find_slot_placeable_first_match() {
         let reg = registry_with_tools();
         let mut inv = Inventory::with_capacity(3);
-        inv.set_slot_without_event(1, Some(ItemStack::new(ItemId(20), 8)));
+        inv.set_slot_without_event(1, Some(ItemStack::new(ItemId(20), nz(8))));
         let hit = inv.find_slot(ItemSelector::Placeable(BlockId(7)), &reg);
         assert_eq!(hit, Some(1));
     }
@@ -877,7 +907,7 @@ mod tests {
     }
 
     #[test]
-    fn insert_stack_fires_one_event_per_call_with_ordered_slot_changes() {
+    fn insert_stack_fires_one_event_with_one_change_per_modified_slot() {
         let mut app = make_app();
         let registry = registry_with_basics();
         let entity = app.world_mut().spawn(Inventory::with_capacity(4)).id();
@@ -885,14 +915,14 @@ mod tests {
         app.world_mut()
             .get_mut::<Inventory>(entity)
             .unwrap()
-            .set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 60)));
+            .set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(60))));
 
         app.world_mut()
             .run_system_once(
                 move |mut commands: Commands, mut q: Query<&mut Inventory>| {
                     let mut inv = q.get_mut(entity).unwrap();
                     inv.insert_stack(
-                        ItemStack::new(ItemId(1), 70),
+                        ItemStack::new(ItemId(1), nz(70)),
                         &registry,
                         &mut commands,
                         entity,
@@ -903,15 +933,92 @@ mod tests {
 
         let captured = app.world().resource::<Captured>();
         assert_eq!(captured.0.len(), 1, "exactly one event per call");
-        let changes = &captured.0[0].changes;
+        let mut changes = captured.0[0].changes.clone();
         // 60 in slot 0 → 64 (delta 4); spill 64 to slot 1; spill 2 to slot 2.
         assert_eq!(changes.len(), 3);
+        // Caller may sort if they need ordering — sort here to assert content.
+        changes.sort();
         assert_eq!(changes[0].slot, 0);
         assert_eq!(changes[1].slot, 1);
         assert_eq!(changes[2].slot, 2);
-        assert_eq!(changes[0].current.as_ref().unwrap().count, 64);
-        assert_eq!(changes[1].current.as_ref().unwrap().count, 64);
-        assert_eq!(changes[2].current.as_ref().unwrap().count, 2);
+        assert_eq!(changes[0].current.as_ref().unwrap().count.get(), 64);
+        assert_eq!(changes[1].current.as_ref().unwrap().count.get(), 64);
+        assert_eq!(changes[2].current.as_ref().unwrap().count.get(), 2);
+    }
+
+    /// Regression for the previously documented "always sorted by ascending
+    /// slot index" claim: the doc no longer guarantees order, so the event
+    /// payload may interleave high indices (touched by pass 1) before low
+    /// indices (touched by pass 2).  Asserts the *set* of touched slots is
+    /// correct without depending on order.
+    #[test]
+    fn insert_stack_changes_may_be_unordered() {
+        let mut app = make_app();
+        let registry = registry_with_basics();
+        let entity = app.world_mut().spawn(Inventory::with_capacity(6)).id();
+        // Pre-fill slot 5 with a partial stack of item 1; slots 0..=4 empty.
+        app.world_mut()
+            .get_mut::<Inventory>(entity)
+            .unwrap()
+            .set_slot_without_event(5, Some(ItemStack::new(ItemId(1), nz(60))));
+
+        app.world_mut()
+            .run_system_once(
+                move |mut commands: Commands, mut q: Query<&mut Inventory>| {
+                    let mut inv = q.get_mut(entity).unwrap();
+                    // 60 + 70: 4 fills slot 5, then 64 fills slot 0, then 2 fills slot 1.
+                    inv.insert_stack(
+                        ItemStack::new(ItemId(1), nz(70)),
+                        &registry,
+                        &mut commands,
+                        entity,
+                    );
+                },
+            )
+            .unwrap();
+
+        let captured = app.world().resource::<Captured>();
+        assert_eq!(captured.0.len(), 1);
+        let changes = &captured.0[0].changes;
+        let touched: std::collections::BTreeSet<usize> = changes.iter().map(|c| c.slot).collect();
+        assert_eq!(touched, [0_usize, 1, 5].into_iter().collect());
+        // Pass 1 touches slot 5 first, so slot 5 appears before slot 0 in
+        // the unsorted payload — proving the raw order is *not* ascending.
+        assert_eq!(changes[0].slot, 5, "pass-1 records the partial slot first");
+    }
+
+    #[test]
+    fn insert_stack_emits_at_most_one_change_per_slot() {
+        let mut app = make_app();
+        let registry = registry_with_basics();
+        let entity = app.world_mut().spawn(Inventory::with_capacity(4)).id();
+        app.world_mut()
+            .get_mut::<Inventory>(entity)
+            .unwrap()
+            .set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(60))));
+
+        app.world_mut()
+            .run_system_once(
+                move |mut commands: Commands, mut q: Query<&mut Inventory>| {
+                    let mut inv = q.get_mut(entity).unwrap();
+                    inv.insert_stack(
+                        ItemStack::new(ItemId(1), nz(80)),
+                        &registry,
+                        &mut commands,
+                        entity,
+                    );
+                },
+            )
+            .unwrap();
+
+        let captured = app.world().resource::<Captured>();
+        let changes = &captured.0[0].changes;
+        let unique: std::collections::BTreeSet<usize> = changes.iter().map(|c| c.slot).collect();
+        assert_eq!(
+            unique.len(),
+            changes.len(),
+            "every modified slot appears at most once in the event payload"
+        );
     }
 
     #[test]
@@ -966,14 +1073,18 @@ mod tests {
         app.world_mut()
             .get_mut::<Inventory>(entity)
             .unwrap()
-            .set_slot_without_event(0, Some(ItemStack::new(ItemId(1), 5)));
+            .set_slot_without_event(0, Some(ItemStack::new(ItemId(1), nz(5))));
 
         app.world_mut()
             .run_system_once(
                 move |mut commands: Commands, mut q: Query<&mut Inventory>| {
                     let mut inv = q.get_mut(entity).unwrap();
-                    let prev =
-                        inv.set_slot(0, Some(ItemStack::new(ItemId(2), 1)), &mut commands, entity);
+                    let prev = inv.set_slot(
+                        0,
+                        Some(ItemStack::new(ItemId(2), nz(1))),
+                        &mut commands,
+                        entity,
+                    );
                     assert_eq!(prev.unwrap().item, ItemId(1));
                 },
             )
@@ -991,7 +1102,7 @@ mod tests {
     fn set_slot_to_identical_fires_no_event() {
         let mut app = make_app();
         let entity = app.world_mut().spawn(Inventory::with_capacity(1)).id();
-        let stack = ItemStack::new(ItemId(1), 3);
+        let stack = ItemStack::new(ItemId(1), nz(3));
         app.world_mut()
             .get_mut::<Inventory>(entity)
             .unwrap()

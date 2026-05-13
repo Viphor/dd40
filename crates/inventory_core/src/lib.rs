@@ -19,9 +19,12 @@
 //! ([`SlotChange`][inventory::SlotChange]) describing exactly what moved.
 //!
 //! Bevy's [`Changed<Inventory>`][bevy::ecs::query::Changed] filter still
-//! works (it is a free side-effect of the component change tick) and is a
-//! reasonable fallback for "refresh everything" consumers, but observers
-//! avoid the per-frame iteration cost.
+//! works as a fallback for "refresh everything" consumers — but note that
+//! it fires on *any* `&mut Inventory` access, including the
+//! `*_without_event` silent mutators and even mutable borrows that did not
+//! ultimately change any slot.  The [`InventoryChanged`][inventory::InventoryChanged]
+//! event is the only signal that fires **only** on actual content changes
+//! and that carries the per-slot diff.
 //!
 //! # Escape hatch
 //!
