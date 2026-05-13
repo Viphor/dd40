@@ -40,10 +40,6 @@ use dd40_item_core::registry::{ItemId, ItemRegistry};
 /// states may be empty (e.g. a [`take_slot`][Inventory::take_slot] gives
 /// `previous = Some(_)`, `current = None`; a strict insert into an empty
 /// slot gives the inverse).
-/// `SlotChange` derives [`PartialEq`] / [`Eq`] across all fields, but
-/// implements [`PartialOrd`] / [`Ord`] **keyed only on
-/// [`slot`][Self::slot]** — sorting a `Vec<SlotChange>` therefore yields
-/// changes in ascending slot order regardless of stack contents.
 #[derive(Debug, Clone, PartialEq, Eq, Reflect, Serialize, Deserialize)]
 pub struct SlotChange {
     /// Index of the slot that changed.
@@ -52,18 +48,6 @@ pub struct SlotChange {
     pub previous: Option<ItemStack>,
     /// Stack that is in the slot after the call.
     pub current: Option<ItemStack>,
-}
-
-impl PartialOrd for SlotChange {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for SlotChange {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.slot.cmp(&other.slot)
-    }
 }
 
 /// Entity-targeted event triggered after every successful mutation of an
@@ -81,8 +65,8 @@ impl Ord for SlotChange {
 /// produces one event with three entries — never three separate events.
 ///
 /// The order of entries within `changes` is **unspecified**.  Callers
-/// that need ordered output should sort the vector (e.g. by
-/// [`SlotChange::slot`]); [`SlotChange`] derives [`Ord`] for this reason.
+/// that need ordered output should sort the vector themselves, e.g.
+/// `changes.sort_by_key(|c| c.slot)`.
 ///
 /// No-op calls (failed strict insert, take from an empty slot, etc.) fire
 /// **no** event.  "Event observed" is therefore a reliable signal that
@@ -378,7 +362,7 @@ impl Inventory {
         commands: &mut Commands,
         entity: Entity,
     ) -> Option<ItemStack> {
-        let previous = self.slots.get(slot).and_then(|s| s.clone());
+        let previous = self.slots.get(slot).copied().flatten();
         let taken = self.take_slot_without_event(slot);
         if taken.is_some() {
             commands.trigger(InventoryChanged {
@@ -404,10 +388,10 @@ impl Inventory {
         commands: &mut Commands,
         entity: Entity,
     ) -> Option<ItemStack> {
-        let previous = self.slots.get(slot).and_then(|s| s.clone());
+        let previous = self.slots.get(slot).copied().flatten();
         let taken = self.take_slot_n_without_event(slot, n);
         if taken.is_some() {
-            let current = self.slots.get(slot).and_then(|s| s.clone());
+            let current = self.slots.get(slot).copied().flatten();
             commands.trigger(InventoryChanged {
                 entity,
                 changes: vec![SlotChange {
@@ -435,20 +419,19 @@ impl Inventory {
         if slot >= self.slots.len() {
             return None;
         }
-        let previous = self.slots.get(slot).cloned().flatten();
+        let previous = self.slots[slot];
         if previous == stack {
             // Identical contents — return the previous value but emit no
             // event since nothing observable changed.
             return previous;
         }
-        let current_clone = stack.clone();
         let returned = self.set_slot_without_event(slot, stack);
         commands.trigger(InventoryChanged {
             entity,
             changes: vec![SlotChange {
                 slot,
                 previous,
-                current: current_clone,
+                current: stack,
             }],
         });
         returned
@@ -533,7 +516,7 @@ impl Inventory {
         if cell.is_some() {
             return Err(InsertError::SlotOccupied { slot });
         }
-        let placed = stack.clone();
+        let placed = stack;
         *cell = Some(stack);
         Ok(SlotChange {
             slot,
@@ -937,7 +920,7 @@ mod tests {
         // 60 in slot 0 → 64 (delta 4); spill 64 to slot 1; spill 2 to slot 2.
         assert_eq!(changes.len(), 3);
         // Caller may sort if they need ordering — sort here to assert content.
-        changes.sort();
+        changes.sort_by_key(|c| c.slot);
         assert_eq!(changes[0].slot, 0);
         assert_eq!(changes[1].slot, 1);
         assert_eq!(changes[2].slot, 2);
@@ -947,12 +930,11 @@ mod tests {
     }
 
     /// Regression for the previously documented "always sorted by ascending
-    /// slot index" claim: the doc no longer guarantees order, so the event
-    /// payload may interleave high indices (touched by pass 1) before low
-    /// indices (touched by pass 2).  Asserts the *set* of touched slots is
-    /// correct without depending on order.
+    /// slot index" claim: the doc no longer guarantees order.  Asserts the
+    /// *set* of touched slots is correct without depending on the order of
+    /// entries in the event payload.
     #[test]
-    fn insert_stack_changes_may_be_unordered() {
+    fn insert_stack_records_every_touched_slot_regardless_of_order() {
         let mut app = make_app();
         let registry = registry_with_basics();
         let entity = app.world_mut().spawn(Inventory::with_capacity(6)).id();
@@ -982,9 +964,6 @@ mod tests {
         let changes = &captured.0[0].changes;
         let touched: std::collections::BTreeSet<usize> = changes.iter().map(|c| c.slot).collect();
         assert_eq!(touched, [0_usize, 1, 5].into_iter().collect());
-        // Pass 1 touches slot 5 first, so slot 5 appears before slot 0 in
-        // the unsorted payload — proving the raw order is *not* ascending.
-        assert_eq!(changes[0].slot, 5, "pass-1 records the partial slot first");
     }
 
     #[test]
@@ -1106,13 +1085,13 @@ mod tests {
         app.world_mut()
             .get_mut::<Inventory>(entity)
             .unwrap()
-            .set_slot_without_event(0, Some(stack.clone()));
+            .set_slot_without_event(0, Some(stack));
 
         app.world_mut()
             .run_system_once(
                 move |mut commands: Commands, mut q: Query<&mut Inventory>| {
                     let mut inv = q.get_mut(entity).unwrap();
-                    inv.set_slot(0, Some(stack.clone()), &mut commands, entity);
+                    inv.set_slot(0, Some(stack), &mut commands, entity);
                 },
             )
             .unwrap();
