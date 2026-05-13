@@ -19,6 +19,7 @@ use dd40_physics_core::prelude::{Grounded, Impulse, PhysicsBody, PhysicsSet, Vel
 ///
 /// One-shot semantics: [`CharacterInput::jump`] is reset to `false`
 /// after each tick.
+#[allow(clippy::type_complexity)]
 pub fn apply_character_controller(
     mut query: Query<
         (

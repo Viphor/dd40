@@ -163,6 +163,7 @@ fn on_network_character_added(
 /// one-shot flags like [`CharacterInput::jump`].
 ///
 /// [`CharacterInput::jump`]: dd40_core::character::controller::CharacterInput::jump
+#[allow(clippy::type_complexity)]
 fn bridge_input_to_action_state(
     mut query: Query<
         (&CharacterInput, &mut ActionState<PlayerInput>),
@@ -194,6 +195,7 @@ fn bridge_input_to_action_state(
 ///
 /// Must run **before** [`PhysicsSet::Integrate`] so physics always starts from
 /// the rolled-back position, not stale visual state.
+#[allow(clippy::type_complexity)]
 fn restore_and_record_previous(
     mut commands: Commands,
     mut query: Query<

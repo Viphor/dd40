@@ -125,6 +125,7 @@ fn get_block(pos: BlockPos, cache: &ChunkCache) -> Block {
 // Swept-axis resolution
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn sweep_axis(
     current: Vec3,
     target: Vec3,

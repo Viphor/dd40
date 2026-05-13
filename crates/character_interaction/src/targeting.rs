@@ -113,33 +113,34 @@ fn dda_raycast(
 
         if let Some(chunk) = cache.get(&chunk_pos) {
             let local = pos.chunk_local();
-            if let Some(block) = chunk.get(local.x as usize, local.y as usize, local.z as usize) {
-                if block.block_id != BlockId::AIR && registry.is_solid(&block) {
-                    let face = match last_axis {
-                        LastAxis::X => {
-                            if step.x > 0 {
-                                BlockFace::West
-                            } else {
-                                BlockFace::East
-                            }
+            if let Some(block) = chunk.get(local.x as usize, local.y as usize, local.z as usize)
+                && block.block_id != BlockId::AIR
+                && registry.is_solid(&block)
+            {
+                let face = match last_axis {
+                    LastAxis::X => {
+                        if step.x > 0 {
+                            BlockFace::West
+                        } else {
+                            BlockFace::East
                         }
-                        LastAxis::Y => {
-                            if step.y > 0 {
-                                BlockFace::Bottom
-                            } else {
-                                BlockFace::Top
-                            }
+                    }
+                    LastAxis::Y => {
+                        if step.y > 0 {
+                            BlockFace::Bottom
+                        } else {
+                            BlockFace::Top
                         }
-                        LastAxis::Z => {
-                            if step.z > 0 {
-                                BlockFace::North
-                            } else {
-                                BlockFace::South
-                            }
+                    }
+                    LastAxis::Z => {
+                        if step.z > 0 {
+                            BlockFace::North
+                        } else {
+                            BlockFace::South
                         }
-                    };
-                    return Some((pos, face, block.block_id));
-                }
+                    }
+                };
+                return Some((pos, face, block.block_id));
             }
         }
 

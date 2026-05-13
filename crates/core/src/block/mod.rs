@@ -33,9 +33,10 @@ use crate::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, ChunkPos};
 ///
 /// [`BlockDefinition::collision_shape`]: crate::block::registry::BlockDefinition::collision_shape
 /// [`BlockRegistry`]: crate::block::registry::BlockRegistry
-#[derive(Debug, Clone, Reflect)]
+#[derive(Debug, Clone, Reflect, Default)]
 pub enum CollisionShape {
     /// Solid unit cube — the default for all opaque blocks.
+    #[default]
     FullCube,
     /// No collision at all (air, torches, etc.).
     None,
@@ -48,12 +49,6 @@ pub enum CollisionShape {
         /// Maximum corner in cell-local coordinates (`[0, 1]` range).
         max: Vec3,
     },
-}
-
-impl Default for CollisionShape {
-    fn default() -> Self {
-        Self::FullCube
-    }
 }
 
 pub type BlockCoord = i32;

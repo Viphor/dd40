@@ -22,12 +22,10 @@
 //! use bevy::prelude::*;
 //! use dd40_network::*;
 //!
-//! fn main() {
-//!     App::new()
-//!         .add_plugins(DefaultPlugins)
-//!         .add_plugins(ClientNetworkPlugin)
-//!         .run();
-//! }
+//! App::new()
+//!     .add_plugins(DefaultPlugins)
+//!     .add_plugins(ClientNetworkPlugin)
+//!     .run();
 //! ```
 //!
 //! ## Server Setup
@@ -38,12 +36,10 @@
 //! use bevy::prelude::*;
 //! use dd40_network::*;
 //!
-//! fn main() {
-//!     App::new()
-//!         .add_plugins(MinimalPlugins)
-//!         .add_plugins(ServerNetworkPlugin(DDServer::new(SERVER_PORT)))
-//!         .run();
-//! }
+//! App::new()
+//!     .add_plugins(MinimalPlugins)
+//!     .add_plugins(ServerNetworkPlugin(DDServer::new(SERVER_PORT)))
+//!     .run();
 //! ```
 //!
 //! # Protocol

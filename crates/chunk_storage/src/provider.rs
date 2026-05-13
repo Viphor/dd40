@@ -104,7 +104,7 @@ impl DiskChunkProvider {
         serialize_chunk_versioned(chunk, std::io::BufWriter::new(file), version).map_err(
             |e| match e {
                 ChunkSerializeError::Io(io_err) => io_err,
-                other => Error::new(ErrorKind::Other, other.to_string()),
+                other => Error::other(other.to_string()),
             },
         )
     }

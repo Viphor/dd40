@@ -43,12 +43,10 @@ fn read_save_history_env() -> bool {
 /// use bevy::prelude::*;
 /// use dd40_chunk_storage::plugin::DiskStoragePlugin;
 ///
-/// fn main() {
-///     App::new()
-///         .add_plugins(MinimalPlugins)
-///         .add_plugins(DiskStoragePlugin::new("world_data/chunks"))
-///         .run();
-/// }
+/// App::new()
+///     .add_plugins(MinimalPlugins)
+///     .add_plugins(DiskStoragePlugin::new("world_data/chunks"))
+///     .run();
 /// ```
 pub struct DiskStoragePlugin {
     pub dir: PathBuf,
