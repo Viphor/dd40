@@ -4,7 +4,6 @@ use bevy::{
 use serde::{Deserialize, Serialize};
 
 pub mod registry;
-//pub mod storage;
 
 pub use registry::{BlockDefinition, BlockRegistry};
 
