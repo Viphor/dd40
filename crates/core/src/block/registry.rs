@@ -398,12 +398,6 @@ mod tests {
         let stone = registry.get(stone_id).unwrap();
         assert_eq!(stone.name, "stone");
         assert!(stone.is_solid);
-
-        // Check that BlockRegistryUpdate message was sent
-        //let messages = app.world().resource::<Messages<BlockRegistryUpdate>>();
-        //let mut cursor = messages.get_cursor();
-        //let update = cursor.read(messages).next().unwrap();
-        //assert_eq!(update.block_id, BlockId(1));
     }
 
     #[test]
@@ -413,9 +407,6 @@ mod tests {
 
         // Add BlockRegistry resource
         app.insert_resource(BlockRegistry::new());
-
-        // Add BlockRegistryUpdate message
-        //app.add_message::<BlockRegistryUpdate>();
 
         // Add test system
         app.add_systems(bevy::app::Update, register_stone_auto_system);
@@ -430,12 +421,6 @@ mod tests {
         assert_eq!(stone_id, BlockId(1)); // Auto-assigned after air
         let stone = registry.get(stone_id).unwrap();
         assert_eq!(stone.name, "stone");
-
-        // Check that BlockRegistryUpdate message was sent
-        // let messages = app.world().resource::<Messages<BlockRegistryUpdate>>();
-        // let mut cursor = messages.get_cursor();
-        // let update = cursor.read(messages).next().unwrap();
-        // assert_eq!(update.block_id, BlockId(1));
     }
 
     #[test]

@@ -94,15 +94,6 @@ impl bevy::ecs::entity::MapEntities for PlayerInput {
 // MESSAGES
 // ============================================================================
 
-// Request chunks around a center position
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct RequestChunks {
-//     /// Center position (usually player position)
-//     pub center: BlockPos,
-//     /// Radius in chunks (e.g., radius 3 = 7x7 chunk area)
-//     pub radius: u32,
-// }
-
 /// Request a spawn of the player with the given client id. The server responds with a [`PlayerSpawnLocation`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestSpawn(pub u64);
