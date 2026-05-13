@@ -48,8 +48,7 @@ impl BlockLocal {
     /// Panics if any coordinate is outside the chunk bounds.
     #[inline]
     pub fn new(x: u8, y: u16, z: u8) -> Self {
-        Self::try_new(x, y, z)
-            .unwrap_or_else(|| panic!("BlockLocal out of range: ({x}, {y}, {z})"))
+        Self::try_new(x, y, z).unwrap_or_else(|| panic!("BlockLocal out of range: ({x}, {y}, {z})"))
     }
 
     /// Creates a new chunk-local position, returning `None` if any coordinate
@@ -164,12 +163,18 @@ mod tests {
 
         assert_eq!(
             ChunkChange::new_place(l, id),
-            ChunkChange::Place { local: l, block_id: id },
+            ChunkChange::Place {
+                local: l,
+                block_id: id
+            },
         );
         assert_eq!(ChunkChange::new_remove(l), ChunkChange::Remove { local: l });
         assert_eq!(
             ChunkChange::new_replace(l, id),
-            ChunkChange::Replace { local: l, new_block: id },
+            ChunkChange::Replace {
+                local: l,
+                new_block: id
+            },
         );
 
         assert_eq!(ChunkChange::new_place(l, id).local(), l);
@@ -190,8 +195,7 @@ mod tests {
 
         for original in cases {
             let bytes = bincode::serialize(&original).expect("serialize");
-            let decoded: ChunkChange =
-                bincode::deserialize(&bytes).expect("deserialize");
+            let decoded: ChunkChange = bincode::deserialize(&bytes).expect("deserialize");
             assert_eq!(decoded, original);
         }
     }

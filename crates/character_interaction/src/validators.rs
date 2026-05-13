@@ -24,9 +24,7 @@
 use bevy::prelude::*;
 use dd40_core::block::{Block, CollisionShape};
 use dd40_core::chunk::cache::ChunkCache;
-use dd40_core::chunk::{
-    ChunkChange, ChunkPos, PendingChunkRejections, RejectReason,
-};
+use dd40_core::chunk::{ChunkChange, ChunkPos, PendingChunkRejections, RejectReason};
 use dd40_core::prelude::BlockRegistry;
 use dd40_physics_core::prelude::{Aabb, CharacterPosition, CharacterSpatialCache};
 
@@ -96,14 +94,14 @@ pub fn character_collision_validator(
                 world_pos.z as f32 + 0.5,
             );
 
-            let overlaps = spatial_cache
-                .candidates_for_block(world_pos)
-                .any(|entity| match characters.get(entity) {
+            let overlaps = spatial_cache.candidates_for_block(world_pos).any(|entity| {
+                match characters.get(entity) {
                     Ok((char_pos, char_aabb)) => {
                         char_aabb.overlaps(char_pos.0, &block_aabb, block_origin)
                     }
                     Err(_) => false,
-                });
+                }
+            });
 
             if overlaps {
                 pending.reject(
@@ -131,8 +129,7 @@ mod tests {
         );
         // A non-collidable decorative block.
         r.register_without_event(
-            BlockDefinition::new(BlockId(2), "flower")
-                .with_collision_shape(CollisionShape::None),
+            BlockDefinition::new(BlockId(2), "flower").with_collision_shape(CollisionShape::None),
         );
         r
     }
@@ -154,8 +151,7 @@ mod tests {
         app.add_plugins(ChunkAuthorityPlugin);
         app.add_systems(
             PostUpdate,
-            character_collision_validator
-                .in_set(dd40_core::chunk::ChunkAuthoritySet::Validate),
+            character_collision_validator.in_set(dd40_core::chunk::ChunkAuthoritySet::Validate),
         );
 
         // Spawn a character at the centre of cell (0, 0, 0). The Aabb
@@ -180,12 +176,10 @@ mod tests {
     fn rejects_place_inside_character() {
         let (mut app, _e) = build_app_with_character();
         // Predict a Place into the cell the character occupies.
-        app.world_mut()
-            .resource_mut::<ChunkCache>()
-            .push_predicted(
-                ChunkPos::new(0, 0, 0),
-                ChunkChange::new_place(BlockLocal::new(0, 0, 0), BlockId(1)),
-            );
+        app.world_mut().resource_mut::<ChunkCache>().push_predicted(
+            ChunkPos::new(0, 0, 0),
+            ChunkChange::new_place(BlockLocal::new(0, 0, 0), BlockId(1)),
+        );
 
         app.update();
 
@@ -205,12 +199,10 @@ mod tests {
     fn allows_place_in_empty_cell() {
         let (mut app, _e) = build_app_with_character();
         // Predict a Place into a cell far from the character.
-        app.world_mut()
-            .resource_mut::<ChunkCache>()
-            .push_predicted(
-                ChunkPos::new(0, 0, 0),
-                ChunkChange::new_place(BlockLocal::new(10, 10, 10), BlockId(1)),
-            );
+        app.world_mut().resource_mut::<ChunkCache>().push_predicted(
+            ChunkPos::new(0, 0, 0),
+            ChunkChange::new_place(BlockLocal::new(10, 10, 10), BlockId(1)),
+        );
 
         app.update();
 
@@ -227,12 +219,10 @@ mod tests {
     fn allows_non_collidable_block_inside_character() {
         let (mut app, _e) = build_app_with_character();
         // Flowers (CollisionShape::None) inside a character are fine.
-        app.world_mut()
-            .resource_mut::<ChunkCache>()
-            .push_predicted(
-                ChunkPos::new(0, 0, 0),
-                ChunkChange::new_place(BlockLocal::new(0, 0, 0), BlockId(2)),
-            );
+        app.world_mut().resource_mut::<ChunkCache>().push_predicted(
+            ChunkPos::new(0, 0, 0),
+            ChunkChange::new_place(BlockLocal::new(0, 0, 0), BlockId(2)),
+        );
 
         app.update();
 

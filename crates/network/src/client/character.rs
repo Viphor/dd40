@@ -218,7 +218,9 @@ fn restore_and_record_previous(
         if delta.length() > VISUAL_CORRECTION_MIN_ERROR {
             let total = delta + existing_correction.map_or(Vec3::ZERO, |e| e.0);
             if total.length() > VISUAL_CORRECTION_MIN_ERROR {
-                commands.entity(entity).insert(VisualCorrectionOffset(total));
+                commands
+                    .entity(entity)
+                    .insert(VisualCorrectionOffset(total));
             }
         }
 
@@ -315,10 +317,7 @@ fn apply_frame_interpolation(
 /// Syncs the snapshot-interpolated [`PlayerPosition`] to [`Transform`] for
 /// remote player entities so they render at the smoothed position each frame.
 fn sync_interpolated_position_to_transform(
-    mut query: Query<
-        (&PlayerPosition, &mut Transform),
-        With<Interpolated>,
-    >,
+    mut query: Query<(&PlayerPosition, &mut Transform), With<Interpolated>>,
 ) {
     for (pos, mut transform) in &mut query {
         transform.translation = pos.to_vec3();
@@ -332,10 +331,7 @@ fn sync_interpolated_position_to_transform(
 /// entity has its camera rotation driven directly by `mouse_look`, not by
 /// `PlayerRotation`.
 fn apply_interpolated_rotation(
-    mut query: Query<
-        (&PlayerRotation, &mut Transform),
-        With<Interpolated>,
-    >,
+    mut query: Query<(&PlayerRotation, &mut Transform), With<Interpolated>>,
 ) {
     for (rot, mut transform) in &mut query {
         transform.rotation = Quat::from_euler(EulerRot::YXZ, rot.yaw, rot.pitch, 0.0);
@@ -351,12 +347,7 @@ fn apply_interpolated_rotation(
 /// stale server-confirmed value.  Running here guarantees the render pass
 /// always sees the locally-driven, zero-lag rotation rather than a rolled-back
 /// one.
-fn sync_local_rotation(
-    mut query: Query<
-        (&CharacterInput, &mut PlayerRotation),
-        With<Predicted>,
-    >,
-) {
+fn sync_local_rotation(mut query: Query<(&CharacterInput, &mut PlayerRotation), With<Predicted>>) {
     for (char_input, mut player_rot) in &mut query {
         player_rot.pitch = char_input.pitch;
         player_rot.yaw = char_input.yaw;

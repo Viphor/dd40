@@ -38,12 +38,7 @@ pub struct IntegrationCharacterPhysicsPlugin;
 
 impl Plugin for IntegrationCharacterPhysicsPlugin {
     fn build(&self, app: &mut App) {
-        ensure_plugins!(
-            app,
-            CorePlugin,
-            CharacterCorePlugin,
-            PhysicsCorePlugin
-        );
+        ensure_plugins!(app, CorePlugin, CharacterCorePlugin, PhysicsCorePlugin);
         controller::add_systems(app);
     }
 }

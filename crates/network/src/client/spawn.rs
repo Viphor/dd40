@@ -222,7 +222,9 @@ mod tests {
     fn initial_chunks_gate_contains_nine_positions() {
         let centre = ChunkPos::new(0, 0, 0);
         let pending: HashSet<ChunkPos> = (-1_i32..=1)
-            .flat_map(|dx| (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, 0, centre.z + dz)))
+            .flat_map(|dx| {
+                (-1_i32..=1).map(move |dz| ChunkPos::new(centre.x + dx, 0, centre.z + dz))
+            })
             .collect();
         let gate = InitialChunksGate { pending };
         assert_eq!(gate.pending.len(), 9);

@@ -53,13 +53,29 @@ fn dda_raycast(
     );
 
     #[derive(Clone, Copy)]
-    enum LastAxis { X, Y, Z }
+    enum LastAxis {
+        X,
+        Y,
+        Z,
+    }
     let mut last_axis = LastAxis::Y;
 
     let delta = Vec3::new(
-        if direction.x != 0.0 { (1.0 / direction.x).abs() } else { f32::INFINITY },
-        if direction.y != 0.0 { (1.0 / direction.y).abs() } else { f32::INFINITY },
-        if direction.z != 0.0 { (1.0 / direction.z).abs() } else { f32::INFINITY },
+        if direction.x != 0.0 {
+            (1.0 / direction.x).abs()
+        } else {
+            f32::INFINITY
+        },
+        if direction.y != 0.0 {
+            (1.0 / direction.y).abs()
+        } else {
+            f32::INFINITY
+        },
+        if direction.z != 0.0 {
+            (1.0 / direction.z).abs()
+        } else {
+            f32::INFINITY
+        },
     );
 
     let mut t_max = Vec3::new(
@@ -97,19 +113,29 @@ fn dda_raycast(
 
         if let Some(chunk) = cache.get(&chunk_pos) {
             let local = pos.chunk_local();
-            if let Some(block) =
-                chunk.get(local.x as usize, local.y as usize, local.z as usize)
-            {
+            if let Some(block) = chunk.get(local.x as usize, local.y as usize, local.z as usize) {
                 if block.block_id != BlockId::AIR && registry.is_solid(&block) {
                     let face = match last_axis {
                         LastAxis::X => {
-                            if step.x > 0 { BlockFace::West } else { BlockFace::East }
+                            if step.x > 0 {
+                                BlockFace::West
+                            } else {
+                                BlockFace::East
+                            }
                         }
                         LastAxis::Y => {
-                            if step.y > 0 { BlockFace::Bottom } else { BlockFace::Top }
+                            if step.y > 0 {
+                                BlockFace::Bottom
+                            } else {
+                                BlockFace::Top
+                            }
                         }
                         LastAxis::Z => {
-                            if step.z > 0 { BlockFace::North } else { BlockFace::South }
+                            if step.z > 0 {
+                                BlockFace::North
+                            } else {
+                                BlockFace::South
+                            }
                         }
                     };
                     return Some((pos, face, block.block_id));
@@ -194,13 +220,18 @@ pub(crate) fn update_debug_info(
     targeted_query: Query<&TargetedBlock, With<Player>>,
     mut query: Query<&mut DebugInfo, With<TargetedBlockDebugInfo>>,
 ) {
-    let Ok(mut debug_info) = query.single_mut() else { return };
+    let Ok(mut debug_info) = query.single_mut() else {
+        return;
+    };
     let Some(targeted) = targeted_query.iter().next() else {
         debug_info.set("targeted_block", "None".to_string());
         return;
     };
     if let Some(pos) = targeted.pos {
-        debug_info.set("targeted_block", format!("{:?} at {pos}", targeted.face.unwrap()));
+        debug_info.set(
+            "targeted_block",
+            format!("{:?} at {pos}", targeted.face.unwrap()),
+        );
     } else {
         debug_info.set("targeted_block", "None".to_string());
     }
@@ -211,19 +242,38 @@ pub(crate) fn update_debug_info(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dd40_core::{block::{Block, BlockDefinition, BlockId}, chunk::Chunk};
+    use dd40_core::{
+        block::{Block, BlockDefinition, BlockId},
+        chunk::Chunk,
+    };
 
-    fn raycast_pos(origin: Vec3, direction: Vec3, max_distance: f32, cache: &ChunkCache, registry: &BlockRegistry) -> Option<BlockPos> {
+    fn raycast_pos(
+        origin: Vec3,
+        direction: Vec3,
+        max_distance: f32,
+        cache: &ChunkCache,
+        registry: &BlockRegistry,
+    ) -> Option<BlockPos> {
         dda_raycast(origin, direction, max_distance, cache, registry).map(|(pos, _, _)| pos)
     }
 
-    fn raycast_face(origin: Vec3, direction: Vec3, max_distance: f32, cache: &ChunkCache, registry: &BlockRegistry) -> Option<BlockFace> {
+    fn raycast_face(
+        origin: Vec3,
+        direction: Vec3,
+        max_distance: f32,
+        cache: &ChunkCache,
+        registry: &BlockRegistry,
+    ) -> Option<BlockFace> {
         dda_raycast(origin, direction, max_distance, cache, registry).map(|(_, face, _)| face)
     }
 
     fn make_registry() -> BlockRegistry {
         let mut reg = BlockRegistry::new();
-        reg.register_without_event(BlockDefinition::new(BlockId(1), "stone").with_solid(true).with_renderable(true));
+        reg.register_without_event(
+            BlockDefinition::new(BlockId(1), "stone")
+                .with_solid(true)
+                .with_renderable(true),
+        );
         reg
     }
 
@@ -239,7 +289,13 @@ mod tests {
     fn raycast_hits_block_directly_below() {
         let registry = make_registry();
         let cache = cache_with_block(0, 60, 0, Block::new(BlockId(1)));
-        let hit = raycast_pos(Vec3::new(0.5, 62.0, 0.5), Vec3::NEG_Y, 5.0, &cache, &registry);
+        let hit = raycast_pos(
+            Vec3::new(0.5, 62.0, 0.5),
+            Vec3::NEG_Y,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert_eq!(hit, Some(BlockPos::new(0, 60, 0)));
     }
 
@@ -247,7 +303,13 @@ mod tests {
     fn raycast_misses_when_distance_exceeded() {
         let registry = make_registry();
         let cache = cache_with_block(0, 55, 0, Block::new(BlockId(1)));
-        let hit = raycast_pos(Vec3::new(0.5, 60.0, 0.5), Vec3::NEG_Y, 3.0, &cache, &registry);
+        let hit = raycast_pos(
+            Vec3::new(0.5, 60.0, 0.5),
+            Vec3::NEG_Y,
+            3.0,
+            &cache,
+            &registry,
+        );
         assert!(hit.is_none());
     }
 
@@ -255,7 +317,13 @@ mod tests {
     fn raycast_ignores_air() {
         let registry = make_registry();
         let cache = cache_with_block(0, 60, 0, Block::new(BlockId::AIR));
-        let hit = raycast_pos(Vec3::new(0.5, 62.0, 0.5), Vec3::NEG_Y, 5.0, &cache, &registry);
+        let hit = raycast_pos(
+            Vec3::new(0.5, 62.0, 0.5),
+            Vec3::NEG_Y,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert!(hit.is_none());
     }
 
@@ -271,7 +339,13 @@ mod tests {
     fn raycast_zero_direction_returns_none() {
         let registry = make_registry();
         let cache = cache_with_block(0, 60, 0, Block::new(BlockId(1)));
-        let hit = raycast_pos(Vec3::new(0.5, 62.0, 0.5), Vec3::ZERO, 5.0, &cache, &registry);
+        let hit = raycast_pos(
+            Vec3::new(0.5, 62.0, 0.5),
+            Vec3::ZERO,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert!(hit.is_none());
     }
 
@@ -288,7 +362,13 @@ mod tests {
     fn raycast_skips_unloaded_chunks() {
         let registry = make_registry();
         let cache = ChunkCache::new();
-        let hit = raycast_pos(Vec3::new(0.5, 62.0, 0.5), Vec3::NEG_Y, 5.0, &cache, &registry);
+        let hit = raycast_pos(
+            Vec3::new(0.5, 62.0, 0.5),
+            Vec3::NEG_Y,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert!(hit.is_none());
     }
 
@@ -312,7 +392,13 @@ mod tests {
     fn raycast_hits_block_in_negative_direction() {
         let registry = make_registry();
         let cache = cache_with_block(2, 64, 0, Block::new(BlockId(1)));
-        let hit = raycast_pos(Vec3::new(5.5, 64.5, 0.5), Vec3::NEG_X, 5.0, &cache, &registry);
+        let hit = raycast_pos(
+            Vec3::new(5.5, 64.5, 0.5),
+            Vec3::NEG_X,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert_eq!(hit, Some(BlockPos::new(2, 64, 0)));
     }
 
@@ -381,7 +467,13 @@ mod tests {
     fn face_top_when_ray_comes_from_above() {
         let registry = make_registry();
         let cache = cache_with_block(0, 60, 0, Block::new(BlockId(1)));
-        let face = raycast_face(Vec3::new(0.5, 62.0, 0.5), Vec3::NEG_Y, 5.0, &cache, &registry);
+        let face = raycast_face(
+            Vec3::new(0.5, 62.0, 0.5),
+            Vec3::NEG_Y,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert_eq!(face, Some(BlockFace::Top));
     }
 
@@ -405,7 +497,13 @@ mod tests {
     fn face_east_when_ray_travels_negative_x() {
         let registry = make_registry();
         let cache = cache_with_block(2, 64, 0, Block::new(BlockId(1)));
-        let face = raycast_face(Vec3::new(5.5, 64.5, 0.5), Vec3::NEG_X, 5.0, &cache, &registry);
+        let face = raycast_face(
+            Vec3::new(5.5, 64.5, 0.5),
+            Vec3::NEG_X,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert_eq!(face, Some(BlockFace::East));
     }
 
@@ -421,7 +519,13 @@ mod tests {
     fn face_south_when_ray_travels_negative_z() {
         let registry = make_registry();
         let cache = cache_with_block(0, 64, 2, Block::new(BlockId(1)));
-        let face = raycast_face(Vec3::new(0.5, 64.5, 5.5), Vec3::NEG_Z, 5.0, &cache, &registry);
+        let face = raycast_face(
+            Vec3::new(0.5, 64.5, 5.5),
+            Vec3::NEG_Z,
+            5.0,
+            &cache,
+            &registry,
+        );
         assert_eq!(face, Some(BlockFace::South));
     }
 
@@ -445,7 +549,9 @@ mod tests {
         app.insert_resource(BlockInteractionConfig::default());
         let mut registry = BlockRegistry::new();
         registry.register_without_event(
-            BlockDefinition::new(BlockId(1), "stone").with_solid(true).with_renderable(true),
+            BlockDefinition::new(BlockId(1), "stone")
+                .with_solid(true)
+                .with_renderable(true),
         );
         app.insert_resource(registry);
 
@@ -482,11 +588,21 @@ mod tests {
             ChildOf(b),
         ));
 
-        app.world_mut().run_system_once(update_targeted_block).unwrap();
+        app.world_mut()
+            .run_system_once(update_targeted_block)
+            .unwrap();
 
         let a_target = app.world().get::<TargetedBlock>(a).unwrap();
         let b_target = app.world().get::<TargetedBlock>(b).unwrap();
-        assert_eq!(a_target.pos, Some(BlockPos::new(3, 64, 0)), "A targets +X block");
-        assert_eq!(b_target.pos, Some(BlockPos::new(0, 64, 3)), "B targets +Z block");
+        assert_eq!(
+            a_target.pos,
+            Some(BlockPos::new(3, 64, 0)),
+            "A targets +X block"
+        );
+        assert_eq!(
+            b_target.pos,
+            Some(BlockPos::new(0, 64, 3)),
+            "B targets +Z block"
+        );
     }
 }

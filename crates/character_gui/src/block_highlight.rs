@@ -52,10 +52,7 @@ impl Default for BlockHighlightConfig {
 ///
 /// Pure function — no ECS access — so the easing curve can be unit-tested
 /// without spinning up an [`App`].
-pub fn break_overlay_for_progress(
-    progress: f32,
-    cfg: &BlockHighlightConfig,
-) -> (Vec3, Color) {
+pub fn break_overlay_for_progress(progress: f32, cfg: &BlockHighlightConfig) -> (Vec3, Color) {
     let p = progress.clamp(0.0, 1.0);
     let scale = cfg.mining_scale_start + (cfg.mining_scale_end - cfg.mining_scale_start) * p;
     let start = cfg.mining_color_start.to_linear();
@@ -83,11 +80,7 @@ pub(crate) fn draw_targeted_block_highlight(
         return;
     };
     let Some(pos) = targeted.pos else { return };
-    let center = Vec3::new(
-        pos.x as f32 + 0.5,
-        pos.y as f32 + 0.5,
-        pos.z as f32 + 0.5,
-    );
+    let center = Vec3::new(pos.x as f32 + 0.5, pos.y as f32 + 0.5, pos.z as f32 + 0.5);
     const EPSILON: f32 = 0.0002;
     let outline_size = Vec3::splat(1.0 + EPSILON * 2.0);
     gizmos.cube(

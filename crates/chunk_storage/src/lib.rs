@@ -68,10 +68,7 @@ fn collect_chunk_responses(
     while let Ok(message) = receiver.0.try_recv() {
         match message {
             ChunkResponse::Loaded(chunk) => {
-                debug!(
-                    "DiskStoragePlugin: loaded chunk at {}",
-                    chunk.position()
-                );
+                debug!("DiskStoragePlugin: loaded chunk at {}", chunk.position());
                 ready.write(ChunkReady { chunk });
             }
             ChunkResponse::Request(pos) => {

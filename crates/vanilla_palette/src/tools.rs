@@ -7,7 +7,9 @@
 //! [`ToolRegistrySet`]: dd40_core::tools::ToolRegistrySet
 
 use bevy::prelude::*;
-use dd40_core::tools::{ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet, ToolTierDefinition, ToolTierId};
+use dd40_core::tools::{
+    ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet, ToolTierDefinition, ToolTierId,
+};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -59,7 +61,10 @@ fn register_vanilla_tools(mut registry: ResMut<ToolRegistry>) {
     // Kinds — ID 0 is the engine "NONE" sentinel, registered by ToolRegistry::new().
     // We overlay it with a human-readable name here.
     registry.register_kind(ToolKindDefinition::new(VanillaToolKinds::HAND, "hand"));
-    registry.register_kind(ToolKindDefinition::new(VanillaToolKinds::PICKAXE, "pickaxe"));
+    registry.register_kind(ToolKindDefinition::new(
+        VanillaToolKinds::PICKAXE,
+        "pickaxe",
+    ));
     registry.register_kind(ToolKindDefinition::new(VanillaToolKinds::AXE, "axe"));
     registry.register_kind(ToolKindDefinition::new(VanillaToolKinds::SHOVEL, "shovel"));
     registry.register_kind(ToolKindDefinition::new(VanillaToolKinds::HOE, "hoe"));
@@ -68,10 +73,22 @@ fn register_vanilla_tools(mut registry: ResMut<ToolRegistry>) {
     // Tiers — ID 0 is the engine "DEFAULT" sentinel, overlaid with "hand".
     registry.register_tier(ToolTierDefinition::new(VanillaToolTiers::HAND, "hand", 1.0));
     registry.register_tier(ToolTierDefinition::new(VanillaToolTiers::WOOD, "wood", 2.0));
-    registry.register_tier(ToolTierDefinition::new(VanillaToolTiers::STONE, "stone", 4.0));
+    registry.register_tier(ToolTierDefinition::new(
+        VanillaToolTiers::STONE,
+        "stone",
+        4.0,
+    ));
     registry.register_tier(ToolTierDefinition::new(VanillaToolTiers::IRON, "iron", 6.0));
-    registry.register_tier(ToolTierDefinition::new(VanillaToolTiers::DIAMOND, "diamond", 8.0));
-    registry.register_tier(ToolTierDefinition::new(VanillaToolTiers::GOLD, "gold", 12.0));
+    registry.register_tier(ToolTierDefinition::new(
+        VanillaToolTiers::DIAMOND,
+        "diamond",
+        8.0,
+    ));
+    registry.register_tier(ToolTierDefinition::new(
+        VanillaToolTiers::GOLD,
+        "gold",
+        12.0,
+    ));
 }
 
 // ── Plugin ────────────────────────────────────────────────────────────────────

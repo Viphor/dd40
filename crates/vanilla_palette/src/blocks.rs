@@ -23,7 +23,10 @@
 
 use bevy::prelude::*;
 use dd40_core::{
-    block::{BlockId, registry::{BlockDefinition, BlockRegistrySet}},
+    block::{
+        BlockId,
+        registry::{BlockDefinition, BlockRegistrySet},
+    },
     prelude::*,
 };
 

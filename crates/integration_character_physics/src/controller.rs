@@ -33,8 +33,7 @@ pub fn apply_character_controller(
         With<PhysicsBody>,
     >,
 ) {
-    for (mut input, controller, speed, grounded, velocity, mut impulse, jump_impulse) in
-        &mut query
+    for (mut input, controller, speed, grounded, velocity, mut impulse, jump_impulse) in &mut query
     {
         let effective_speed = speed.0
             * if input.sprint {

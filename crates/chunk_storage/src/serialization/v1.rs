@@ -30,9 +30,7 @@ use dd40_core::prelude::*;
 
 use crate::serialization::ChunkSerializeError;
 
-use super::{
-    deserialize_rle_blocks, read_u64, serialize_rle_blocks,
-};
+use super::{deserialize_rle_blocks, read_u64, serialize_rle_blocks};
 
 /// Serializes the body of `chunk` (RLE blocks + chunk version).
 ///

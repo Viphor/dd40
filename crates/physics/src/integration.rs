@@ -153,9 +153,9 @@ impl Plugin for IntegrationPlugin {
 mod tests {
     use super::*;
     use crate::plugin::PhysicsPlugin;
+    use bevy::time::TimeUpdateStrategy;
     use dd40_core::block::BlockRegistry;
     use dd40_core::chunk::cache::ChunkCache;
-    use bevy::time::TimeUpdateStrategy;
 
     fn make_app(dt_secs: f32) -> App {
         use bevy::time::Fixed;

@@ -33,10 +33,7 @@ use dd40_character_core::face::{CameraRotation, CharacterFace};
 /// Skips faces whose parent is missing or is not a [`Character`].
 pub(crate) fn drive_face_from_input(
     character_query: Query<&CharacterInput, (With<Character>, Without<Player>)>,
-    mut face_query: Query<
-        (&mut Transform, &mut CameraRotation, &ChildOf),
-        With<CharacterFace>,
-    >,
+    mut face_query: Query<(&mut Transform, &mut CameraRotation, &ChildOf), With<CharacterFace>>,
 ) {
     for (mut transform, mut rotation, child_of) in &mut face_query {
         let Ok(input) = character_query.get(child_of.parent()) else {
@@ -44,8 +41,7 @@ pub(crate) fn drive_face_from_input(
         };
         rotation.pitch = input.pitch;
         rotation.yaw = input.yaw;
-        transform.rotation =
-            Quat::from_euler(EulerRot::YXZ, input.yaw, input.pitch, 0.0);
+        transform.rotation = Quat::from_euler(EulerRot::YXZ, input.yaw, input.pitch, 0.0);
     }
 }
 
@@ -66,7 +62,11 @@ mod tests {
         let mut app = build_app();
         let face = app
             .world_mut()
-            .spawn((CharacterFace::default(), CameraRotation::default(), Transform::default()))
+            .spawn((
+                CharacterFace::default(),
+                CameraRotation::default(),
+                Transform::default(),
+            ))
             .id();
         let body = app
             .world_mut()
@@ -94,7 +94,11 @@ mod tests {
         let mut app = build_app();
         let face = app
             .world_mut()
-            .spawn((CharacterFace::default(), CameraRotation::default(), Transform::default()))
+            .spawn((
+                CharacterFace::default(),
+                CameraRotation::default(),
+                Transform::default(),
+            ))
             .id();
         let body = app
             .world_mut()

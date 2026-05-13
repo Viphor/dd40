@@ -125,8 +125,7 @@ pub(crate) fn step_mining(
                     mine: None,
                 };
             }
-            let new_progress =
-                (progress + delta_secs / required_duration).clamp(0.0, 1.0);
+            let new_progress = (progress + delta_secs / required_duration).clamp(0.0, 1.0);
             if new_progress >= 1.0 {
                 MiningStep {
                     next_state: MiningState::Idle,
@@ -211,10 +210,7 @@ pub(crate) fn update_mining(
                     pos, chunk_pos, local
                 );
                 if !cache.push_predicted(chunk_pos, ChunkChange::new_remove(local)) {
-                    debug!(
-                        "Removal dropped — chunk {} not present in cache",
-                        chunk_pos
-                    );
+                    debug!("Removal dropped — chunk {} not present in cache", chunk_pos);
                 }
             } else {
                 warn!(
@@ -283,7 +279,13 @@ mod tests {
     #[test]
     fn idle_with_attack_true_breakable_target_starts_mining() {
         let pos = BlockPos::new(1, 2, 3);
-        let s = step_mining(MiningState::Idle, &target(Some(pos)), true, 0.016, breakable);
+        let s = step_mining(
+            MiningState::Idle,
+            &target(Some(pos)),
+            true,
+            0.016,
+            breakable,
+        );
         let MiningState::Mining {
             pos: p,
             progress,
@@ -309,7 +311,13 @@ mod tests {
     #[test]
     fn idle_with_unbreakable_target_stays_idle() {
         let pos = BlockPos::new(0, 0, 0);
-        let s = step_mining(MiningState::Idle, &target(Some(pos)), true, 0.016, unbreakable);
+        let s = step_mining(
+            MiningState::Idle,
+            &target(Some(pos)),
+            true,
+            0.016,
+            unbreakable,
+        );
         assert!(matches!(s.next_state, MiningState::Idle));
         assert_eq!(s.mine, None);
     }
@@ -383,7 +391,13 @@ mod tests {
         let s1 = step_mining(state, &target(Some(new_target)), true, 0.016, breakable);
         assert!(matches!(s1.next_state, MiningState::Idle));
         // Tick 2: now Idle + attack still held + new target → start.
-        let s2 = step_mining(s1.next_state, &target(Some(new_target)), true, 0.016, breakable);
+        let s2 = step_mining(
+            s1.next_state,
+            &target(Some(new_target)),
+            true,
+            0.016,
+            breakable,
+        );
         let MiningState::Mining { pos, .. } = s2.next_state else {
             panic!("expected Mining on new target");
         };
@@ -404,7 +418,13 @@ mod tests {
         assert_eq!(s1.mine, Some(pos));
         assert!(matches!(s1.next_state, MiningState::Idle));
         // Tick 2: still holding attack on a different target → starts fresh.
-        let s2 = step_mining(s1.next_state, &target(Some(new_target)), true, 0.016, breakable);
+        let s2 = step_mining(
+            s1.next_state,
+            &target(Some(new_target)),
+            true,
+            0.016,
+            breakable,
+        );
         let MiningState::Mining { pos: p, .. } = s2.next_state else {
             panic!("expected Mining on new target");
         };

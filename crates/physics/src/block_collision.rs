@@ -25,8 +25,8 @@
 use bevy::prelude::*;
 
 use dd40_core::{
-    block::{Block, BlockPos, CollisionShape},
     block::registry::BlockRegistry,
+    block::{Block, BlockPos, CollisionShape},
     chunk::cache::ChunkCache,
 };
 use dd40_physics_core::prelude::*;
@@ -183,13 +183,7 @@ fn sweep_axis(
                 trace!(
                     "block_collision: {:?} sweep — candidate block id={} at {:?} \
                      (world aabb {:.3?}..{:.3?}), entity {:.3?}..{:.3?}",
-                    axis,
-                    block.block_id.0,
-                    block_pos,
-                    baabb.min,
-                    baabb.max,
-                    e_min,
-                    e_max,
+                    axis, block.block_id.0, block_pos, baabb.min, baabb.max, e_min, e_max,
                 );
 
                 let (block_face, entity_face) = if moving_positive {
@@ -429,11 +423,11 @@ impl Plugin for BlockCollisionPlugin {
 mod tests {
     use super::*;
     use crate::plugin::PhysicsPlugin;
+    use bevy::time::TimeUpdateStrategy;
     use dd40_core::{
         block::{Block, BlockDefinition, BlockId},
         chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, Chunk, ChunkPos, cache::ChunkCache},
     };
-    use bevy::time::TimeUpdateStrategy;
 
     // ------------------------------------------------------------------
     // Test helpers
@@ -529,7 +523,10 @@ mod tests {
         tick(&mut app);
 
         let grounded = app.world().get::<Grounded>(entity).unwrap();
-        assert!(grounded.0, "entity should be grounded after landing on floor");
+        assert!(
+            grounded.0,
+            "entity should be grounded after landing on floor"
+        );
     }
 
     #[test]
@@ -546,7 +543,10 @@ mod tests {
         tick(&mut app);
 
         let grounded = app.world().get::<Grounded>(entity).unwrap();
-        assert!(!grounded.0, "entity should not be grounded while moving upward");
+        assert!(
+            !grounded.0,
+            "entity should not be grounded while moving upward"
+        );
     }
 
     #[test]
@@ -661,7 +661,10 @@ mod tests {
         let pos = BlockPos::new(0, 0, 0);
         let block = Block::new(BlockId(3));
         let aabb = block_world_aabb(pos, block, &registry);
-        assert!(aabb.is_none(), "CollisionShape::None should suppress collision");
+        assert!(
+            aabb.is_none(),
+            "CollisionShape::None should suppress collision"
+        );
     }
 
     #[test]
@@ -695,7 +698,10 @@ mod tests {
         );
 
         let grounded = app.world().get::<Grounded>(entity).unwrap();
-        assert!(!grounded.0, "entity should not be spuriously grounded with no blocks present");
+        assert!(
+            !grounded.0,
+            "entity should not be spuriously grounded with no blocks present"
+        );
     }
 
     #[test]
@@ -913,7 +919,10 @@ mod tests {
         );
 
         let grounded = app.world().get::<Grounded>(entity).unwrap();
-        assert!(grounded.0, "entity should be grounded on floor in non-zero-y chunk");
+        assert!(
+            grounded.0,
+            "entity should be grounded on floor in non-zero-y chunk"
+        );
     }
 
     #[test]

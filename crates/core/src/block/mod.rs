@@ -1,4 +1,6 @@
-use bevy::{ecs::component::Component, math::Vec3, reflect::Reflect, transform::components::Transform};
+use bevy::{
+    ecs::component::Component, math::Vec3, reflect::Reflect, transform::components::Transform,
+};
 use serde::{Deserialize, Serialize};
 
 pub mod registry;

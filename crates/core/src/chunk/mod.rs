@@ -19,9 +19,8 @@ pub mod config;
 pub mod events;
 
 pub use authority::{
-    ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkAuthoritySet,
-    PendingChunkRejections, RejectReason, commit_predicted_changes,
-    default_block_registry_validator,
+    ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkAuthoritySet, PendingChunkRejections,
+    RejectReason, commit_predicted_changes, default_block_registry_validator,
 };
 pub use change::{BlockLocal, ChunkChange};
 pub use config::MaxDeltaBehind;
@@ -411,7 +410,8 @@ impl Chunk {
         let mut committed = Vec::with_capacity(self.predicted.len());
         while let Some(entry) = self.predicted.pop_front() {
             self.version += 1;
-            self.confirmed_history.push_back((self.version, entry.change));
+            self.confirmed_history
+                .push_back((self.version, entry.change));
             committed.push((self.version, entry.change));
         }
         committed
@@ -448,11 +448,7 @@ impl Chunk {
     /// is bumped per change. Matching predictions are **not** removed
     /// here; the network reconciliation system handles that so it can
     /// emit `PredictionRejected` for the leftovers.
-    pub fn apply_confirmed_changes(
-        &mut self,
-        base_version: u64,
-        changes: &[ChunkChange],
-    ) -> bool {
+    pub fn apply_confirmed_changes(&mut self, base_version: u64, changes: &[ChunkChange]) -> bool {
         if base_version != self.version {
             return false;
         }
@@ -498,7 +494,11 @@ impl Chunk {
     /// Out-of-range writes are silently dropped (mirrors [`Chunk::set`]).
     fn apply_change_to_data(&mut self, change: &ChunkChange) {
         match *change {
-            ChunkChange::Place { local, block_id } | ChunkChange::Replace { local, new_block: block_id } => {
+            ChunkChange::Place { local, block_id }
+            | ChunkChange::Replace {
+                local,
+                new_block: block_id,
+            } => {
                 self.set_local(local, Block::new(block_id));
             }
             ChunkChange::Remove { local } => {
@@ -547,11 +547,7 @@ mod tests {
         // Roundtrip across positive, negative, and chunk-boundary chunks.
         for (cx, cz) in [(0, 0), (3, -2), (-5, -7), (12345, -67890)] {
             let chunk_pos = ChunkPos::new(cx, 0, cz);
-            for (lx, ly, lz) in [
-                (0u8, 0u16, 0u8),
-                (15, 255, 15),
-                (7, 64, 11),
-            ] {
+            for (lx, ly, lz) in [(0u8, 0u16, 0u8), (15, 255, 15), (7, 64, 11)] {
                 let local = BlockLocal::new(lx, ly, lz);
                 let world = chunk_pos.block_pos(local);
                 assert_eq!(world.chunk_pos(), chunk_pos);

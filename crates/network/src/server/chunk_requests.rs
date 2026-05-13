@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use bevy::{platform::collections::HashSet, prelude::*};
 use dd40_core::prelude::*;
-use lightyear::prelude::{LinkOf, MessageReceiver, MessageSender, ReplicationSender, SendUpdatesMode};
+use lightyear::prelude::{
+    LinkOf, MessageReceiver, MessageSender, ReplicationSender, SendUpdatesMode,
+};
 
 use crate::protocol::{ChunkSnapshot, ChunkUpdate, PlayerSpawnLocation, RequestSpawn};
 

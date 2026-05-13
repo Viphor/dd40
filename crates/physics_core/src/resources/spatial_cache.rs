@@ -283,7 +283,9 @@ mod tests {
 
         for (cx, cz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
             assert!(
-                cache.entities_in_chunk(ChunkPos::new(cx, 0, cz)).contains(&e),
+                cache
+                    .entities_in_chunk(ChunkPos::new(cx, 0, cz))
+                    .contains(&e),
                 "entity should appear in chunk ({cx},{cz})"
             );
         }
@@ -349,11 +351,15 @@ mod tests {
 
         assert_eq!(cache.registration_count(), 1);
         assert!(
-            !cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&old),
+            !cache
+                .entities_in_chunk(ChunkPos::new(0, 0, 0))
+                .contains(&old),
             "old entity should have been cleared by rebuild"
         );
         assert!(
-            cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&new),
+            cache
+                .entities_in_chunk(ChunkPos::new(0, 0, 0))
+                .contains(&new),
             "new entity should be present after rebuild"
         );
     }
@@ -367,7 +373,9 @@ mod tests {
         cache.rebuild(std::iter::once((e, Vec3::new(-4.0, 0.0, -4.0), &aabb)));
 
         assert!(
-            cache.entities_in_chunk(ChunkPos::new(-1, 0, -1)).contains(&e),
+            cache
+                .entities_in_chunk(ChunkPos::new(-1, 0, -1))
+                .contains(&e),
             "entity at negative coords should map to chunk (-1,-1)"
         );
     }

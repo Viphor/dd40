@@ -1,5 +1,5 @@
-pub mod bundles;
 pub mod builder;
+pub mod bundles;
 pub mod components;
 pub mod controller;
 pub mod face;

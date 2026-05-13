@@ -103,8 +103,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::prelude::*;
     use bevy::ecs::system::{EntityCommands, RunSystemOnce};
+    use bevy::prelude::*;
 
     /// Tiny test-only builder so the physics_core tests don't depend on
     /// `dd40_character_core`. It only carries the bare minimum the

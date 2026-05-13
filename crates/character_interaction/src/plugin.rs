@@ -8,13 +8,13 @@ use dd40_item_core::plugin::ItemCorePlugin;
 use crate::face_drive::drive_face_from_input;
 use crate::interact::try_interact;
 use crate::mining::update_mining;
-pub use dd40_character_core::mining_state::MiningState;
-pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
 use crate::placement::try_place_block;
 use crate::targeting::{
     BlockInteractionConfig, spawn_debug_entity, update_debug_info, update_targeted_block,
 };
 use crate::validators::character_collision_validator;
+pub use dd40_character_core::mining_state::MiningState;
+pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
 use dd40_core::chunk::ChunkAuthorityAppExt;
 
 /// Plugin that adds block-targeting, highlight rendering, placement, and

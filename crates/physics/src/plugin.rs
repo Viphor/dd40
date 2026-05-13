@@ -23,7 +23,11 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
-        app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, CharacterCollisionPlugin));
+        app.add_plugins((
+            IntegrationPlugin,
+            BlockCollisionPlugin,
+            CharacterCollisionPlugin,
+        ));
         app.add_observer(on_physics_body_added);
     }
 }

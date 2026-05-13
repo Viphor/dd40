@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use bevy::ecs::system::EntityCommands;
+use bevy::prelude::*;
 use dd40_core::builder_extra::AddExtra;
 
 use crate::{
@@ -171,11 +171,7 @@ impl CharacterBuilder {
     pub fn spawn<'c>(self, commands: &'c mut Commands) -> EntityCommands<'c> {
         let face_offset = self.face_offset;
         let extras = self.extras;
-        let body_bundle = CharacterBundle::new(
-            self.name,
-            self.movement_speed,
-            self.transform,
-        );
+        let body_bundle = CharacterBundle::new(self.name, self.movement_speed, self.transform);
         let mut entity = commands.spawn(body_bundle);
         for extra in extras {
             extra(&mut entity);
@@ -187,10 +183,7 @@ impl CharacterBuilder {
     /// Attaches the character's body bundle and a face child to an
     /// already-spawned entity. Useful when something else (e.g. lightyear's
     /// `Predicted` observer) created the entity for you.
-    pub fn attach<'a, 'c>(
-        self,
-        entity: &'a mut EntityCommands<'c>,
-    ) -> &'a mut EntityCommands<'c> {
+    pub fn attach<'a, 'c>(self, entity: &'a mut EntityCommands<'c>) -> &'a mut EntityCommands<'c> {
         let face_offset = self.face_offset;
         let extras = self.extras;
         entity.insert(CharacterBundle::new(
@@ -259,9 +252,11 @@ mod tests {
     #[test]
     fn spawn_creates_body_and_face_child_with_default_offset() {
         let mut app = make_app();
-        app.world_mut().run_system_once(|mut commands: Commands| {
-            CharacterBuilder::new("Hero").spawn(&mut commands);
-        }).unwrap();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                CharacterBuilder::new("Hero").spawn(&mut commands);
+            })
+            .unwrap();
 
         let mut bodies = app.world_mut().query_filtered::<Entity, With<Character>>();
         let body = bodies
@@ -298,16 +293,21 @@ mod tests {
     fn face_offset_override_propagates_to_face_child() {
         let mut app = make_app();
         let custom = Vec3::new(0.0, 2.4, 0.1);
-        app.world_mut().run_system_once(move |mut commands: Commands| {
-            CharacterBuilder::new("Tall").face_offset(custom).spawn(&mut commands);
-        }).unwrap();
+        app.world_mut()
+            .run_system_once(move |mut commands: Commands| {
+                CharacterBuilder::new("Tall")
+                    .face_offset(custom)
+                    .spawn(&mut commands);
+            })
+            .unwrap();
 
         let mut faces = app.world_mut().query::<&CharacterFace>();
         let face = faces.iter(app.world()).next().expect("face spawned");
         assert_eq!(face.offset, custom);
 
-        let mut transforms =
-            app.world_mut().query_filtered::<&Transform, With<CharacterFace>>();
+        let mut transforms = app
+            .world_mut()
+            .query_filtered::<&Transform, With<CharacterFace>>();
         let t = transforms.iter(app.world()).next().unwrap();
         assert_eq!(t.translation, custom);
     }
@@ -368,11 +368,15 @@ mod tests {
         let mut app = make_app();
         app.world_mut()
             .run_system_once(|mut commands: Commands| {
-                CharacterBuilder::new("Local").with_player().spawn(&mut commands);
+                CharacterBuilder::new("Local")
+                    .with_player()
+                    .spawn(&mut commands);
             })
             .unwrap();
 
-        let mut q = app.world_mut().query_filtered::<Entity, (With<Character>, With<Player>)>();
+        let mut q = app
+            .world_mut()
+            .query_filtered::<Entity, (With<Character>, With<Player>)>();
         assert_eq!(
             q.iter(app.world()).count(),
             1,
@@ -432,7 +436,9 @@ mod tests {
             })
             .unwrap();
 
-        let mut q = app.world_mut().query_filtered::<Entity, With<CharacterInput>>();
+        let mut q = app
+            .world_mut()
+            .query_filtered::<Entity, With<CharacterInput>>();
         assert_eq!(
             q.iter(app.world()).count(),
             0,
@@ -471,10 +477,12 @@ mod tests {
         let mut app = make_app();
         let preexisting = app.world_mut().spawn_empty().id();
 
-        app.world_mut().run_system_once(move |mut commands: Commands| {
-            let mut e = commands.entity(preexisting);
-            CharacterBuilder::new("Predicted").attach(&mut e);
-        }).unwrap();
+        app.world_mut()
+            .run_system_once(move |mut commands: Commands| {
+                let mut e = commands.entity(preexisting);
+                CharacterBuilder::new("Predicted").attach(&mut e);
+            })
+            .unwrap();
 
         assert!(
             app.world().get::<Character>(preexisting).is_some(),

@@ -41,8 +41,7 @@ pub(crate) fn receive_chunk_requests(
         &mut ChunkRequests,
     )>,
 ) {
-    for (mut receiver, mut snapshot_sender, mut update_sender, mut pending) in
-        receivers.iter_mut()
+    for (mut receiver, mut snapshot_sender, mut update_sender, mut pending) in receivers.iter_mut()
     {
         if receiver.has_messages() {
             trace!("Receiving chunk requests from client");
@@ -75,14 +74,14 @@ pub(crate) fn receive_chunk_requests(
                     "Client claims chunk {} version {} > server {} — sending snapshot to resync",
                     request.pos, client_version, server_version
                 );
-                snapshot_sender.send::<ChunkChannel>(ChunkSnapshot { chunk: chunk.clone() });
+                snapshot_sender.send::<ChunkChannel>(ChunkSnapshot {
+                    chunk: chunk.clone(),
+                });
                 continue;
             }
 
             // Client is behind. Try to deliver a delta if it's within window.
-            let within_window = client_version
-                .saturating_add(max_delta.0 as u64)
-                >= server_version;
+            let within_window = client_version.saturating_add(max_delta.0 as u64) >= server_version;
             let delta = if within_window {
                 chunk.history_since(client_version)
             } else {
@@ -91,10 +90,7 @@ pub(crate) fn receive_chunk_requests(
 
             match delta {
                 Some(history) if !history.is_empty() => {
-                    let new_version = history
-                        .last()
-                        .map(|(v, _)| *v)
-                        .unwrap_or(server_version);
+                    let new_version = history.last().map(|(v, _)| *v).unwrap_or(server_version);
                     let changes: Vec<_> = history.into_iter().map(|(_, c)| c).collect();
                     trace!(
                         "Sending {} delta change(s) for chunk {} ({} -> {})",
@@ -114,7 +110,9 @@ pub(crate) fn receive_chunk_requests(
                     // history_since returned empty despite version mismatch
                     // — defensive fallback (shouldn't happen if version
                     // arithmetic is correct).
-                    snapshot_sender.send::<ChunkChannel>(ChunkSnapshot { chunk: chunk.clone() });
+                    snapshot_sender.send::<ChunkChannel>(ChunkSnapshot {
+                        chunk: chunk.clone(),
+                    });
                 }
                 None => {
                     snapshot_fallback.write(ChunkSnapshotFallback {
@@ -126,7 +124,9 @@ pub(crate) fn receive_chunk_requests(
                         "Falling back to snapshot for chunk {} (client {} server {})",
                         request.pos, client_version, server_version
                     );
-                    snapshot_sender.send::<ChunkChannel>(ChunkSnapshot { chunk: chunk.clone() });
+                    snapshot_sender.send::<ChunkChannel>(ChunkSnapshot {
+                        chunk: chunk.clone(),
+                    });
                 }
             }
         }

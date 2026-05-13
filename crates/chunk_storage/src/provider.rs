@@ -101,12 +101,12 @@ impl DiskChunkProvider {
             std::fs::create_dir_all(parent)?;
         }
         let file = std::fs::File::create(&path)?;
-        serialize_chunk_versioned(chunk, std::io::BufWriter::new(file), version).map_err(|e| {
-            match e {
+        serialize_chunk_versioned(chunk, std::io::BufWriter::new(file), version).map_err(
+            |e| match e {
                 ChunkSerializeError::Io(io_err) => io_err,
                 other => Error::new(ErrorKind::Other, other.to_string()),
-            }
-        })
+            },
+        )
     }
 
     pub(crate) fn request(&self, pos: ChunkPos, sender: crossbeam_channel::Sender<ChunkResponse>) {
@@ -142,8 +142,8 @@ impl DiskChunkProvider {
 mod tests {
     use super::*;
     use crate::serialization::deserialize_chunk;
-    use dd40_core::prelude::*;
     use dd40_core::chunk::change::ChunkChange;
+    use dd40_core::prelude::*;
     use std::io::{BufReader, Read};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -223,7 +223,8 @@ mod tests {
         provider.save(&chunk).unwrap();
 
         let path = dir.join(format!("chunk_{}_{}_{}.bin", pos.x, pos.y, pos.z));
-        let restored = deserialize_chunk(BufReader::new(std::fs::File::open(&path).unwrap())).unwrap();
+        let restored =
+            deserialize_chunk(BufReader::new(std::fs::File::open(&path).unwrap())).unwrap();
         assert_eq!(restored.version(), 5, "version preserved under V1");
         assert!(
             restored.confirmed_history().is_empty(),
@@ -240,7 +241,8 @@ mod tests {
         provider.save(&chunk).unwrap();
 
         let path = dir.join(format!("chunk_{}_{}_{}.bin", pos.x, pos.y, pos.z));
-        let restored = deserialize_chunk(BufReader::new(std::fs::File::open(&path).unwrap())).unwrap();
+        let restored =
+            deserialize_chunk(BufReader::new(std::fs::File::open(&path).unwrap())).unwrap();
         assert_eq!(restored.version(), 5);
         let restored_hist: Vec<_> = restored.confirmed_history().iter().copied().collect();
         let original_hist: Vec<_> = chunk.confirmed_history().iter().copied().collect();

@@ -234,7 +234,11 @@ fn neighbour_is_transparent(
         (cp.z, nz as usize)
     };
 
-    let neighbour_pos = ChunkPos { x: ncx, y: cp.y, z: ncz };
+    let neighbour_pos = ChunkPos {
+        x: ncx,
+        y: cp.y,
+        z: ncz,
+    };
 
     match cache.get(&neighbour_pos) {
         Some(neighbour_chunk) => {

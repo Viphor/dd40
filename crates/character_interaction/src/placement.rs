@@ -141,8 +141,7 @@ pub(crate) fn try_place_block(
                 return None;
             }
             let chunk = cache.get(&chunk_pos)?;
-            let existing =
-                chunk.get(local.x as usize, local.y as usize, local.z as usize)?;
+            let existing = chunk.get(local.x as usize, local.y as usize, local.z as usize)?;
             Some(registry.is_replaceable(&existing))
         };
 
@@ -219,12 +218,9 @@ mod tests {
 
     #[test]
     fn place_true_no_target_emits_nothing() {
-        let s = step_placement(
-            true,
-            &TargetedBlock::default(),
-            Some(BlockId(5)),
-            |_| Some(true),
-        );
+        let s = step_placement(true, &TargetedBlock::default(), Some(BlockId(5)), |_| {
+            Some(true)
+        });
         assert!(s.place.is_none());
     }
 

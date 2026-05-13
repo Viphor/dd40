@@ -68,9 +68,7 @@ use bevy::prelude::*;
 
 use crate::block::BlockRegistry;
 use crate::chunk::{
-    ChunkChange, ChunkPos, PredictedChange,
-    cache::ChunkCache,
-    events::ChunkChanged,
+    ChunkChange, ChunkPos, PredictedChange, cache::ChunkCache, events::ChunkChanged,
 };
 
 /// Why a predicted change was rejected.
@@ -148,7 +146,9 @@ impl PendingChunkRejections {
     }
 
     /// Drain the entire rejection map, leaving it empty.
-    pub fn drain(&mut self) -> bevy::platform::collections::hash_map::Drain<'_, (ChunkPos, usize), RejectReason> {
+    pub fn drain(
+        &mut self,
+    ) -> bevy::platform::collections::hash_map::Drain<'_, (ChunkPos, usize), RejectReason> {
         self.rejections.drain()
     }
 }
@@ -579,19 +579,13 @@ mod tests {
     fn first_rejection_wins() {
         // Two custom validators reject the same prediction with
         // different reasons. The first one's reason must be kept.
-        fn reject_with_a(
-            cache: Res<ChunkCache>,
-            mut pending: ResMut<PendingChunkRejections>,
-        ) {
+        fn reject_with_a(cache: Res<ChunkCache>, mut pending: ResMut<PendingChunkRejections>) {
             let dirty: Vec<ChunkPos> = cache.dirty_chunks().copied().collect();
             for pos in dirty {
                 pending.reject(pos, 0, RejectReason::custom("validator-A"));
             }
         }
-        fn reject_with_b(
-            cache: Res<ChunkCache>,
-            mut pending: ResMut<PendingChunkRejections>,
-        ) {
+        fn reject_with_b(cache: Res<ChunkCache>, mut pending: ResMut<PendingChunkRejections>) {
             let dirty: Vec<ChunkPos> = cache.dirty_chunks().copied().collect();
             for pos in dirty {
                 pending.reject(pos, 0, RejectReason::custom("validator-B"));

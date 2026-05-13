@@ -38,8 +38,7 @@ impl Plugin for PlayerInputPlugin {
             ItemCorePlugin
         );
 
-        let playing_and_running =
-            in_state(AppState::Playing).and(in_state(GameState::Running));
+        let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
 
         app.init_state::<PlayerMode>()
             .register_type::<PlayerMode>()
@@ -57,8 +56,7 @@ impl Plugin for PlayerInputPlugin {
             .add_systems(Update, add_debug_info)
             .add_systems(
                 Update,
-                (mouse_look, toggle_player_mode)
-                    .run_if(playing_and_running.clone()),
+                (mouse_look, toggle_player_mode).run_if(playing_and_running.clone()),
             )
             .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)))
             // ── FreeCam mode entry — clear stale interaction state ────
@@ -80,8 +78,7 @@ impl Plugin for PlayerInputPlugin {
             // ── Update — FreeCam mode only ────────────────────────────
             .add_systems(
                 Update,
-                free_cam_movement
-                    .run_if(playing_and_running.and(in_state(PlayerMode::FreeCam))),
+                free_cam_movement.run_if(playing_and_running.and(in_state(PlayerMode::FreeCam))),
             );
     }
 }
