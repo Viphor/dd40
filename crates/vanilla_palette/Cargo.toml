@@ -1,7 +1,8 @@
 [package]
 name = "dd40_vanilla_palette"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 
 [dependencies]
 dd40_core = { workspace = true }

@@ -1,7 +1,8 @@
 [package]
 name = "dd40_character_interaction"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 
 [dependencies]
 bevy = { workspace = true, default-features = false, features = ["bevy_gizmos"] }

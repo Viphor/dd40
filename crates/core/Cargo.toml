@@ -1,7 +1,8 @@
 [package]
 name = "dd40_core"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 
 [features]
 ## Enables DEBUG-level logging in `log_plugin()` instead of the default INFO level.
