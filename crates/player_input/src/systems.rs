@@ -24,10 +24,7 @@ use crate::state::PlayerMode;
 /// [`sync_camera_to_face`] copies the face's `GlobalTransform` onto the
 /// camera each frame.
 pub(crate) fn setup_camera(mut commands: Commands) {
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(0.0, 64.0, 0.0),
-    ));
+    commands.spawn((Camera3d::default(), Transform::from_xyz(0.0, 64.0, 0.0)));
 }
 
 // ---------------------------------------------------------------------------
@@ -109,12 +106,10 @@ pub(crate) fn player_input(
     // Find the local player's face by walking up to the parent and
     // checking for the `Player` marker.
     let Some((face_global, rotation, character_entity)) =
-        face_query
-            .iter()
-            .find_map(|(gt, rot, child_of)| {
-                let parent = child_of.parent();
-                player_query.get(parent).ok().map(|_| (gt, rot, parent))
-            })
+        face_query.iter().find_map(|(gt, rot, child_of)| {
+            let parent = child_of.parent();
+            player_query.get(parent).ok().map(|_| (gt, rot, parent))
+        })
     else {
         return;
     };
@@ -308,7 +303,7 @@ mod tests {
 
         let e = spawn_player(
             &mut app,
-            Some(ActiveItem(Some(ItemStack::new(ItemId(1), 1)))),
+            Some(ActiveItem(Some(ItemStack::single(ItemId(1))))),
         );
         press(&mut app, MouseButton::Right);
         app.update();
@@ -322,14 +317,13 @@ mod tests {
         let mut app = make_app();
         {
             let mut registry = app.world_mut().resource_mut::<ItemRegistry>();
-            registry.register(
-                ItemDefinition::new(ItemId(2), "test_block").with_placeable(BlockId(42)),
-            );
+            registry
+                .register(ItemDefinition::new(ItemId(2), "test_block").with_placeable(BlockId(42)));
         }
 
         let e = spawn_player(
             &mut app,
-            Some(ActiveItem(Some(ItemStack::new(ItemId(2), 1)))),
+            Some(ActiveItem(Some(ItemStack::single(ItemId(2))))),
         );
         press(&mut app, MouseButton::Right);
         app.update();
@@ -346,7 +340,10 @@ mod tests {
         press(&mut app, MouseButton::Right);
         app.update();
         // Reset interact (the interaction layer would normally do this).
-        app.world_mut().get_mut::<CharacterInput>(e).unwrap().interact = false;
+        app.world_mut()
+            .get_mut::<CharacterInput>(e)
+            .unwrap()
+            .interact = false;
         // Tick 2: still pressed but no longer just_pressed → no fire.
         app.world_mut()
             .resource_mut::<ButtonInput<MouseButton>>()
@@ -463,14 +460,12 @@ pub(crate) fn mouse_look(
     }
 
     let Some((mut transform, mut rotation, sensitivity)) =
-        face_query
-            .iter_mut()
-            .find_map(|(t, r, s, child_of)| {
-                player_query
-                    .get(child_of.parent())
-                    .ok()
-                    .map(|_| (t, r, s.copied()))
-            })
+        face_query.iter_mut().find_map(|(t, r, s, child_of)| {
+            player_query
+                .get(child_of.parent())
+                .ok()
+                .map(|_| (t, r, s.copied()))
+        })
     else {
         return;
     };
@@ -502,12 +497,9 @@ pub(crate) fn sync_camera_to_face(
     player_query: Query<(), With<Player>>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
 ) {
-    let Some(face_global) =
-        face_query
-            .iter()
-            .find_map(|(gt, child_of)| {
-                player_query.get(child_of.parent()).ok().map(|_| gt)
-            })
+    let Some(face_global) = face_query
+        .iter()
+        .find_map(|(gt, child_of)| player_query.get(child_of.parent()).ok().map(|_| gt))
     else {
         return;
     };
@@ -524,10 +516,7 @@ pub(crate) fn sync_camera_to_face(
 // ---------------------------------------------------------------------------
 
 /// Inserts a [`DebugInfo`] panel on newly-spawned player entities.
-pub(crate) fn add_debug_info(
-    mut commands: Commands,
-    player_query: Query<Entity, Added<Player>>,
-) {
+pub(crate) fn add_debug_info(mut commands: Commands, player_query: Query<Entity, Added<Player>>) {
     use bevy::color::palettes::basic::YELLOW;
     for player_entity in player_query.iter() {
         commands.entity(player_entity).insert(

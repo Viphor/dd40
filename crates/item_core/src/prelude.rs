@@ -7,6 +7,4 @@
 pub use crate::active_item::{ActiveItem, ItemStack};
 pub use crate::messages::{ActiveItemChanged, ItemSelector, RequestActiveItem};
 pub use crate::plugin::ItemCorePlugin;
-pub use crate::registry::{
-    ItemDefinition, ItemId, ItemRegistry, ItemRegistrySet, ToolBehavior,
-};
+pub use crate::registry::{ItemDefinition, ItemId, ItemRegistry, ItemRegistrySet, ToolBehavior};

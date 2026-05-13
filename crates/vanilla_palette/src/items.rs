@@ -18,6 +18,8 @@
 //!
 //! [`ItemRegistrySet`]: dd40_item_core::registry::ItemRegistrySet
 
+use std::num::NonZero;
+
 use bevy::prelude::*;
 use dd40_core::ensure_plugins;
 use dd40_item_core::plugin::ItemCorePlugin;
@@ -128,11 +130,23 @@ const TOOL_TIERS: [(&str, dd40_core::tools::ToolTierId); 5] = [
 ];
 
 const TOOL_KINDS: [(&str, dd40_core::tools::ToolKindId, ItemId); 5] = [
-    ("pickaxe", VanillaToolKinds::PICKAXE, VanillaItems::WOODEN_PICKAXE),
+    (
+        "pickaxe",
+        VanillaToolKinds::PICKAXE,
+        VanillaItems::WOODEN_PICKAXE,
+    ),
     ("axe", VanillaToolKinds::AXE, VanillaItems::WOODEN_AXE),
-    ("shovel", VanillaToolKinds::SHOVEL, VanillaItems::WOODEN_SHOVEL),
+    (
+        "shovel",
+        VanillaToolKinds::SHOVEL,
+        VanillaItems::WOODEN_SHOVEL,
+    ),
     ("hoe", VanillaToolKinds::HOE, VanillaItems::WOODEN_HOE),
-    ("shears", VanillaToolKinds::SHEARS, VanillaItems::WOODEN_SHEARS),
+    (
+        "shears",
+        VanillaToolKinds::SHEARS,
+        VanillaItems::WOODEN_SHEARS,
+    ),
 ];
 
 const PLACEABLE_ITEMS: [(ItemId, &str, dd40_core::block::BlockId); 6] = [
@@ -146,9 +160,7 @@ const PLACEABLE_ITEMS: [(ItemId, &str, dd40_core::block::BlockId); 6] = [
 
 fn register_vanilla_items(mut registry: ResMut<ItemRegistry>) {
     for (item_id, name, block_id) in PLACEABLE_ITEMS {
-        registry.register(
-            ItemDefinition::new(item_id, name).with_placeable(block_id),
-        );
+        registry.register(ItemDefinition::new(item_id, name).with_placeable(block_id));
     }
 
     for (kind_name, kind_id, base_item) in TOOL_KINDS {
@@ -157,7 +169,7 @@ fn register_vanilla_items(mut registry: ResMut<ItemRegistry>) {
             let name = format!("{tier_name}_{kind_name}");
             registry.register(
                 ItemDefinition::new(id, name)
-                    .with_max_stack(1)
+                    .with_max_stack(NonZero::<u16>::MIN)
                     .with_tool(kind_id, *tier_id),
             );
         }
@@ -202,7 +214,7 @@ mod tests {
             assert_eq!(def.name, name);
             assert_eq!(def.placeable, Some(block));
             assert!(def.tool.is_none());
-            assert_eq!(def.max_stack, 64);
+            assert_eq!(def.max_stack.get(), 64);
         }
     }
 
@@ -217,7 +229,7 @@ mod tests {
                     .get(id)
                     .unwrap_or_else(|| panic!("{tier_name}_{kind_name} missing"));
                 assert_eq!(def.name, format!("{tier_name}_{kind_name}"));
-                assert_eq!(def.max_stack, 1);
+                assert_eq!(def.max_stack.get(), 1);
                 let tool = def.tool.expect("tool item has tool behaviour");
                 assert_eq!(tool.kind, kind_id);
                 assert_eq!(tool.tier, *tier_id);
@@ -227,12 +239,18 @@ mod tests {
     }
 
     #[test]
-    fn registers_exactly_31_vanilla_items_plus_sentinel() {
+    fn registers_exactly_31_vanilla_items() {
         let app = build_app();
         let registry = app.world().resource::<ItemRegistry>();
-        // 1 sentinel (ItemId::EMPTY) + 6 placeables + 25 tools = 32 entries
-        // up to ID 124, with the gap (7..=99) filled by `unknown_*` placeholders.
-        let count = registry.iter().filter(|d| !d.name.starts_with("unknown_")).count();
-        assert_eq!(count, 1 + PLACEABLE_ITEMS.len() + TOOL_KINDS.len() * TOOL_TIERS.len());
+        // 6 placeables + 25 tools = 31 entries up to ID 124, with the gap
+        // (0, 7..=99) filled by `unknown_*` placeholders.
+        let count = registry
+            .iter()
+            .filter(|d| !d.name.starts_with("unknown_"))
+            .count();
+        assert_eq!(
+            count,
+            PLACEABLE_ITEMS.len() + TOOL_KINDS.len() * TOOL_TIERS.len()
+        );
     }
 }
