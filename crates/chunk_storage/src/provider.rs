@@ -143,7 +143,6 @@ mod tests {
     use super::*;
     use crate::serialization::deserialize_chunk;
     use dd40_core::chunk::change::ChunkChange;
-    use dd40_core::prelude::*;
     use std::io::{BufReader, Read};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU32, Ordering};

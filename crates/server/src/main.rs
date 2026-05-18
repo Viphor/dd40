@@ -12,7 +12,7 @@ use dd40_physics::PhysicsPlugin;
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
 use dd40_world::{
     WorldPlugin,
-    generators::flat::{FlatWorldGenerator, Layer},
+    generators::bowl::{BowlWorldGenerator, Layer},
 };
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
             IntegrationCharacterPhysicsPlugin,
             VanillaPalettePlugin,
             DiskStoragePlugin::new("world_data/chunks"),
-            WorldPlugin::new(FlatWorldGenerator(vec![
+            WorldPlugin::new(BowlWorldGenerator(vec![
                 Layer {
                     block_id: VanillaBlocks::STONE,
                     height_range: 0..58,

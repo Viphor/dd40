@@ -5,6 +5,7 @@ use bevy::ecs::{
 };
 use dd40_core::prelude::*;
 
+pub mod bowl;
 pub mod flat;
 
 pub trait WorldGenerator: Send + Sync + 'static {
