@@ -19,6 +19,7 @@ members = [
     "crates/item_core",
     "crates/inventory_core",
     "crates/integration_character_physics",
+    "crates/rng",
 ]
 resolver = "3"
 
@@ -29,6 +30,7 @@ authors = ["Andreas H. Klostergaard <akl@klostergaard.net>"]
 
 [workspace.dependencies]
 bevy = { version = "0.18", default-features = false }
+rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "os_rng"] }
 dd40_core = { path = "crates/core" }
 dd40_physics_core = { path = "crates/physics_core" }
 dd40_physics = { path = "crates/physics" }
@@ -46,3 +48,4 @@ dd40_vanilla_palette = { path = "crates/vanilla_palette" }
 dd40_item_core = { path = "crates/item_core" }
 dd40_inventory_core = { path = "crates/inventory_core" }
 dd40_integration_character_physics = { path = "crates/integration_character_physics" }
+dd40_rng = { path = "crates/rng" }

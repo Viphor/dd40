@@ -1,0 +1,9 @@
+[package]
+name = "dd40_rng"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+bevy = { workspace = true, default-features = false }
+rand = { workspace = true }

@@ -2893,6 +2893,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_rng"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "rand 0.9.2",
+]
+
+[[package]]
 name = "dd40_server"
 version = "0.1.0"
 dependencies = [
