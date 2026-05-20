@@ -18,6 +18,7 @@ pub mod cache;
 pub mod change;
 pub mod config;
 pub mod events;
+pub mod wire;
 
 pub use authority::{
     ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkAuthoritySet, PendingCellDataRejections,
@@ -26,6 +27,7 @@ pub use authority::{
 };
 pub use change::{BlockLocal, CellDataChange, ChunkChange};
 pub use config::MaxDeltaBehind;
+pub use wire::{CellDataWireError, SerializableCellDataChange, SerializableChunkChange};
 
 /// Width (X) of a chunk in blocks.
 pub const CHUNK_SIZE_X: usize = 16;

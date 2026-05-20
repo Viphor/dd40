@@ -120,6 +120,12 @@ pub type BlockDataDecoder =
 /// Metadata recorded for each registered [`BlockData`] type.
 #[derive(Clone, Copy)]
 pub struct BlockDataTypeInfo {
+    /// Runtime type identifier of the registered type.  Carried here so
+    /// the wire decoder can rebuild [`CellDataChange::Clear`] entries
+    /// (which key on `TypeId`) from a `type_key` lookup alone.
+    ///
+    /// [`CellDataChange::Clear`]: crate::chunk::change::CellDataChange::Clear
+    pub type_id: TypeId,
     /// Wire / disk string identifier — `std::any::type_name::<T>()` at
     /// registration time.
     pub type_key: &'static str,
@@ -184,8 +190,14 @@ impl BlockDataTypeRegistry {
             let value: T = erased_serde::deserialize(d)?;
             Ok(Box::new(value) as Box<dyn BlockData>)
         };
-        self.by_type_id
-            .insert(tid, BlockDataTypeInfo { type_key, decoder });
+        self.by_type_id.insert(
+            tid,
+            BlockDataTypeInfo {
+                type_id: tid,
+                type_key,
+                decoder,
+            },
+        );
         self.by_type_key.insert(type_key, tid);
         true
     }
