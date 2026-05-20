@@ -34,6 +34,7 @@ impl Plugin for CorePlugin {
             .add_message::<GenerateChunk>()
             .add_message::<ChunkChanged>()
             .add_message::<ChunkPredicted>()
+            .add_message::<crate::chunk::events::CellDataPredicted>()
             .add_message::<PredictionRejected>()
             .add_message::<ChunkSnapshotFallback>();
 

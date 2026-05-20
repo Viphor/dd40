@@ -195,6 +195,14 @@ impl BlockDataTypeRegistry {
         self.by_type_id.get(&TypeId::of::<T>())
     }
 
+    /// Returns the metadata for a type identified by its [`TypeId`].
+    ///
+    /// Useful for code paths that only have an erased `&dyn BlockData`
+    /// in hand — e.g. the chunk authority's cell-data validator.
+    pub fn get_by_type_id(&self, type_id: TypeId) -> Option<&BlockDataTypeInfo> {
+        self.by_type_id.get(&type_id)
+    }
+
     /// Returns the metadata for a wire-key string if it has been
     /// registered.
     pub fn get_by_key(&self, type_key: &str) -> Option<&BlockDataTypeInfo> {

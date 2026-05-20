@@ -32,6 +32,10 @@ pub struct ChunkCache {
     /// renderer, audio, …) subscribe to the resulting messages rather than
     /// polling the cache.
     pending_predicted_events: Vec<(ChunkPos, ChunkChange)>,
+    /// Same as `pending_predicted_events` but for [`CellDataChange`]s.
+    /// Drained each frame into a [`CellDataPredicted`](super::events::CellDataPredicted)
+    /// message stream by [`emit_predicted_events`].
+    pending_predicted_cell_data_events: Vec<(ChunkPos, CellDataChange)>,
 }
 
 impl ChunkCache {
@@ -42,6 +46,7 @@ impl ChunkCache {
             waiting: HashSet::new(),
             dirty: HashSet::new(),
             pending_predicted_events: Vec::new(),
+            pending_predicted_cell_data_events: Vec::new(),
         }
     }
 
@@ -84,6 +89,54 @@ impl ChunkCache {
         true
     }
 
+    /// Enqueue a predicted [`CellDataChange`] on the chunk at `pos`,
+    /// optimistically applying it to the chunk's per-cell typed-data
+    /// store and marking the chunk dirty for the next authority commit
+    /// pass.
+    ///
+    /// Mirrors [`ChunkCache::push_predicted`] for the parallel cell-data
+    /// queue.  Returns `false` when no chunk is loaded at `pos`.
+    pub fn push_predicted_cell_data(&mut self, pos: ChunkPos, change: CellDataChange) -> bool {
+        let Some(chunk) = self.chunks.get_mut(&pos) else {
+            return false;
+        };
+        let event_payload = change.clone();
+        chunk.push_predicted_cell_data(change);
+        self.dirty.insert(pos);
+        self.pending_predicted_cell_data_events
+            .push((pos, event_payload));
+        true
+    }
+
+    /// Enqueue a paired predicted block-placement and cell-data write at
+    /// `pos`, optimistically applying both to the chunk.
+    ///
+    /// This is the canonical way to spawn a block that ships with typed
+    /// data (e.g. a chest with its inventory, a sign with its text).
+    /// The two queues are committed in order — block changes first,
+    /// then cell-data — so the block exists before its data is recorded,
+    /// and the [`commit_predicted_changes`] cleanup pass for
+    /// [`ChunkChange::Remove`] never strips the value you just attached.
+    ///
+    /// Returns `false` when no chunk is loaded at `pos`.
+    ///
+    /// [`commit_predicted_changes`]: crate::chunk::commit_predicted_changes
+    /// [`ChunkChange::Remove`]: crate::chunk::ChunkChange::Remove
+    pub fn push_predicted_place_with_data<T: crate::block::BlockData>(
+        &mut self,
+        pos: ChunkPos,
+        local: crate::chunk::change::BlockLocal,
+        block_id: crate::block::BlockId,
+        data: T,
+    ) -> bool {
+        if !self.chunks.contains_key(&pos) {
+            return false;
+        }
+        self.push_predicted(pos, ChunkChange::new_place(local, block_id));
+        self.push_predicted_cell_data(pos, CellDataChange::new_set(local, data));
+        true
+    }
+
     /// Manually mark a chunk as dirty.
     ///
     /// You should rarely need this — [`ChunkCache::push_predicted`] handles
@@ -121,6 +174,14 @@ impl ChunkCache {
         &mut self,
     ) -> std::vec::Drain<'_, (ChunkPos, ChunkChange)> {
         self.pending_predicted_events.drain(..)
+    }
+
+    /// Drains buffered [`CellDataPredicted`](super::events::CellDataPredicted)
+    /// payloads queued by [`ChunkCache::push_predicted_cell_data`].
+    pub fn drain_pending_predicted_cell_data_events(
+        &mut self,
+    ) -> std::vec::Drain<'_, (ChunkPos, CellDataChange)> {
+        self.pending_predicted_cell_data_events.drain(..)
     }
 
     /// Requests the chunk at `pos` from the provider if it has not already been requested,
@@ -261,13 +322,32 @@ pub fn emit_predicted_events(
     }
 }
 
+/// Drains buffered cell-data predictions queued by
+/// [`ChunkCache::push_predicted_cell_data`] and publishes them as
+/// [`CellDataPredicted`] messages.
+pub fn emit_predicted_cell_data_events(
+    mut cache: ResMut<ChunkCache>,
+    mut writer: MessageWriter<super::events::CellDataPredicted>,
+) {
+    for (pos, change) in cache.drain_pending_predicted_cell_data_events() {
+        writer.write(super::events::CellDataPredicted { pos, change });
+    }
+}
+
 pub struct ChunkCachePlugin;
 
 impl Plugin for ChunkCachePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkCache>()
             .add_systems(PreUpdate, chunk_ready_listener)
-            .add_systems(PostUpdate, (request_chunk_system, emit_predicted_events));
+            .add_systems(
+                PostUpdate,
+                (
+                    request_chunk_system,
+                    emit_predicted_events,
+                    emit_predicted_cell_data_events,
+                ),
+            );
     }
 }
 
@@ -289,6 +369,7 @@ mod tests {
     fn build_app() -> App {
         let mut app = App::new();
         app.add_message::<ChunkPredicted>();
+        app.add_message::<super::super::events::CellDataPredicted>();
         app.add_message::<ChunkReady>();
         app.add_message::<RequestChunk>();
         app.add_plugins(ChunkCachePlugin);

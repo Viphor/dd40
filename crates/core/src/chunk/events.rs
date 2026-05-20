@@ -1,7 +1,7 @@
 use bevy::ecs::message::Message;
 use serde::{Deserialize, Serialize};
 
-use crate::chunk::{Chunk, ChunkChange, ChunkPos};
+use crate::chunk::{CellDataChange, Chunk, ChunkChange, ChunkPos};
 
 /// Event telling the world generator to generate a chunk at the given position.
 /// The world generator should respond with a `ChunkReady` event when the chunk is ready.
@@ -51,8 +51,13 @@ pub struct ChunkReady {
 pub struct ChunkChanged {
     /// Chunk that changed.
     pub pos: ChunkPos,
-    /// Changes applied, in commit order. Coordinates are chunk-local.
+    /// Block-level changes applied, in commit order. Coordinates are
+    /// chunk-local.
     pub changes: Vec<ChunkChange>,
+    /// Per-cell typed-data changes applied, in commit order. Coordinates
+    /// are chunk-local. Empty when only block-level changes were
+    /// committed this pass.
+    pub cell_data_changes: Vec<CellDataChange>,
     /// Authoritative chunk version after these changes were applied.
     pub new_version: u64,
 }
@@ -108,4 +113,19 @@ pub struct ChunkSnapshotFallback {
     pub client_version: u64,
     /// Version the server has.
     pub server_version: u64,
+}
+
+/// Local Bevy message fired every time a predicted [`CellDataChange`] is
+/// queued on a chunk via
+/// [`ChunkCache::push_predicted_cell_data`](crate::chunk::cache::ChunkCache::push_predicted_cell_data).
+///
+/// Mirrors [`ChunkPredicted`] for the parallel cell-data queue.
+/// Optimistic listeners (sign UIs, chest inventory previews) subscribe to
+/// this to react the same frame as the prediction.
+#[derive(Message, Clone, Debug)]
+pub struct CellDataPredicted {
+    /// Chunk that received the prediction.
+    pub pos: ChunkPos,
+    /// Predicted change. Coordinates are chunk-local.
+    pub change: CellDataChange,
 }

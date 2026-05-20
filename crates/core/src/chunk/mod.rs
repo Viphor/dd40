@@ -20,10 +20,11 @@ pub mod config;
 pub mod events;
 
 pub use authority::{
-    ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkAuthoritySet, PendingChunkRejections,
-    RejectReason, commit_predicted_changes, default_block_registry_validator,
+    ChunkAuthorityAppExt, ChunkAuthorityPlugin, ChunkAuthoritySet, PendingCellDataRejections,
+    PendingChunkRejections, RejectReason, commit_predicted_changes,
+    default_block_registry_validator, default_cell_data_registry_validator,
 };
-pub use change::{BlockLocal, ChunkChange};
+pub use change::{BlockLocal, CellDataChange, ChunkChange};
 pub use config::MaxDeltaBehind;
 
 /// Width (X) of a chunk in blocks.
@@ -246,6 +247,23 @@ pub struct Chunk {
     /// type identity outside of a [`BlockDataTypeRegistry`].
     #[serde(skip)]
     cell_data: HashMap<BlockLocal, HashMap<TypeId, Box<dyn BlockData>>>,
+    /// Runtime-only queue of locally-predicted [`CellDataChange`]s paired
+    /// with the pre-prediction value at the target cell (if any). Lets
+    /// the server validate against the cell's true confirmed state and
+    /// lets rejections roll back the cell precisely.
+    ///
+    /// Skipped by serde for the same reason as [`Chunk::cell_data`].
+    #[serde(skip)]
+    predicted_cell_data: VecDeque<PredictedCellDataChange>,
+    /// Server-confirmed history of [`CellDataChange`]s, paired with the
+    /// chunk version each change produced. Shares the version counter
+    /// with [`Chunk::confirmed_history`] — every committed change
+    /// (block-level or cell-data-level) bumps `version` once.
+    ///
+    /// Skipped by serde. Wire/disk transport will land alongside
+    /// `NetworkedCellDataChange` (S5+).
+    #[serde(skip)]
+    confirmed_cell_data_history: VecDeque<(u64, CellDataChange)>,
 }
 
 /// A locally-predicted change paired with the pre-prediction value at its
@@ -263,6 +281,38 @@ pub struct PredictedChange {
     pub prior: Block,
 }
 
+/// A locally-predicted [`CellDataChange`] paired with the pre-prediction
+/// value at its target cell, if any.
+///
+/// `prior` is the `T`-typed value that occupied the cell immediately
+/// before the change was applied — for [`CellDataChange::Set`] this is
+/// any replaced value of the same type; for [`CellDataChange::Clear`]
+/// this is the removed value. `None` when the cell had no value of the
+/// relevant type.
+///
+/// Used by the authority commit pass exactly like [`PredictedChange`]:
+/// validators inspect, rejected entries are rolled back by writing
+/// `prior` back (or removing the value if `prior` is `None`), accepted
+/// entries are committed and appended to
+/// [`Chunk::confirmed_cell_data_history`].
+#[derive(Debug)]
+pub struct PredictedCellDataChange {
+    /// The change the caller pushed.
+    pub change: CellDataChange,
+    /// Value that occupied the target cell at `change.type_id()` before
+    /// the change was applied, or `None` if the cell had no such value.
+    pub prior: Option<Box<dyn BlockData>>,
+}
+
+impl Clone for PredictedCellDataChange {
+    fn clone(&self) -> Self {
+        Self {
+            change: self.change.clone(),
+            prior: self.prior.as_ref().map(|p| p.clone_box()),
+        }
+    }
+}
+
 impl Chunk {
     /// Creates a new chunk at `position`, pre-filled with `Block::default()` (air).
     ///
@@ -275,6 +325,8 @@ impl Chunk {
             confirmed_history: VecDeque::new(),
             predicted: VecDeque::new(),
             cell_data: HashMap::new(),
+            predicted_cell_data: VecDeque::new(),
+            confirmed_cell_data_history: VecDeque::new(),
         }
     }
 
@@ -591,6 +643,160 @@ impl Chunk {
     pub fn cell_data_cell_count(&self) -> usize {
         self.cell_data.len()
     }
+
+    /// Drains every [`BlockData`] value attached to `local` and returns
+    /// the `(TypeId, type_key)` pairs that were present.
+    ///
+    /// Used by the authority commit pass to enforce the invariant that
+    /// cell data must not outlive the block it belongs to: when a block
+    /// is removed, every typed entry at that cell is cleared so the
+    /// sparse store cannot leak orphaned state.
+    pub fn drain_cell_data_at(&mut self, local: BlockLocal) -> Vec<(TypeId, &'static str)> {
+        let Some(submap) = self.cell_data.remove(&local) else {
+            return Vec::new();
+        };
+        submap
+            .into_iter()
+            .map(|(tid, val)| (tid, val.type_key()))
+            .collect()
+    }
+
+    // -----------------------------------------------------------------
+    // Predicted / confirmed CellDataChange queues
+    // -----------------------------------------------------------------
+
+    /// Returns the queue of locally-predicted [`CellDataChange`]s that
+    /// have not yet been confirmed.
+    pub fn predicted_cell_data(&self) -> &VecDeque<PredictedCellDataChange> {
+        &self.predicted_cell_data
+    }
+
+    /// Returns the confirmed [`CellDataChange`] history, paired with the
+    /// chunk version each entry produced.
+    pub fn confirmed_cell_data_history(&self) -> &VecDeque<(u64, CellDataChange)> {
+        &self.confirmed_cell_data_history
+    }
+
+    /// Pushes a locally-predicted [`CellDataChange`] onto the chunk and
+    /// applies it to `cell_data` immediately.  Mirrors
+    /// [`Chunk::push_predicted`] — the pre-prediction value at the target
+    /// cell (of the relevant [`TypeId`]) is captured so the authority
+    /// commit pass can validate against the original state and roll back
+    /// on rejection.
+    ///
+    /// External callers should prefer the equivalent on
+    /// [`ChunkCache`](crate::chunk::cache::ChunkCache) so the dirty index
+    /// stays in sync.
+    pub fn push_predicted_cell_data(&mut self, change: CellDataChange) {
+        let local = change.local();
+        let type_id = change.type_id();
+        let prior = self
+            .cell_data
+            .get_mut(&local)
+            .and_then(|submap| submap.remove(&type_id));
+        self.apply_cell_data_change(&change);
+        self.predicted_cell_data
+            .push_back(PredictedCellDataChange { change, prior });
+    }
+
+    /// Drains every queued predicted cell-data change without touching
+    /// `cell_data`, `version`, or `confirmed_cell_data_history`. Returns
+    /// the entries in FIFO order.
+    pub fn take_predicted_cell_data(&mut self) -> Vec<PredictedCellDataChange> {
+        self.predicted_cell_data.drain(..).collect()
+    }
+
+    /// Server-side: commit a pre-validated list of [`CellDataChange`]s
+    /// that are already reflected in `cell_data` (because they were
+    /// predicted and accepted).  Bumps `version` once per change and
+    /// appends to `confirmed_cell_data_history`.
+    ///
+    /// Returns the committed `(version, change)` pairs in commit order
+    /// for the caller (typically the authority commit pass) to broadcast.
+    pub fn commit_accepted_cell_data(
+        &mut self,
+        accepted: Vec<CellDataChange>,
+    ) -> Vec<(u64, CellDataChange)> {
+        let mut committed = Vec::with_capacity(accepted.len());
+        for change in accepted {
+            self.version += 1;
+            self.confirmed_cell_data_history
+                .push_back((self.version, change.clone()));
+            committed.push((self.version, change));
+        }
+        committed
+    }
+
+    /// Server commit-pass helper: roll back the predicted cell-data
+    /// change at the given target by writing `prior` back (or removing
+    /// the value if `prior` is `None`).
+    pub fn rollback_cell_data(
+        &mut self,
+        local: BlockLocal,
+        type_id: TypeId,
+        prior: Option<Box<dyn BlockData>>,
+    ) {
+        let submap = self.cell_data.entry(local).or_default();
+        match prior {
+            Some(value) => {
+                submap.insert(type_id, value);
+            }
+            None => {
+                submap.remove(&type_id);
+            }
+        }
+        if self
+            .cell_data
+            .get(&local)
+            .is_some_and(|submap| submap.is_empty())
+        {
+            self.cell_data.remove(&local);
+        }
+    }
+
+    /// Client-side: apply a batch of confirmed cell-data changes from
+    /// the server.  `base_version` must equal the chunk's current
+    /// `version`; otherwise the call returns `false` without mutating
+    /// anything.  On success each change is written to `cell_data`,
+    /// appended to `confirmed_cell_data_history`, and `version` is
+    /// bumped per change.
+    pub fn apply_confirmed_cell_data_changes(
+        &mut self,
+        base_version: u64,
+        changes: Vec<CellDataChange>,
+    ) -> bool {
+        if base_version != self.version {
+            return false;
+        }
+        for change in changes {
+            self.apply_cell_data_change(&change);
+            self.version += 1;
+            self.confirmed_cell_data_history
+                .push_back((self.version, change));
+        }
+        true
+    }
+
+    /// Applies a single [`CellDataChange`] to `cell_data` without
+    /// touching version/history/predicted queues.
+    fn apply_cell_data_change(&mut self, change: &CellDataChange) {
+        match change {
+            CellDataChange::Set { local, value } => {
+                self.cell_data
+                    .entry(*local)
+                    .or_default()
+                    .insert(value.as_any().type_id(), value.clone_box());
+            }
+            CellDataChange::Clear { local, type_id, .. } => {
+                if let Some(submap) = self.cell_data.get_mut(local) {
+                    submap.remove(type_id);
+                    if submap.is_empty() {
+                        self.cell_data.remove(local);
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for Chunk {
@@ -601,6 +807,11 @@ impl std::fmt::Debug for Chunk {
             .field("predicted", &self.predicted.len())
             .field("history", &self.confirmed_history.len())
             .field("cell_data_cells", &self.cell_data.len())
+            .field("predicted_cell_data", &self.predicted_cell_data.len())
+            .field(
+                "confirmed_cell_data_history",
+                &self.confirmed_cell_data_history.len(),
+            )
             .finish()
     }
 }

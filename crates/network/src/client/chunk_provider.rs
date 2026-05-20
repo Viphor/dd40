@@ -152,6 +152,7 @@ pub(crate) fn apply_chunk_updates(
         changed.write(ChunkChanged {
             pos: update.pos,
             changes: update.changes.clone(),
+            cell_data_changes: Vec::new(),
             new_version: update.new_version,
         });
     }
