@@ -149,10 +149,15 @@ pub struct ChunkUpdate {
     /// Version the chunk was at *before* `changes` were applied. The
     /// client may apply the delta only if this matches its local version.
     pub base_version: u64,
-    /// Authoritative changes, in the order the server applied them.
-    pub changes: Vec<ChunkChange>,
-    /// Version after `changes` are applied. Clients store this as their
-    /// new local version on success.
+    /// Authoritative block-level changes, in commit order.
+    pub changes: Vec<SerializableChunkChange>,
+    /// Authoritative cell-data changes, in commit order.  Applied
+    /// **after** `changes` so the version counter ordering matches the
+    /// server commit pass, and so any auto-Clear synthesised by the
+    /// authority for a removed block follows the corresponding Remove.
+    pub cell_data_changes: Vec<SerializableCellDataChange>,
+    /// Version after `changes` and `cell_data_changes` are applied.
+    /// Clients store this as their new local version on success.
     pub new_version: u64,
 }
 

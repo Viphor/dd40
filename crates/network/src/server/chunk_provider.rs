@@ -92,7 +92,10 @@ pub(crate) fn receive_chunk_requests(
             match delta {
                 Some(history) if !history.is_empty() => {
                     let new_version = history.last().map(|(v, _)| *v).unwrap_or(server_version);
-                    let changes: Vec<_> = history.into_iter().map(|(_, c)| c).collect();
+                    let changes: Vec<SerializableChunkChange> = history
+                        .into_iter()
+                        .map(|(_, c)| SerializableChunkChange::from(c))
+                        .collect();
                     trace!(
                         "Sending {} delta change(s) for chunk {} ({} -> {})",
                         changes.len(),
@@ -104,6 +107,7 @@ pub(crate) fn receive_chunk_requests(
                         pos: request.pos,
                         base_version: client_version,
                         changes,
+                        cell_data_changes: Vec::new(),
                         new_version,
                     });
                 }

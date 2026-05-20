@@ -98,12 +98,35 @@ pub(crate) fn broadcast_chunk_updates(
             if chebyshev(player_chunk, update.pos) > radius {
                 continue;
             }
-            let len = update.changes.len() as u64;
-            let base_version = update.new_version.saturating_sub(len);
+            let total_len = (update.changes.len() + update.cell_data_changes.len()) as u64;
+            let base_version = update.new_version.saturating_sub(total_len);
+
+            // Convert runtime types to wire types.  Block-level conversion
+            // is infallible; cell-data conversion can fail if bincode
+            // refuses the payload (corrupt BlockData impl) — in that
+            // case we drop the offending entry but still send the rest,
+            // since the alternative (drop the whole update) would force
+            // a snapshot fallback for a problem that is server-side and
+            // not the client's fault.
+            let block_changes: Vec<SerializableChunkChange> =
+                update.changes.iter().copied().map(Into::into).collect();
+            let mut cell_data_changes: Vec<SerializableCellDataChange> =
+                Vec::with_capacity(update.cell_data_changes.len());
+            for c in &update.cell_data_changes {
+                match SerializableCellDataChange::try_from(c) {
+                    Ok(s) => cell_data_changes.push(s),
+                    Err(e) => warn!(
+                        "Dropping un-serialisable cell-data change for chunk {}: {}",
+                        update.pos, e
+                    ),
+                }
+            }
+
             sender.send::<BlockChannel>(ChunkUpdate {
                 pos: update.pos,
                 base_version,
-                changes: update.changes.clone(),
+                changes: block_changes,
+                cell_data_changes,
                 new_version: update.new_version,
             });
         }

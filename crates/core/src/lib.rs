@@ -19,7 +19,8 @@ pub mod prelude {
         builder_extra::AddExtra,
         chunk::{
             BlockLocal, CHUNK_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, CellDataChange,
-            Chunk, ChunkChange, ChunkPos, MaxDeltaBehind, cache::ChunkCache, events::*,
+            CellDataWireError, Chunk, ChunkChange, ChunkPos, MaxDeltaBehind,
+            SerializableCellDataChange, SerializableChunkChange, cache::ChunkCache, events::*,
         },
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         state::{AppState, GameState},
