@@ -31,6 +31,7 @@ authors = ["Andreas H. Klostergaard <akl@klostergaard.net>"]
 [workspace.dependencies]
 bevy = { version = "0.18", default-features = false }
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "os_rng"] }
+erased-serde = "0.4"
 dd40_core = { path = "crates/core" }
 dd40_physics_core = { path = "crates/physics_core" }
 dd40_physics = { path = "crates/physics" }

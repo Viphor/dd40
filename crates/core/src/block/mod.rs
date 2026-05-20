@@ -3,8 +3,10 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 
+pub mod data;
 pub mod registry;
 
+pub use data::{BlockData, BlockDataAppExt, BlockDataDecodeError, BlockDataTypeInfo, BlockDataTypeRegistry};
 pub use registry::{BlockDefinition, BlockRegistry};
 
 use crate::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, ChunkPos};

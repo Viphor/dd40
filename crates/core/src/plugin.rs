@@ -19,6 +19,7 @@ impl Plugin for CorePlugin {
             .init_state::<GameState>()
             .insert_resource(BlockRegistry::new())
             .insert_resource(ToolRegistry::new())
+            .init_resource::<crate::block::BlockDataTypeRegistry>()
             .init_resource::<MaxDeltaBehind>()
             .register_type::<BlockId>()
             .register_type::<Block>()
