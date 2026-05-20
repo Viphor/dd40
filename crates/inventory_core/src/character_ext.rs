@@ -1,4 +1,4 @@
-//! Builder extension trait that adds an [`Inventory`] to any
+//! Builder extension trait that adds an [`InventoryComponent`] to any
 //! [`AddExtra`][dd40_core::builder_extra::AddExtra] builder.
 //!
 //! [`CharacterInventoryExt`] is blanket-implemented on every type that
@@ -13,19 +13,22 @@
 
 use dd40_core::builder_extra::AddExtra;
 
+use crate::component::InventoryComponent;
 use crate::inventory::Inventory;
 
-/// Adds an [`Inventory`] to any builder that implements
+/// Adds an [`InventoryComponent`] to any builder that implements
 /// [`AddExtra`][dd40_core::builder_extra::AddExtra].
 pub trait CharacterInventoryExt {
-    /// Attaches an empty [`Inventory`] of the given capacity.
+    /// Attaches an empty [`InventoryComponent`] of the given capacity.
     fn with_inventory(self, capacity: usize) -> Self;
 
-    /// Attaches a pre-constructed [`Inventory`].
+    /// Attaches an [`InventoryComponent`] wrapping a pre-built
+    /// [`Inventory`].
     ///
     /// Useful when the inventory must be populated before spawn (loading a
     /// save, restoring a snapshot).  After spawn, mutate via the
-    /// event-firing methods on [`Inventory`] so observers stay in sync.
+    /// event-firing methods on [`InventoryComponent`] so observers stay in
+    /// sync.
     fn with_inventory_component(self, inventory: Inventory) -> Self;
 }
 
@@ -35,14 +38,14 @@ where
 {
     fn with_inventory(mut self, capacity: usize) -> Self {
         self.add_extra(move |entity| {
-            entity.insert(Inventory::with_capacity(capacity));
+            entity.insert(InventoryComponent::with_capacity(capacity));
         });
         self
     }
 
     fn with_inventory_component(mut self, inventory: Inventory) -> Self {
         self.add_extra(move |entity| {
-            entity.insert(inventory);
+            entity.insert(InventoryComponent::from_inventory(inventory));
         });
         self
     }
@@ -96,8 +99,11 @@ mod tests {
         });
         app.update();
         let id = entity_id.lock().unwrap().expect("entity spawned");
-        let inv = app.world().get::<Inventory>(id).expect("Inventory present");
-        assert_eq!(inv.capacity(), 9);
+        let inv = app
+            .world()
+            .get::<InventoryComponent>(id)
+            .expect("InventoryComponent present");
+        assert_eq!(inv.inventory().capacity(), 9);
     }
 
     #[test]
@@ -106,7 +112,7 @@ mod tests {
         let entity_id = std::sync::Arc::new(std::sync::Mutex::new(None::<Entity>));
         let id_clone = entity_id.clone();
         let mut prefilled = Inventory::with_capacity(2);
-        prefilled.set_slot_without_event(
+        prefilled.set_slot(
             0,
             Some(dd40_item_core::active_item::ItemStack::single(
                 dd40_item_core::registry::ItemId(7),
@@ -120,10 +126,13 @@ mod tests {
         });
         app.update();
         let id = entity_id.lock().unwrap().expect("entity spawned");
-        let inv = app.world().get::<Inventory>(id).expect("Inventory present");
-        assert_eq!(inv.capacity(), 2);
+        let inv = app
+            .world()
+            .get::<InventoryComponent>(id)
+            .expect("InventoryComponent present");
+        assert_eq!(inv.inventory().capacity(), 2);
         assert_eq!(
-            inv.slot(0).unwrap().item,
+            inv.inventory().slot(0).unwrap().item,
             dd40_item_core::registry::ItemId(7)
         );
     }

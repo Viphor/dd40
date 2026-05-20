@@ -1,17 +1,20 @@
 //! Root plugin for the `dd40_inventory_core` crate.
 //!
 //! [`InventoryCorePlugin`] is the single entry point.  Add it once to
-//! register the [`Inventory`][crate::inventory::Inventory] component for
-//! reflection.  Implementation crates that depend on this one should call
+//! register the [`InventoryComponent`] for reflection and the
+//! [`BlockInventory`] type with the chunk's cell-data registry.
+//! Implementation crates that depend on this one should call
 //! `ensure_plugins!(app, InventoryCorePlugin)` from their own
 //! `Plugin::build` so consumers do not need to add it manually.
 
 use bevy::prelude::*;
+use dd40_core::block::BlockDataAppExt;
 use dd40_core::ensure_plugins;
 use dd40_core::plugin::CorePlugin;
 use dd40_item_core::plugin::ItemCorePlugin;
 
-use crate::inventory::Inventory;
+use crate::block::BlockInventory;
+use crate::component::InventoryComponent;
 
 /// Registers the inventory-system vocabulary.
 ///
@@ -19,18 +22,22 @@ use crate::inventory::Inventory;
 ///
 /// - Auto-adds [`CorePlugin`] and [`ItemCorePlugin`] via
 ///   [`ensure_plugins!`][dd40_core::ensure_plugins].
-/// - Registers [`Inventory`] for reflection.
+/// - Registers [`InventoryComponent`] for reflection.
+/// - Registers [`BlockInventory`] with the block-data type registry so
+///   chunk cell data can carry it over the wire and on disk.
 ///
-/// [`InventoryChanged`][crate::inventory::InventoryChanged] is an `Event`,
-/// not a `Message`, so it does not need explicit registration — observers
-/// register themselves with `app.add_observer(...)`.
+/// [`InventoryChanged`][crate::component::InventoryChanged] and
+/// [`BlockInventoryChanged`][crate::block::BlockInventoryChanged] are
+/// `Event`s, not `Message`s, so they do not need explicit registration
+/// — observers register themselves with `app.add_observer(...)`.
 #[derive(Default)]
 pub struct InventoryCorePlugin;
 
 impl Plugin for InventoryCorePlugin {
     fn build(&self, app: &mut App) {
         ensure_plugins!(app, CorePlugin, ItemCorePlugin);
-        app.register_type::<Inventory>();
+        app.register_type::<InventoryComponent>();
+        app.register_block_data::<BlockInventory>();
     }
 }
 
@@ -55,6 +62,19 @@ mod tests {
         assert!(
             app.is_plugin_added::<ItemCorePlugin>(),
             "ItemCorePlugin must be auto-added by InventoryCorePlugin"
+        );
+    }
+
+    #[test]
+    fn registers_block_inventory_with_block_data_registry() {
+        let mut app = App::new();
+        app.add_plugins(InventoryCorePlugin);
+        let registry = app
+            .world()
+            .resource::<dd40_core::block::BlockDataTypeRegistry>();
+        assert!(
+            registry.get::<BlockInventory>().is_some(),
+            "BlockInventory must be registered with the BlockDataTypeRegistry"
         );
     }
 }

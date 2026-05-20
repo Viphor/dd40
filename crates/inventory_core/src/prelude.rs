@@ -4,6 +4,8 @@
 //! use dd40_inventory_core::prelude::*;
 //! ```
 
+pub use crate::block::{BlockInventory, BlockInventoryChanged};
 pub use crate::character_ext::CharacterInventoryExt;
-pub use crate::inventory::{InsertError, Inventory, InventoryChanged, SlotChange};
+pub use crate::component::{InventoryChanged, InventoryComponent};
+pub use crate::inventory::{InsertError, Inventory, SlotChange};
 pub use crate::plugin::InventoryCorePlugin;
