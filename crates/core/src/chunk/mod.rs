@@ -1,4 +1,5 @@
-use std::collections::VecDeque;
+use std::any::TypeId;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
 
 use bevy::{
@@ -10,7 +11,7 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize, ser::SerializeTuple};
 
-use crate::block::{Block, BlockCoord, BlockId, BlockPos};
+use crate::block::{Block, BlockCoord, BlockId, BlockPos, data::BlockData};
 
 pub mod authority;
 pub mod cache;
@@ -229,6 +230,22 @@ pub struct Chunk {
     /// Skipped by serde so it never crosses the wire or reaches disk.
     #[serde(skip)]
     predicted: VecDeque<PredictedChange>,
+    /// Sparse, per-cell typed-data store.
+    ///
+    /// Most cells will never have an entry here: chests, signs, beds — the
+    /// rare cells that need to carry state beyond their [`BlockId`]. The
+    /// outer map is keyed by [`BlockLocal`] so empty chunks consume **zero**
+    /// memory beyond the field itself, and the inner map is keyed by
+    /// [`TypeId`] so multiple unrelated crates can each attach their own
+    /// data to the same cell without colliding.
+    ///
+    /// Skipped by serde — wire and disk transport carry typed data through
+    /// `NetworkedChunkChange` (forthcoming in S5) and the storage `V2`
+    /// format (S7).  Direct in-memory serialisation of this map is
+    /// intentionally **not** supported because the boxed values lose their
+    /// type identity outside of a [`BlockDataTypeRegistry`].
+    #[serde(skip)]
+    cell_data: HashMap<BlockLocal, HashMap<TypeId, Box<dyn BlockData>>>,
 }
 
 /// A locally-predicted change paired with the pre-prediction value at its
@@ -257,6 +274,7 @@ impl Chunk {
             version: 0,
             confirmed_history: VecDeque::new(),
             predicted: VecDeque::new(),
+            cell_data: HashMap::new(),
         }
     }
 
@@ -335,7 +353,7 @@ impl Chunk {
             return None;
         };
 
-        let local = pos.chunk_local();
+        let local = pos.to_local();
         self.get(local.x as usize, local.y as usize, local.z as usize)
     }
 
@@ -512,6 +530,67 @@ impl Chunk {
     fn index(lx: usize, ly: usize, lz: usize) -> usize {
         lx + lz * CHUNK_SIZE_X + ly * CHUNK_SIZE_X * CHUNK_SIZE_Z
     }
+
+    // -----------------------------------------------------------------
+    // Sparse per-cell typed-data store
+    // -----------------------------------------------------------------
+
+    /// Returns the [`BlockData`] of type `T` attached to the cell at
+    /// `local`, falling through to `None` when nothing is stored there.
+    ///
+    /// O(1) on the underlying [`HashMap`]; the downcast is statically
+    /// guaranteed to succeed because the inner map is keyed by [`TypeId`].
+    pub fn cell_data<T: BlockData>(&self, local: BlockLocal) -> Option<&T> {
+        self.cell_data
+            .get(&local)?
+            .get(&TypeId::of::<T>())?
+            .as_any()
+            .downcast_ref::<T>()
+    }
+
+    /// Stores `value` against the cell at `local`, replacing any previous
+    /// value of the same type.
+    ///
+    /// `T` should already be registered with the app via
+    /// [`App::register_block_data`](crate::block::BlockDataAppExt::register_block_data)
+    /// so the value can be transmitted across the network and saved to
+    /// disk; the chunk itself does not verify this — the validator chain
+    /// (S4) is responsible for rejecting writes of unregistered types.
+    pub fn set_cell_data<T: BlockData>(&mut self, local: BlockLocal, value: T) {
+        self.cell_data
+            .entry(local)
+            .or_default()
+            .insert(TypeId::of::<T>(), Box::new(value));
+    }
+
+    /// Removes the `T`-typed value at `local`, returning `true` if a value
+    /// was removed.  Drops the per-cell submap when it becomes empty so
+    /// the sparse store does not retain empty buckets.
+    pub fn remove_cell_data<T: BlockData>(&mut self, local: BlockLocal) -> bool {
+        let Some(submap) = self.cell_data.get_mut(&local) else {
+            return false;
+        };
+        let removed = submap.remove(&TypeId::of::<T>()).is_some();
+        if submap.is_empty() {
+            self.cell_data.remove(&local);
+        }
+        removed
+    }
+
+    /// Iterates over every [`BlockData`] value attached to `local`,
+    /// regardless of concrete type.  Order is unspecified.
+    pub fn iter_cell_data(&self, local: BlockLocal) -> impl Iterator<Item = &dyn BlockData> {
+        self.cell_data
+            .get(&local)
+            .into_iter()
+            .flat_map(|submap| submap.values().map(|b| &**b as &dyn BlockData))
+    }
+
+    /// Returns the number of cells that currently carry at least one
+    /// typed-data entry.  Mostly useful for tests and diagnostics.
+    pub fn cell_data_cell_count(&self) -> usize {
+        self.cell_data.len()
+    }
 }
 
 impl std::fmt::Debug for Chunk {
@@ -521,6 +600,7 @@ impl std::fmt::Debug for Chunk {
             .field("version", &self.version)
             .field("predicted", &self.predicted.len())
             .field("history", &self.confirmed_history.len())
+            .field("cell_data_cells", &self.cell_data.len())
             .finish()
     }
 }
@@ -551,10 +631,10 @@ mod tests {
                 let local = BlockLocal::new(lx, ly, lz);
                 let world = chunk_pos.block_pos(local);
                 assert_eq!(world.chunk_pos(), chunk_pos);
-                let local_again = world.chunk_local();
-                assert_eq!(local_again.x as u8, lx);
-                assert_eq!(local_again.y as u16, ly);
-                assert_eq!(local_again.z as u8, lz);
+                let local_again = world.to_local();
+                assert_eq!(local_again.x, lx);
+                assert_eq!(local_again.y, ly);
+                assert_eq!(local_again.z, lz);
             }
         }
     }
@@ -677,5 +757,104 @@ mod tests {
         c.set_local(lp(0, 0, 0), Block::new(BlockId(99)));
         c.push_predicted(ChunkChange::new_replace(lp(0, 0, 0), BlockId(7)));
         assert_eq!(c.get_local(lp(0, 0, 0)).block_id, BlockId(7));
+    }
+
+    // -----------------------------------------------------------------
+    // Sparse per-cell typed-data tests
+    // -----------------------------------------------------------------
+
+    use crate::block::BlockData;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct SignText(String);
+    impl BlockData for SignText {
+        fn type_key(&self) -> &'static str {
+            std::any::type_name::<Self>()
+        }
+        fn clone_box(&self) -> Box<dyn BlockData> {
+            Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct Tag(u32);
+    impl BlockData for Tag {
+        fn type_key(&self) -> &'static str {
+            std::any::type_name::<Self>()
+        }
+        fn clone_box(&self) -> Box<dyn BlockData> {
+            Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    fn fresh_chunk_allocates_no_cell_data() {
+        let c = Chunk::new(ChunkPos::new(0, 0, 0));
+        assert_eq!(c.cell_data_cell_count(), 0);
+        assert!(c.cell_data::<SignText>(lp(0, 0, 0)).is_none());
+    }
+
+    #[test]
+    fn cell_data_set_get_roundtrip() {
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
+        c.set_cell_data(lp(1, 2, 3), SignText("hello".into()));
+        assert_eq!(
+            c.cell_data::<SignText>(lp(1, 2, 3)),
+            Some(&SignText("hello".into()))
+        );
+        // Other cells unaffected.
+        assert!(c.cell_data::<SignText>(lp(0, 0, 0)).is_none());
+    }
+
+    #[test]
+    fn cell_data_set_replaces_same_type() {
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
+        c.set_cell_data(lp(1, 2, 3), SignText("first".into()));
+        c.set_cell_data(lp(1, 2, 3), SignText("second".into()));
+        assert_eq!(
+            c.cell_data::<SignText>(lp(1, 2, 3)),
+            Some(&SignText("second".into()))
+        );
+    }
+
+    #[test]
+    fn cell_data_distinct_types_coexist_at_same_cell() {
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
+        c.set_cell_data(lp(1, 2, 3), SignText("text".into()));
+        c.set_cell_data(lp(1, 2, 3), Tag(42));
+        assert_eq!(
+            c.cell_data::<SignText>(lp(1, 2, 3)),
+            Some(&SignText("text".into()))
+        );
+        assert!(c.cell_data::<Tag>(lp(1, 2, 3)).is_some());
+        assert_eq!(c.iter_cell_data(lp(1, 2, 3)).count(), 2);
+    }
+
+    #[test]
+    fn remove_cell_data_drops_empty_submap() {
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
+        c.set_cell_data(lp(1, 2, 3), SignText("x".into()));
+        assert!(c.remove_cell_data::<SignText>(lp(1, 2, 3)));
+        assert_eq!(c.cell_data_cell_count(), 0);
+        // Removing again is a no-op.
+        assert!(!c.remove_cell_data::<SignText>(lp(1, 2, 3)));
+    }
+
+    #[test]
+    fn cell_data_survives_clone() {
+        let mut original = Chunk::new(ChunkPos::new(0, 0, 0));
+        original.set_cell_data(lp(1, 2, 3), SignText("alpha".into()));
+        let copy = original.clone();
+        assert_eq!(
+            copy.cell_data::<SignText>(lp(1, 2, 3)),
+            Some(&SignText("alpha".into()))
+        );
     }
 }

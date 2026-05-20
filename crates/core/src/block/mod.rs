@@ -11,7 +11,7 @@ pub use data::{
 };
 pub use registry::{BlockDefinition, BlockRegistry};
 
-use crate::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, ChunkPos};
+use crate::chunk::{BlockLocal, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, ChunkPos};
 
 // ---------------------------------------------------------------------------
 // Collision shape
@@ -84,12 +84,33 @@ impl BlockPos {
     /// world-space sign of `self`. This is the inverse of
     /// [`BlockPos::chunk_pos`] in the sense that
     /// `chunk_pos() * CHUNK_SIZE + chunk_local() == self`.
+    #[deprecated(
+        since = "0.1.0",
+        note = "use `BlockPos::to_local` instead, which returns a typed `BlockLocal`"
+    )]
     pub fn chunk_local(&self) -> Self {
         Self {
             x: self.x.rem_euclid(CHUNK_SIZE_X as BlockCoord),
             y: self.y.rem_euclid(CHUNK_SIZE_Y as BlockCoord),
             z: self.z.rem_euclid(CHUNK_SIZE_Z as BlockCoord),
         }
+    }
+
+    /// Returns the chunk-local position of this block as a typed
+    /// [`BlockLocal`].
+    ///
+    /// All three components are guaranteed in-range — `x`/`z` in
+    /// `0..CHUNK_SIZE_X`/`CHUNK_SIZE_Z` and `y` in `0..CHUNK_SIZE_Y` —
+    /// because they come from `rem_euclid` against those constants.
+    ///
+    /// This is the inverse of [`BlockPos::chunk_pos`]:
+    /// `chunk_pos() * CHUNK_SIZE + to_local() == self`.
+    pub fn to_local(&self) -> BlockLocal {
+        BlockLocal::new(
+            self.x.rem_euclid(CHUNK_SIZE_X as BlockCoord) as u8,
+            self.y.rem_euclid(CHUNK_SIZE_Y as BlockCoord) as u16,
+            self.z.rem_euclid(CHUNK_SIZE_Z as BlockCoord) as u8,
+        )
     }
 }
 
@@ -187,6 +208,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn block_pos_chunk_local() {
         let pos = BlockPos::new(17, 64, -1);
         let local = pos.chunk_local();
@@ -194,6 +216,14 @@ mod tests {
     }
 
     #[test]
+    fn block_pos_to_local_typed() {
+        let pos = BlockPos::new(17, 64, -1);
+        let local = pos.to_local();
+        assert_eq!(local, crate::chunk::BlockLocal::new(1, 64, 15));
+    }
+
+    #[test]
+    #[allow(deprecated)]
     fn block_pos_chunk_local_wraps_y_for_non_zero_y_chunks() {
         use crate::chunk::CHUNK_SIZE_Y;
         // World y = CHUNK_SIZE_Y + 5 should land in chunk y=1 at local y=5.

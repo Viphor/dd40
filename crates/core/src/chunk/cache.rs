@@ -165,6 +165,53 @@ impl ChunkCache {
     pub fn chunk_count(&self) -> usize {
         self.chunks.len()
     }
+
+    // -----------------------------------------------------------------
+    // Sparse per-cell typed-data accessors keyed by world BlockPos.
+    // -----------------------------------------------------------------
+
+    /// Returns the [`BlockData`] of type `T` attached to the cell at
+    /// world position `pos`.
+    ///
+    /// Returns `None` when either the containing chunk is not loaded or
+    /// no value of `T` is stored at that cell.  The caller can
+    /// distinguish the two by checking [`ChunkCache::get`] for the
+    /// chunk's presence.
+    pub fn block_data<T: crate::block::data::BlockData>(&self, pos: BlockPos) -> Option<&T> {
+        let chunk_pos = pos.chunk_pos();
+        let local = pos.to_local();
+        self.chunks.get(&chunk_pos)?.cell_data::<T>(local)
+    }
+
+    /// Stores `value` against the cell at world position `pos`, replacing
+    /// any previous value of the same type.  Returns `true` when the
+    /// containing chunk is loaded and the value was inserted, `false`
+    /// when there is no chunk at that position (the caller is responsible
+    /// for [`ChunkCache::request`]ing the chunk first).
+    pub fn set_block_data<T: crate::block::data::BlockData>(
+        &mut self,
+        pos: BlockPos,
+        value: T,
+    ) -> bool {
+        let chunk_pos = pos.chunk_pos();
+        let local = pos.to_local();
+        let Some(chunk) = self.chunks.get_mut(&chunk_pos) else {
+            return false;
+        };
+        chunk.set_cell_data(local, value);
+        true
+    }
+
+    /// Removes the `T`-typed value at world position `pos`.  Returns
+    /// `true` when a value was removed.
+    pub fn remove_block_data<T: crate::block::data::BlockData>(&mut self, pos: BlockPos) -> bool {
+        let chunk_pos = pos.chunk_pos();
+        let local = pos.to_local();
+        let Some(chunk) = self.chunks.get_mut(&chunk_pos) else {
+            return false;
+        };
+        chunk.remove_cell_data::<T>(local)
+    }
 }
 
 /// System that listens for `ChunkReady` events and inserts the ready chunks into the cache.
@@ -298,5 +345,51 @@ mod tests {
         app.update();
         let cache = app.world().resource::<ChunkCache>();
         assert_eq!(cache.pending_predicted_events.len(), 0);
+    }
+
+    // -----------------------------------------------------------------
+    // Block-pos-keyed typed data accessors
+    // -----------------------------------------------------------------
+
+    use crate::block::{BlockData, BlockPos};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct ChestState(u32);
+    impl BlockData for ChestState {
+        fn type_key(&self) -> &'static str {
+            std::any::type_name::<Self>()
+        }
+        fn clone_box(&self) -> Box<dyn BlockData> {
+            Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    fn cache_block_data_round_trips() {
+        let mut cache = ChunkCache::new();
+        cache.insert(Chunk::new(ChunkPos::new(1, 0, -1)));
+        let bp = BlockPos::new(17, 5, -3); // chunk_pos = (1, 0, -1), local = (1, 5, 13)
+        assert!(cache.set_block_data(bp, ChestState(7)));
+        assert_eq!(cache.block_data::<ChestState>(bp), Some(&ChestState(7)));
+        assert!(cache.remove_block_data::<ChestState>(bp));
+        assert!(cache.block_data::<ChestState>(bp).is_none());
+    }
+
+    #[test]
+    fn cache_block_data_returns_none_when_chunk_unloaded() {
+        let cache = ChunkCache::new();
+        let bp = BlockPos::new(0, 0, 0);
+        assert!(cache.block_data::<ChestState>(bp).is_none());
+    }
+
+    #[test]
+    fn cache_set_block_data_fails_when_chunk_unloaded() {
+        let mut cache = ChunkCache::new();
+        let bp = BlockPos::new(0, 0, 0);
+        assert!(!cache.set_block_data(bp, ChestState(7)));
     }
 }
