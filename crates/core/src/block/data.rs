@@ -71,6 +71,7 @@ use serde::de::DeserializeOwned;
 /// impl BlockData for MyMarker {
 ///     fn type_key(&self) -> &'static str { std::any::type_name::<Self>() }
 ///     fn clone_box(&self) -> Box<dyn BlockData> { Box::new(self.clone()) }
+///     fn as_any(&self) -> &dyn std::any::Any { self }
 /// }
 /// ```
 ///
@@ -94,6 +95,13 @@ pub trait BlockData: erased_serde::Serialize + Any + Send + Sync + Debug {
     /// Used by the chunk cache when it needs to duplicate block data —
     /// for example when sending a snapshot to a newly connected client.
     fn clone_box(&self) -> Box<dyn BlockData>;
+
+    /// Upcast to [`Any`] for downcasting.
+    ///
+    /// Implementations should always be the trivial `self`.  The shim is
+    /// required because trait-object upcasting from `&dyn BlockData` to
+    /// `&dyn Any` is not yet stable across all supported toolchains.
+    fn as_any(&self) -> &dyn Any;
 }
 
 erased_serde::serialize_trait_object!(BlockData);
@@ -294,6 +302,9 @@ mod tests {
         fn clone_box(&self) -> Box<dyn BlockData> {
             Box::new(self.clone())
         }
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,6 +315,9 @@ mod tests {
         }
         fn clone_box(&self) -> Box<dyn BlockData> {
             Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn Any {
+            self
         }
     }
 

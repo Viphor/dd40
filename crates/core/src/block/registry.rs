@@ -1,10 +1,13 @@
 use super::BlockId;
+use super::data::BlockData;
 use bevy::{
     color::Color,
     ecs::{event::Event, resource::Resource, schedule::SystemSet, system::Commands},
+    platform::collections::HashMap,
     reflect::Reflect,
 };
 use serde::{Deserialize, Serialize};
+use std::any::TypeId;
 
 use super::CollisionShape;
 use crate::tools::ToolKindId;
@@ -69,6 +72,19 @@ pub struct BlockDefinition {
     ///
     /// Defaults to `true`.
     pub is_destructible: bool,
+    /// Default typed data attached to this block type.
+    ///
+    /// Downstream crates use [`BlockDefinition::with_data`] to attach a
+    /// fallback value of any registered [`BlockData`] type (for example a
+    /// loot table on every stone block).  Per-cell overrides live in the
+    /// chunk's sparse typed-data store (added in S3); when no per-cell
+    /// value is present the registry value is used.
+    ///
+    /// Keyed by [`TypeId`] for fast lookup.  Ignored by the reflection
+    /// system because trait-object maps cannot be meaningfully reflected
+    /// — revisit if editor tooling needs to see these.
+    #[reflect(ignore)]
+    pub data: HashMap<TypeId, Box<dyn BlockData>>,
 }
 
 impl BlockDefinition {
@@ -96,6 +112,7 @@ impl BlockDefinition {
             toughness: 1.0,
             preferred_tool: None,
             is_destructible: true,
+            data: HashMap::default(),
         }
     }
 
@@ -175,6 +192,53 @@ impl BlockDefinition {
     pub fn with_destructible(mut self, is_destructible: bool) -> Self {
         self.is_destructible = is_destructible;
         self
+    }
+
+    /// Attaches a default value of `T` to this block type.
+    ///
+    /// `T` must implement [`BlockData`] and should already be registered
+    /// with the app via
+    /// [`App::register_block_data`](crate::block::BlockDataAppExt::register_block_data)
+    /// so that the value can survive a network or disk round-trip.
+    /// Replaces any existing value of the same type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dd40_core::prelude::*;
+    /// use serde::{Deserialize, Serialize};
+    ///
+    /// #[derive(Debug, Clone, Serialize, Deserialize)]
+    /// struct LootHint(&'static str);
+    /// impl BlockData for LootHint {
+    ///     fn type_key(&self) -> &'static str { std::any::type_name::<Self>() }
+    ///     fn clone_box(&self) -> Box<dyn BlockData> { Box::new(self.clone()) }
+    ///     fn as_any(&self) -> &dyn std::any::Any { self }
+    /// }
+    ///
+    /// let def = BlockDefinition::new(BlockId(1000), "demo")
+    ///     .with_data(LootHint("cobblestone"));
+    /// assert!(def.has_data::<LootHint>());
+    /// ```
+    pub fn with_data<T: BlockData>(mut self, value: T) -> Self {
+        self.data.insert(TypeId::of::<T>(), Box::new(value));
+        self
+    }
+
+    /// Returns the default value of `T` attached to this block type, if any.
+    ///
+    /// Performs a downcast on the type-erased stored value; the cast is
+    /// guaranteed to succeed because the map is keyed by [`TypeId`].
+    pub fn data<T: BlockData>(&self) -> Option<&T> {
+        self.data
+            .get(&TypeId::of::<T>())?
+            .as_any()
+            .downcast_ref::<T>()
+    }
+
+    /// Returns `true` if a default value of `T` is attached to this block.
+    pub fn has_data<T: BlockData>(&self) -> bool {
+        self.data.contains_key(&TypeId::of::<T>())
     }
 }
 
@@ -324,6 +388,17 @@ impl BlockRegistry {
             .map(|def| def.is_destructible)
             .unwrap_or(false)
     }
+
+    /// Returns the default [`BlockData`] value of type `T` registered on the
+    /// block definition with id `id`, if any.
+    ///
+    /// This is the registry-side convenience for fetching a block-type-scoped
+    /// piece of typed data — e.g. a loot table that applies to every cell of a
+    /// given block type.  Per-cell overrides (forthcoming in S3) take
+    /// precedence over the registry value.
+    pub fn block_data<T: BlockData>(&self, id: BlockId) -> Option<&T> {
+        self.get(id)?.data::<T>()
+    }
 }
 
 #[derive(Event, Debug, Clone, Serialize, Deserialize)]
@@ -449,5 +524,95 @@ mod tests {
 
         assert!(!registry.is_solid(&air_block));
         assert!(registry.is_solid(&stone_block));
+    }
+
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct LootHint(String);
+    impl crate::block::BlockData for LootHint {
+        fn type_key(&self) -> &'static str {
+            std::any::type_name::<Self>()
+        }
+        fn clone_box(&self) -> Box<dyn crate::block::BlockData> {
+            Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct UnusedMarker;
+    impl crate::block::BlockData for UnusedMarker {
+        fn type_key(&self) -> &'static str {
+            std::any::type_name::<Self>()
+        }
+        fn clone_box(&self) -> Box<dyn crate::block::BlockData> {
+            Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    fn data_is_none_when_not_attached() {
+        let def = BlockDefinition::new(BlockId(1), "stone");
+        assert!(def.data::<LootHint>().is_none());
+        assert!(!def.has_data::<LootHint>());
+    }
+
+    #[test]
+    fn data_round_trips_through_with_data() {
+        let def =
+            BlockDefinition::new(BlockId(1), "stone").with_data(LootHint("cobblestone".to_owned()));
+        assert!(def.has_data::<LootHint>());
+        assert_eq!(
+            def.data::<LootHint>(),
+            Some(&LootHint("cobblestone".to_owned()))
+        );
+        assert!(def.data::<UnusedMarker>().is_none());
+    }
+
+    #[test]
+    fn with_data_replaces_previous_value() {
+        let def = BlockDefinition::new(BlockId(1), "stone")
+            .with_data(LootHint("dirt".to_owned()))
+            .with_data(LootHint("cobblestone".to_owned()));
+        assert_eq!(
+            def.data::<LootHint>(),
+            Some(&LootHint("cobblestone".to_owned()))
+        );
+    }
+
+    #[test]
+    fn clone_preserves_typed_data() {
+        let original =
+            BlockDefinition::new(BlockId(1), "stone").with_data(LootHint("cobblestone".to_owned()));
+        let copy = original.clone();
+        assert_eq!(
+            copy.data::<LootHint>(),
+            Some(&LootHint("cobblestone".to_owned()))
+        );
+        // Each clone owns its own boxed value.
+        assert_ne!(
+            std::ptr::addr_of!(*original.data.values().next().unwrap()) as *const _ as usize,
+            std::ptr::addr_of!(*copy.data.values().next().unwrap()) as *const _ as usize,
+        );
+    }
+
+    #[test]
+    fn registry_block_data_looks_up_through_definition() {
+        let mut registry = BlockRegistry::new();
+        registry.insert_definition(
+            BlockDefinition::new(BlockId(1), "stone").with_data(LootHint("cobblestone".to_owned())),
+        );
+        assert_eq!(
+            registry.block_data::<LootHint>(BlockId(1)),
+            Some(&LootHint("cobblestone".to_owned()))
+        );
+        assert!(registry.block_data::<LootHint>(BlockId(999)).is_none());
+        assert!(registry.block_data::<UnusedMarker>(BlockId(1)).is_none());
     }
 }
