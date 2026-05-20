@@ -1,9 +1,13 @@
-//! Version 1 chunk body codec — RLE blocks + chunk version, no history.
+//! Version 1 chunk body codec — RLE blocks + chunk version + live cell data.
+//!
+//! V1 is the baseline persistent format: it preserves the chunk's block grid,
+//! the current authoritative `version`, and the live cell-data state (typed
+//! `BlockData` entries against individual cells, e.g. chest inventories or
+//! sign text). No history (block or cell-data) is written — use
+//! [`v1_versioned`](super::v1_versioned) when delta replay across restarts
+//! is required.
 //!
 //! # Body format
-//!
-//! The body immediately follows the shared header written by the parent
-//! module. It consists of:
 //!
 //! ```text
 //! ┌────────────────────────────────────────────────────┐
@@ -14,51 +18,44 @@
 //! ├────────────────────────────────────────────────────┤
 //! │  Chunk version                                     │
 //! │      version: u64                                  │
+//! ├────────────────────────────────────────────────────┤
+//! │  Live cell data (bincode-encoded record list)      │
 //! └────────────────────────────────────────────────────┘
 //! ```
 //!
-//! All multi-byte integers are little-endian. The `version` field carries the
-//! `Chunk::version()` value at write time so the caller can resume from the
-//! correct authoritative version on load.
-//!
-//! Block order matches the chunk's flat-array layout:
-//! `index = lx + lz * CHUNK_SIZE_X + ly * CHUNK_SIZE_X * CHUNK_SIZE_Z`
+//! All multi-byte integers are little-endian. Block order matches the
+//! chunk's flat-array layout:
+//! `index = lx + lz * CHUNK_SIZE_X + ly * CHUNK_SIZE_X * CHUNK_SIZE_Z`.
 
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 
+use dd40_core::block::BlockDataTypeRegistry;
 use dd40_core::prelude::*;
 
-use crate::serialization::ChunkSerializeError;
+use super::{
+    ChunkSerializeError, cell_data, deserialize_rle_blocks, read_u64, serialize_rle_blocks,
+};
 
-use super::{deserialize_rle_blocks, read_u64, serialize_rle_blocks};
-
-/// Serializes the body of `chunk` (RLE blocks + chunk version).
-///
-/// # Errors
-///
-/// Returns an [`io::Error`] if any write to `writer` fails.
-pub(super) fn serialize_body<W: Write>(chunk: &Chunk, writer: &mut W) -> io::Result<()> {
+/// Serializes the body of `chunk` (RLE blocks + version + live cell data).
+pub(super) fn serialize_body<W: Write>(
+    chunk: &Chunk,
+    writer: &mut W,
+) -> Result<(), ChunkSerializeError> {
     serialize_rle_blocks(chunk, writer)?;
     writer.write_all(&chunk.version().to_le_bytes())?;
+    cell_data::serialize_live(chunk, writer)?;
     Ok(())
 }
 
-/// Deserializes the body of a V1 chunk into a fresh [`Chunk`] at `pos`.
-///
-/// The decoded chunk has its `version` set from the trailing field and an
-/// empty `confirmed_history`.
-///
-/// # Errors
-///
-/// - [`io::Error`] — any read failure, including unexpected EOF.
-/// - Returns an `UnexpectedBlockCount` error (via the caller) if the number of
-///   decoded blocks does not equal [`CHUNK_SIZE`].
+/// Deserializes a V1 body into a fresh [`Chunk`] at `pos`.
 pub(super) fn deserialize_body<R: Read>(
     pos: ChunkPos,
     reader: &mut R,
+    registry: &BlockDataTypeRegistry,
 ) -> Result<Chunk, ChunkSerializeError> {
     let mut chunk = deserialize_rle_blocks(pos, reader)?;
     let version = read_u64(reader)?;
     chunk.set_version(version);
+    cell_data::deserialize_live(&mut chunk, reader, registry)?;
     Ok(chunk)
 }

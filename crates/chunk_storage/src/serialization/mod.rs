@@ -14,8 +14,9 @@
 //! │    chunk_z: i32                                    │
 //! ├────────────────────────────────────────────────────┤
 //! │  Body (variable, format depends on version)        │
-//! │    v1            — RLE blocks + version (no history)│
-//! │    v1_versioned  — RLE blocks + version + history  │
+//! │    v1            — RLE blocks + version + cell data│
+//! │    v1_versioned  — v1 + block history + cell-data  │
+//! │                    history                         │
 //! └────────────────────────────────────────────────────┘
 //! ```
 //!
@@ -36,8 +37,11 @@
 
 use std::io::{self, Read, Write};
 
+use dd40_core::block::BlockDataTypeRegistry;
+use dd40_core::chunk::wire::CellDataWireError;
 use dd40_core::prelude::*;
 
+pub mod cell_data;
 pub mod v1;
 pub mod v1_versioned;
 
@@ -61,18 +65,17 @@ const LATEST_VERSION: ChunkVersion = ChunkVersion::V1;
 
 /// Identifies the body codec used in a chunk file.
 ///
-/// Each variant maps 1-to-1 to a version submodule (`v1`, `v1_versioned`, …)
-/// and to the integer stored in the file header.
+/// Each variant maps 1-to-1 to a version submodule (`v1`,
+/// `v1_versioned`) and to the integer stored in the file header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChunkVersion {
-    /// Version 1 — RLE block array followed by `version: u64`. No history.
-    /// See [`v1`].
+    /// Version 1 — RLE block array, chunk `version`, and live cell
+    /// data. No history. See [`v1`].
     V1 = 1,
-    /// Version 1 with persisted history — RLE block array, `version: u64`,
-    /// and the chunk's `confirmed_history`. See [`v1_versioned`].
-    ///
-    /// Choose this format when the storage backend needs to serve delta
-    /// updates after a restart. Otherwise [`ChunkVersion::V1`] is smaller.
+    /// Version 1 with persisted history — V1 body plus the chunk's
+    /// confirmed block-change history and confirmed cell-data history.
+    /// Required for the server to resume serving delta updates after a
+    /// restart. See [`v1_versioned`].
     V1Versioned = 2,
 }
 
@@ -111,6 +114,11 @@ pub enum ChunkSerializeError {
     ///
     /// [`CHUNK_SIZE`]: dd40_core::chunk::CHUNK_SIZE
     UnexpectedBlockCount { expected: usize, actual: usize },
+    /// Cell-data encode or decode failed (bincode error, or the encoded
+    /// `type_key` was not present in the runtime [`BlockDataTypeRegistry`]).
+    ///
+    /// [`BlockDataTypeRegistry`]: dd40_core::block::BlockDataTypeRegistry
+    CellData(CellDataWireError),
 }
 
 impl std::fmt::Display for ChunkSerializeError {
@@ -126,6 +134,7 @@ impl std::fmt::Display for ChunkSerializeError {
             Self::UnexpectedBlockCount { expected, actual } => {
                 write!(f, "body decoded {actual} blocks, expected {expected}")
             }
+            Self::CellData(e) => write!(f, "cell-data codec error: {e}"),
         }
     }
 }
@@ -134,6 +143,7 @@ impl std::error::Error for ChunkSerializeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(e) => Some(e),
+            Self::CellData(e) => Some(e),
             _ => None,
         }
     }
@@ -142,6 +152,12 @@ impl std::error::Error for ChunkSerializeError {
 impl From<io::Error> for ChunkSerializeError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<CellDataWireError> for ChunkSerializeError {
+    fn from(e: CellDataWireError) -> Self {
+        Self::CellData(e)
     }
 }
 
@@ -225,6 +241,11 @@ pub fn serialize_chunk_versioned<W: Write>(
 /// version stored in the header. This means files written by any previously
 /// supported version can still be read.
 ///
+/// `registry` is consulted to decode any cell-data entries in the
+/// file. If no `BlockData` types are registered, the call still
+/// succeeds for files that contain no cell-data records (e.g. all
+/// chunks written before any `BlockData` type was introduced).
+///
 /// # Errors
 ///
 /// - [`ChunkSerializeError::Io`] — any read failure, including unexpected EOF.
@@ -234,18 +255,26 @@ pub fn serialize_chunk_versioned<W: Write>(
 ///   is not handled by this build.
 /// - [`ChunkSerializeError::UnexpectedBlockCount`] — the body decoded a wrong
 ///   number of blocks.
+/// - [`ChunkSerializeError::CellData`] — the cell-data section referenced a
+///   `BlockData` `type_key` that is not in `registry`, or the bincode payload
+///   did not decode.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use std::fs::File;
 /// use std::io::BufReader;
+/// use dd40_core::block::BlockDataTypeRegistry;
 /// use dd40_chunk_storage::serialization::deserialize_chunk;
 ///
 /// let file = File::open("chunk_0_0.bin").unwrap();
-/// let chunk = deserialize_chunk(BufReader::new(file)).unwrap();
+/// let registry = BlockDataTypeRegistry::default();
+/// let chunk = deserialize_chunk(BufReader::new(file), &registry).unwrap();
 /// ```
-pub fn deserialize_chunk<R: Read>(mut reader: R) -> Result<Chunk, ChunkSerializeError> {
+pub fn deserialize_chunk<R: Read>(
+    mut reader: R,
+    registry: &BlockDataTypeRegistry,
+) -> Result<Chunk, ChunkSerializeError> {
     // ---- Shared header ----
     let mut magic = [0u8; 4];
     reader.read_exact(&mut magic)?;
@@ -262,8 +291,8 @@ pub fn deserialize_chunk<R: Read>(mut reader: R) -> Result<Chunk, ChunkSerialize
 
     // ---- Version-specific body ----
     match version {
-        ChunkVersion::V1 => v1::deserialize_body(pos, &mut reader),
-        ChunkVersion::V1Versioned => v1_versioned::deserialize_body(pos, &mut reader),
+        ChunkVersion::V1 => v1::deserialize_body(pos, &mut reader, registry),
+        ChunkVersion::V1Versioned => v1_versioned::deserialize_body(pos, &mut reader, registry),
     }
 }
 
@@ -286,10 +315,16 @@ pub trait ChunkSerializeExt: Sized {
 
     /// Reads a chunk from `path`, auto-detecting the version from the header.
     ///
+    /// `registry` is consulted to decode any cell-data entries; pass
+    /// [`BlockDataTypeRegistry::default`] if you know the chunk has none.
+    ///
     /// # Errors
     ///
     /// Propagates any [`ChunkSerializeError`] from [`deserialize_chunk`].
-    fn load(path: &std::path::Path) -> Result<Self, ChunkSerializeError>;
+    fn load(
+        path: &std::path::Path,
+        registry: &BlockDataTypeRegistry,
+    ) -> Result<Self, ChunkSerializeError>;
 }
 
 impl ChunkSerializeExt for Chunk {
@@ -301,9 +336,12 @@ impl ChunkSerializeExt for Chunk {
         serialize_chunk(self, std::io::BufWriter::new(file))
     }
 
-    fn load(path: &std::path::Path) -> Result<Self, ChunkSerializeError> {
+    fn load(
+        path: &std::path::Path,
+        registry: &BlockDataTypeRegistry,
+    ) -> Result<Self, ChunkSerializeError> {
         let file = std::fs::File::open(path)?;
-        deserialize_chunk(std::io::BufReader::new(file))
+        deserialize_chunk(std::io::BufReader::new(file), registry)
     }
 }
 
@@ -435,23 +473,47 @@ fn read_i32<R: Read>(reader: &mut R) -> io::Result<i32> {
 
 #[cfg(test)]
 mod tests {
+    use dd40_core::block::BlockDataTypeRegistry;
+    use dd40_core::block::data::BlockData;
+    use dd40_core::chunk::CellDataChange;
     use dd40_core::prelude::*;
+    use serde::{Deserialize, Serialize};
 
     use super::*;
+
+    /// Minimal [`BlockData`] used by the cell-data round-trip tests.
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct TestSign {
+        text: String,
+    }
+
+    impl BlockData for TestSign {
+        fn type_key(&self) -> &'static str {
+            std::any::type_name::<Self>()
+        }
+        fn clone_box(&self) -> Box<dyn BlockData> {
+            Box::new(self.clone())
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
 
     // Helper: round-trip a chunk through an in-memory buffer using the latest
     // version and return the deserialized copy.
     fn round_trip(chunk: &Chunk) -> Chunk {
         let mut buf = Vec::new();
         serialize_chunk(chunk, &mut buf).expect("serialize failed");
-        deserialize_chunk(buf.as_slice()).expect("deserialize failed")
+        let registry = BlockDataTypeRegistry::default();
+        deserialize_chunk(buf.as_slice(), &registry).expect("deserialize failed")
     }
 
     // Helper: round-trip using an explicit version.
     fn round_trip_versioned(chunk: &Chunk, version: ChunkVersion) -> Chunk {
         let mut buf = Vec::new();
         serialize_chunk_versioned(chunk, &mut buf, version).expect("serialize_versioned failed");
-        deserialize_chunk(buf.as_slice()).expect("deserialize failed")
+        let registry = BlockDataTypeRegistry::default();
+        deserialize_chunk(buf.as_slice(), &registry).expect("deserialize failed")
     }
 
     // Helper: collect every block in storage order.
@@ -666,7 +728,8 @@ mod tests {
         serialize_chunk(&Chunk::new(ChunkPos::new(0, 0, 0)), &mut buf).unwrap();
         buf[0] = 0xFF; // corrupt first magic byte
 
-        let err = deserialize_chunk(buf.as_slice()).unwrap_err();
+        let registry = BlockDataTypeRegistry::default();
+        let err = deserialize_chunk(buf.as_slice(), &registry).unwrap_err();
         assert!(
             matches!(err, ChunkSerializeError::BadMagic(_)),
             "expected BadMagic, got: {err}"
@@ -682,7 +745,8 @@ mod tests {
         buf[4] = 99;
         buf[5] = 0;
 
-        let err = deserialize_chunk(buf.as_slice()).unwrap_err();
+        let registry = BlockDataTypeRegistry::default();
+        let err = deserialize_chunk(buf.as_slice(), &registry).unwrap_err();
         assert!(
             matches!(err, ChunkSerializeError::UnsupportedVersion(99)),
             "expected UnsupportedVersion(99), got: {err}"
@@ -696,7 +760,8 @@ mod tests {
         serialize_chunk(&Chunk::new(ChunkPos::new(0, 0, 0)), &mut buf).unwrap();
         buf.truncate(10); // keep header, strip entire body
 
-        let err = deserialize_chunk(buf.as_slice()).unwrap_err();
+        let registry = BlockDataTypeRegistry::default();
+        let err = deserialize_chunk(buf.as_slice(), &registry).unwrap_err();
         assert!(
             matches!(err, ChunkSerializeError::Io(_)),
             "expected Io error, got: {err}"
@@ -707,8 +772,9 @@ mod tests {
     // Encoding size
     // -----------------------------------------------------------------------
 
-    /// An all-air chunk should encode to exactly 34 bytes:
-    ///   18-byte header + 2 RLE runs × 4 bytes + 8-byte version.
+    /// An all-air chunk should encode to exactly 35 bytes:
+    ///   18-byte header + 2 RLE runs × 4 bytes + 8-byte version
+    ///   + 1 byte for an empty cell-data record list (bincode varint 0).
     ///
     /// Header = 4 (magic) + 2 (version tag) + 4 (x) + 4 (y) + 4 (z) = 18.
     /// CHUNK_SIZE = 65536, MAX_RUN = 65535 → 2 runs needed.
@@ -718,13 +784,13 @@ mod tests {
         serialize_chunk(&Chunk::new(ChunkPos::new(0, 0, 0)), &mut buf).unwrap();
         assert_eq!(
             buf.len(),
-            34,
-            "expected 34-byte encoding for all-air chunk, got {} bytes",
+            35,
+            "expected 35-byte encoding for all-air chunk, got {} bytes",
             buf.len()
         );
     }
 
-    /// A fully uniform non-air chunk also encodes to 34 bytes.
+    /// A fully uniform non-air chunk also encodes to 35 bytes.
     #[test]
     fn compact_encoding_uniform_non_air() {
         let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
@@ -740,8 +806,8 @@ mod tests {
         serialize_chunk(&chunk, &mut buf).unwrap();
         assert_eq!(
             buf.len(),
-            34,
-            "expected 34-byte encoding for uniform chunk, got {} bytes",
+            35,
+            "expected 35-byte encoding for uniform chunk, got {} bytes",
             buf.len()
         );
     }
@@ -761,5 +827,110 @@ mod tests {
                 "flat_to_local({i}) → ({lx},{ly},{lz}) does not round-trip"
             );
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Cell data round-trip
+    // -----------------------------------------------------------------------
+
+    fn registry_with_sign() -> BlockDataTypeRegistry {
+        let mut r = BlockDataTypeRegistry::default();
+        r.register::<TestSign>();
+        r
+    }
+
+    /// V1 persists live cell data: a chunk with a sign survives a round-trip.
+    #[test]
+    fn round_trip_v1_preserves_cell_data() {
+        let pos = ChunkPos::new(0, 0, 0);
+        let mut original = Chunk::new(pos);
+        let local = BlockLocal::new(2, 3, 4);
+        original.insert_cell_data_for_load(
+            local,
+            Box::new(TestSign {
+                text: "hello".into(),
+            }),
+        );
+
+        let mut buf = Vec::new();
+        serialize_chunk_versioned(&original, &mut buf, ChunkVersion::V1).unwrap();
+        let registry = registry_with_sign();
+        let restored = deserialize_chunk(buf.as_slice(), &registry).unwrap();
+
+        let value = restored
+            .iter_all_cell_data()
+            .find(|(l, _)| *l == local)
+            .expect("sign must round-trip");
+        let sign = value
+            .1
+            .as_any()
+            .downcast_ref::<TestSign>()
+            .expect("type downcast");
+        assert_eq!(sign.text, "hello");
+    }
+
+    /// V1Versioned persists both live cell data and the cell-data history.
+    #[test]
+    fn round_trip_v1_versioned_preserves_cell_data_history() {
+        let pos = ChunkPos::new(1, 0, -1);
+        let mut original = Chunk::new(pos);
+        original.set_version(9);
+        let local = BlockLocal::new(0, 0, 0);
+        original.insert_cell_data_for_load(
+            local,
+            Box::new(TestSign {
+                text: "live".into(),
+            }),
+        );
+        original.push_confirmed_cell_data_for_load(
+            9,
+            CellDataChange::new_set(
+                local,
+                TestSign {
+                    text: "history-entry".into(),
+                },
+            ),
+        );
+
+        let mut buf = Vec::new();
+        serialize_chunk_versioned(&original, &mut buf, ChunkVersion::V1Versioned).unwrap();
+        let registry = registry_with_sign();
+        let restored = deserialize_chunk(buf.as_slice(), &registry).unwrap();
+
+        assert_eq!(restored.version(), 9);
+        assert_eq!(restored.confirmed_cell_data_history().len(), 1);
+        let (hv, hc) = restored.confirmed_cell_data_history().front().unwrap();
+        assert_eq!(*hv, 9);
+        let CellDataChange::Set { value, .. } = hc else {
+            panic!("expected Set history entry");
+        };
+        let s = value.as_any().downcast_ref::<TestSign>().unwrap();
+        assert_eq!(s.text, "history-entry");
+    }
+
+    /// A cell-data record whose `type_key` is not present in the registry
+    /// must surface as [`ChunkSerializeError::CellData`] rather than be
+    /// silently dropped.
+    #[test]
+    fn unknown_cell_data_type_fails_loud() {
+        let pos = ChunkPos::new(0, 0, 0);
+        let mut original = Chunk::new(pos);
+        original.insert_cell_data_for_load(
+            BlockLocal::new(1, 1, 1),
+            Box::new(TestSign {
+                text: "oops".into(),
+            }),
+        );
+
+        let mut buf = Vec::new();
+        serialize_chunk(&original, &mut buf).unwrap();
+
+        // Load without registering TestSign.
+        let empty = BlockDataTypeRegistry::default();
+        let err = deserialize_chunk(buf.as_slice(), &empty).unwrap_err();
+        assert!(
+            matches!(err, ChunkSerializeError::CellData(_)),
+            "expected CellData error, got: {err}"
+        );
     }
 }

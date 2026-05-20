@@ -149,7 +149,7 @@ impl Debug for BlockDataTypeInfo {
 ///
 /// Look-up is keyed by [`TypeId`] for in-memory work and by wire string
 /// for network / disk deserialisation.
-#[derive(Resource, Default, Debug)]
+#[derive(Resource, Clone, Default, Debug)]
 pub struct BlockDataTypeRegistry {
     by_type_id: HashMap<TypeId, BlockDataTypeInfo>,
     by_type_key: HashMap<&'static str, TypeId>,

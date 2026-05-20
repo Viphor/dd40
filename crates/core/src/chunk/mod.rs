@@ -383,6 +383,35 @@ impl Chunk {
         self.confirmed_history.push_back((version, change));
     }
 
+    /// Iterates over every cell that has at least one piece of typed
+    /// data on it, yielding the cell-local coordinate paired with each
+    /// boxed [`BlockData`] entry.  Storage backends use this to walk the
+    /// live cell-data state during save.
+    pub fn iter_all_cell_data(&self) -> impl Iterator<Item = (BlockLocal, &dyn BlockData)> {
+        self.cell_data
+            .iter()
+            .flat_map(|(local, submap)| submap.values().map(move |v| (*local, v.as_ref())))
+    }
+
+    /// Re-inserts a boxed [`BlockData`] entry at `local` without
+    /// touching version, history, or predicted queues.  Low-level
+    /// escape hatch for storage backends rehydrating a persisted live
+    /// cell-data state.
+    pub fn insert_cell_data_for_load(&mut self, local: BlockLocal, value: Box<dyn BlockData>) {
+        self.cell_data
+            .entry(local)
+            .or_default()
+            .insert(value.as_any().type_id(), value);
+    }
+
+    /// Appends `(version, change)` to the cell-data confirmed history
+    /// without touching live state or `version`.  Counterpart of
+    /// [`Chunk::push_confirmed_for_load`] for the cell-data history.
+    pub fn push_confirmed_cell_data_for_load(&mut self, version: u64, change: CellDataChange) {
+        self.confirmed_cell_data_history
+            .push_back((version, change));
+    }
+
     /// Returns the block at chunk-local coordinates, or `None` when the
     /// coordinates are out of range.
     pub fn get(&self, lx: usize, ly: usize, lz: usize) -> Option<Block> {

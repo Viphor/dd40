@@ -4,6 +4,7 @@ use std::{
 };
 
 use bevy::prelude::*;
+use dd40_core::block::BlockDataTypeRegistry;
 use dd40_core::prelude::*;
 
 use crate::{
@@ -26,10 +27,12 @@ use crate::{
 /// writer's format is fixed at construction time:
 ///
 /// - `save_history = false` (default) — writes [`ChunkVersion::V1`].
-///   Smallest file. The chunk's confirmed history is dropped at save time.
+///   Persists the chunk's live cell-data state but drops block and
+///   cell-data history at save time.
 /// - `save_history = true` — writes [`ChunkVersion::V1Versioned`]. The
-///   chunk's confirmed history is persisted so the server can serve delta
-///   updates after a restart.
+///   chunk's confirmed block history, live cell data, and cell-data
+///   history are all persisted so the server can serve delta updates
+///   after a restart.
 ///
 /// See [`crate::plugin::DiskStoragePlugin`] for how the flag is wired from
 /// the `DD40_CHUNK_STORAGE__SAVE_HISTORY` environment variable.
@@ -37,10 +40,12 @@ use crate::{
 pub struct DiskChunkProvider {
     dir: PathBuf,
     save_history: bool,
+    registry: BlockDataTypeRegistry,
 }
 
 impl DiskChunkProvider {
-    /// Creates a provider that writes the smallest format ([`ChunkVersion::V1`]).
+    /// Creates a provider that writes the smallest cell-data-aware
+    /// format ([`ChunkVersion::V1`]).
     ///
     /// Equivalent to [`DiskChunkProvider::with_history`] with
     /// `save_history = false`. The directory does **not** need to exist
@@ -57,7 +62,21 @@ impl DiskChunkProvider {
         Self {
             dir: dir.into(),
             save_history,
+            registry: BlockDataTypeRegistry::default(),
         }
+    }
+
+    /// Replaces the [`BlockDataTypeRegistry`] snapshot this provider
+    /// uses when decoding cell data.  The plugin keeps this synced to
+    /// the live registry resource at startup; tests can construct the
+    /// provider with [`Self::new`] and then call this directly.
+    pub fn set_registry(&mut self, registry: BlockDataTypeRegistry) {
+        self.registry = registry;
+    }
+
+    /// Returns the registry currently used for cell-data decoding.
+    pub fn registry(&self) -> &BlockDataTypeRegistry {
+        &self.registry
     }
 
     /// Returns whether this provider persists the confirmed history on save.
@@ -87,10 +106,13 @@ impl DiskChunkProvider {
         let version = if self.save_history {
             ChunkVersion::V1Versioned
         } else {
-            if !chunk.confirmed_history().is_empty() {
+            if !chunk.confirmed_history().is_empty()
+                || !chunk.confirmed_cell_data_history().is_empty()
+            {
                 debug!(
-                    "DiskChunkProvider: dropping {}-entry confirmed history for {} (save_history = false)",
+                    "DiskChunkProvider: dropping {} block-history + {} cell-data-history entries for {} (save_history = false)",
                     chunk.confirmed_history().len(),
+                    chunk.confirmed_cell_data_history().len(),
                     chunk.position(),
                 );
             }
@@ -111,20 +133,24 @@ impl DiskChunkProvider {
 
     pub(crate) fn request(&self, pos: ChunkPos, sender: crossbeam_channel::Sender<ChunkResponse>) {
         let path = self.chunk_path(pos);
+        let registry = self.registry.clone();
         // Spawn a background thread so disk I/O never blocks the main thread.
         std::thread::spawn(move || {
-            let result = deserialize_chunk(BufReader::new(match std::fs::File::open(&path) {
-                Ok(f) => f,
-                Err(e) if e.kind() == ErrorKind::NotFound => {
-                    let _ = sender.send(ChunkResponse::Request(pos));
-                    return;
-                }
-                Err(e) => {
-                    warn!("DiskChunkProvider: failed to open {:?}: {}", path, e);
-                    let _ = sender.send(ChunkResponse::Request(pos));
-                    return;
-                }
-            }));
+            let result = deserialize_chunk(
+                BufReader::new(match std::fs::File::open(&path) {
+                    Ok(f) => f,
+                    Err(e) if e.kind() == ErrorKind::NotFound => {
+                        let _ = sender.send(ChunkResponse::Request(pos));
+                        return;
+                    }
+                    Err(e) => {
+                        warn!("DiskChunkProvider: failed to open {:?}: {}", path, e);
+                        let _ = sender.send(ChunkResponse::Request(pos));
+                        return;
+                    }
+                }),
+                &registry,
+            );
             match result {
                 Ok(chunk) => {
                     let _ = sender.send(ChunkResponse::Loaded(chunk));
@@ -222,8 +248,12 @@ mod tests {
         provider.save(&chunk).unwrap();
 
         let path = dir.join(format!("chunk_{}_{}_{}.bin", pos.x, pos.y, pos.z));
-        let restored =
-            deserialize_chunk(BufReader::new(std::fs::File::open(&path).unwrap())).unwrap();
+        let registry = BlockDataTypeRegistry::default();
+        let restored = deserialize_chunk(
+            BufReader::new(std::fs::File::open(&path).unwrap()),
+            &registry,
+        )
+        .unwrap();
         assert_eq!(restored.version(), 5, "version preserved under V1");
         assert!(
             restored.confirmed_history().is_empty(),
@@ -240,8 +270,12 @@ mod tests {
         provider.save(&chunk).unwrap();
 
         let path = dir.join(format!("chunk_{}_{}_{}.bin", pos.x, pos.y, pos.z));
-        let restored =
-            deserialize_chunk(BufReader::new(std::fs::File::open(&path).unwrap())).unwrap();
+        let registry = BlockDataTypeRegistry::default();
+        let restored = deserialize_chunk(
+            BufReader::new(std::fs::File::open(&path).unwrap()),
+            &registry,
+        )
+        .unwrap();
         assert_eq!(restored.version(), 5);
         let restored_hist: Vec<_> = restored.confirmed_history().iter().copied().collect();
         let original_hist: Vec<_> = chunk.confirmed_history().iter().copied().collect();

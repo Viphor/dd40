@@ -2757,8 +2757,11 @@ name = "dd40_chunk_storage"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bincode 1.3.3",
  "crossbeam-channel",
  "dd40_core",
+ "erased-serde",
+ "serde",
 ]
 
 [[package]]

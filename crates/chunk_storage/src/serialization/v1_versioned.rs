@@ -1,30 +1,32 @@
-//! Version 1 (history-preserving) chunk body codec — RLE blocks + chunk
-//! version + confirmed history.
+//! Version 1 (history-preserving) chunk body codec — V1 body plus the
+//! chunk's confirmed block-change history and its confirmed cell-data
+//! history.
 //!
-//! Identical to [`v1`](super::v1) except that the trailing `confirmed_history`
-//! is also persisted, so a chunk reconstructed from this format can serve
-//! delta updates to clients whose `current_version` is older than the chunk's
-//! latest version.
+//! Pick this format when the storage backend needs to serve delta
+//! updates after a restart. Otherwise [`v1`](super::v1) is smaller.
 //!
 //! # Body format
 //!
 //! ```text
 //! ┌────────────────────────────────────────────────────┐
-//! │  RLE block array  (identical to v1)                │
+//! │  RLE block array                                   │
 //! ├────────────────────────────────────────────────────┤
-//! │  Chunk version                                     │
-//! │      version: u64                                  │
+//! │  Chunk version: u64                                │
 //! ├────────────────────────────────────────────────────┤
-//! │  Confirmed history                                 │
+//! │  Block confirmed history                           │
 //! │      history_len: u32                              │
 //! │      Repeated history_len times:                   │
 //! │        version_at_change: u64                      │
 //! │        change: 8 bytes (see `serialize_change`)    │
+//! ├────────────────────────────────────────────────────┤
+//! │  Live cell data       (bincode record list)        │
+//! ├────────────────────────────────────────────────────┤
+//! │  Cell-data history    (bincode record list)        │
 //! └────────────────────────────────────────────────────┘
 //! ```
 //!
-//! All multi-byte integers are little-endian. Each [`ChunkChange`] is encoded
-//! in a fixed 8 bytes:
+//! All multi-byte integers are little-endian. Each [`ChunkChange`] is
+//! encoded in a fixed 8 bytes:
 //!
 //! ```text
 //!   tag:      u8  (0 = Place, 1 = Remove, 2 = Replace)
@@ -37,18 +39,24 @@
 
 use std::io::{self, Read, Write};
 
+use dd40_core::block::BlockDataTypeRegistry;
 use dd40_core::prelude::*;
 
-use crate::serialization::ChunkSerializeError;
-
-use super::{deserialize_rle_blocks, read_u16, read_u32, read_u64, serialize_rle_blocks};
+use super::{
+    ChunkSerializeError, cell_data, deserialize_rle_blocks, read_u16, read_u32, read_u64,
+    serialize_rle_blocks,
+};
 
 const TAG_PLACE: u8 = 0;
 const TAG_REMOVE: u8 = 1;
 const TAG_REPLACE: u8 = 2;
 
-/// Serializes the body of `chunk` (RLE blocks + version + history).
-pub(super) fn serialize_body<W: Write>(chunk: &Chunk, writer: &mut W) -> io::Result<()> {
+/// Serializes the body of `chunk` (RLE blocks + version + block history
+/// + live cell data + cell-data history).
+pub(super) fn serialize_body<W: Write>(
+    chunk: &Chunk,
+    writer: &mut W,
+) -> Result<(), ChunkSerializeError> {
     serialize_rle_blocks(chunk, writer)?;
     writer.write_all(&chunk.version().to_le_bytes())?;
 
@@ -64,13 +72,16 @@ pub(super) fn serialize_body<W: Write>(chunk: &Chunk, writer: &mut W) -> io::Res
         serialize_change(*change, writer)?;
     }
 
+    cell_data::serialize_live(chunk, writer)?;
+    cell_data::serialize_history(chunk, writer)?;
     Ok(())
 }
 
-/// Deserializes a V1Versioned body into a [`Chunk`] at `pos`.
+/// Deserializes a V1Versioned body into a fresh [`Chunk`] at `pos`.
 pub(super) fn deserialize_body<R: Read>(
     pos: ChunkPos,
     reader: &mut R,
+    registry: &BlockDataTypeRegistry,
 ) -> Result<Chunk, ChunkSerializeError> {
     let mut chunk = deserialize_rle_blocks(pos, reader)?;
     let version = read_u64(reader)?;
@@ -83,6 +94,8 @@ pub(super) fn deserialize_body<R: Read>(
         chunk.push_confirmed_for_load(change_version, change);
     }
 
+    cell_data::deserialize_live(&mut chunk, reader, registry)?;
+    cell_data::deserialize_history(&mut chunk, reader, registry)?;
     Ok(chunk)
 }
 

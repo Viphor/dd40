@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use dd40_core::block::BlockDataTypeRegistry;
 use dd40_core::plugin::CorePlugin;
 
 use crate::{
@@ -100,7 +101,22 @@ impl Plugin for DiskStoragePlugin {
             PreUpdate,
             (dispatch_chunk_requests, collect_chunk_responses),
         );
+
+        // Snapshot the live BlockDataTypeRegistry into the disk provider
+        // once startup finishes — at that point every plugin has had a
+        // chance to call `register_block_data::<T>()`.
+        app.add_systems(Startup, snapshot_registry_into_provider);
     }
+}
+
+/// Copies the current [`BlockDataTypeRegistry`] into the
+/// [`DiskChunkProvider`] so the background load thread has the
+/// type-decoder table it needs to decode cell-data entries on load.
+fn snapshot_registry_into_provider(
+    registry: Res<BlockDataTypeRegistry>,
+    mut provider: ResMut<DiskChunkProvider>,
+) {
+    provider.set_registry(registry.clone());
 }
 
 #[cfg(test)]
