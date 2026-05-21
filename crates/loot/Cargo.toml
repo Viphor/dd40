@@ -1,0 +1,21 @@
+[package]
+name = "dd40_loot"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+bevy = { workspace = true, default-features = false }
+rand = { workspace = true }
+dd40_core = { workspace = true }
+dd40_item_core = { workspace = true }
+dd40_inventory_core = { workspace = true }
+dd40_loot_core = { workspace = true }
+dd40_rng = { workspace = true }
+
+[dev-dependencies]
+bevy = { workspace = true }
+dd40_core = { workspace = true }
+dd40_item_core = { workspace = true }
+dd40_inventory_core = { workspace = true }
+dd40_loot_core = { workspace = true }
