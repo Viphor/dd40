@@ -26,9 +26,10 @@ pub enum LootSet {
 /// Server-only loot plugin.
 ///
 /// Adding this plugin to the **server** binary is what turns
-/// destroyed blocks into [`DropItems`][dd40_inventory_core::DropItems]
-/// messages. The client never adds it; clients learn about drops by
-/// receiving the replicated item entities (forthcoming).
+/// destroyed blocks into
+/// [`DropItems`][dd40_inventory_core::drop::DropItems] messages. The
+/// client never adds it; clients learn about drops by receiving the
+/// replicated item entities (forthcoming).
 ///
 /// Auto-adds [`CorePlugin`], [`ItemCorePlugin`],
 /// [`InventoryCorePlugin`], [`LootCorePlugin`], and

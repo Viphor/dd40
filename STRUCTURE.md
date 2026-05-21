@@ -42,7 +42,7 @@ There are currently no tracked exceptions to this rule.
 |---|---|---|
 | `dd40_physics` | Gravity integration, block collision, character collision | `dd40_core`, `dd40_physics_core` |
 | `dd40_integration_character_physics` | Bridges `CharacterInput` → physics `Impulse` (the only crate that knows about both `dd40_character_core` and `dd40_physics_core`) | `dd40_core`, `dd40_character_core`, `dd40_physics_core` |
-| `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999) | `dd40_core` |
+| `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999); attaches `LootTable` block-data | `dd40_core`, `dd40_item_core`, `dd40_loot_core` |
 | `dd40_world` | World generation (generic over `WorldGenerator` trait) | `dd40_core` |
 | `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) | `dd40_core` |
 | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD | `dd40_core`, `dd40_physics_core` |
@@ -52,13 +52,14 @@ There are currently no tracked exceptions to this rule.
 | `dd40_debug_ui` | FPS overlay, orientation gizmo, custom debug elements | `dd40_core` |
 | `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
 | `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
+| `dd40_loot` | Server-only: turns accepted `ChunkChange::Remove` into `DropItems` messages, consulting cell-data and `BlockDefinition`-level `LootTable`s with `placeable`-item fallback | `dd40_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loot_core`, `dd40_rng` |
 
 ### Tier 2 — Binary
 
 | Crate | Plugins wired |
 |---|---|
 | `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin` |
-| `dd40_server` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `DiskStoragePlugin`, `WorldPlugin`, `ServerNetworkPlugin` |
+| `dd40_server` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `DiskStoragePlugin`, `WorldPlugin`, `LootPlugin`, `ServerNetworkPlugin` |
 
 ---
 
