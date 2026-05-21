@@ -66,6 +66,7 @@
 pub mod block;
 pub mod character_ext;
 pub mod component;
+pub mod drop;
 pub mod inventory;
 pub mod plugin;
 pub mod prelude;

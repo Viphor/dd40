@@ -15,6 +15,7 @@ use dd40_item_core::plugin::ItemCorePlugin;
 
 use crate::block::BlockInventory;
 use crate::component::InventoryComponent;
+use crate::drop::DropItems;
 
 /// Registers the inventory-system vocabulary.
 ///
@@ -25,6 +26,8 @@ use crate::component::InventoryComponent;
 /// - Registers [`InventoryComponent`] for reflection.
 /// - Registers [`BlockInventory`] with the block-data type registry so
 ///   chunk cell data can carry it over the wire and on disk.
+/// - Registers the [`DropItems`] message so loot and death systems can
+///   request item-entity spawns through a single seam.
 ///
 /// [`InventoryChanged`][crate::component::InventoryChanged] and
 /// [`BlockInventoryChanged`][crate::block::BlockInventoryChanged] are
@@ -38,6 +41,7 @@ impl Plugin for InventoryCorePlugin {
         ensure_plugins!(app, CorePlugin, ItemCorePlugin);
         app.register_type::<InventoryComponent>();
         app.register_block_data::<BlockInventory>();
+        app.add_message::<DropItems>();
     }
 }
 
@@ -75,6 +79,17 @@ mod tests {
         assert!(
             registry.get::<BlockInventory>().is_some(),
             "BlockInventory must be registered with the BlockDataTypeRegistry"
+        );
+    }
+
+    #[test]
+    fn registers_drop_items_message() {
+        use bevy::ecs::message::Messages;
+        let mut app = App::new();
+        app.add_plugins(InventoryCorePlugin);
+        assert!(
+            app.world().get_resource::<Messages<DropItems>>().is_some(),
+            "DropItems must be registered as a Bevy message"
         );
     }
 }
