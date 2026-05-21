@@ -2845,6 +2845,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_loot_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "dd40_item_core",
+ "rand 0.9.2",
+ "serde",
+]
+
+[[package]]
 name = "dd40_network"
 version = "0.1.0"
 dependencies = [

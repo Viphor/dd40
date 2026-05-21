@@ -32,7 +32,9 @@ There are currently no tracked exceptions to this rule.
 | `dd40_physics_core` | Physics types, components, system sets | `dd40_core` |
 | `dd40_character_core` | Character types, input bridge, `MiningState`, `TargetedBlock`, `PlayerId`, render sets | `dd40_core` |
 | `dd40_item_core` | Item registry, `ActiveItem`, `RequestActiveItem`, `ActiveItemChanged` | `dd40_core` |
-| `dd40_inventory_core` | `Inventory` component, `InventoryChanged` event, `CharacterInventoryExt` builder extension | `dd40_core`, `dd40_item_core` |
+| `dd40_inventory_core` | Pure-data `Inventory` + `InventoryComponent` (entity-keyed) + `BlockInventory` (block-cell, `BlockData`) + `DropItems` message + `CharacterInventoryExt` builder extension | `dd40_core`, `dd40_item_core` |
+| `dd40_rng` | Pluggable `GameRng` resource, `RngPlugin` | — |
+| `dd40_loot_core` | `LootTable`, `LootEntry`, `LootMode`; `BlockData` impl so tables can attach to `BlockDefinition` | `dd40_core`, `dd40_item_core` |
 
 ### Tier 1 — Implementation
 
