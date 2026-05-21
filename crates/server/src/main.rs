@@ -3,6 +3,7 @@ use dd40_character_interaction::CharacterInteractionPlugin;
 use dd40_chunk_storage::plugin::DiskStoragePlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
+use dd40_loot::LootPlugin;
 use dd40_network::{
     ServerNetworkPlugin,
     server::connection::{DDServer, LinkConditionerConfig, RecvLinkConditioner},
@@ -45,6 +46,8 @@ fn main() {
             // connected character.  The server owns the truth; clients render
             // the result that comes back over the wire.
             CharacterInteractionPlugin,
+            // Server-only: turn accepted ChunkChange::Remove into DropItems.
+            LootPlugin,
             ServerNetworkPlugin(DDServer {
                 conditioner: Some(RecvLinkConditioner::new(
                     LinkConditionerConfig::average_condition(),

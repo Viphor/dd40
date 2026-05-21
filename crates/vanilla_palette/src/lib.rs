@@ -33,6 +33,7 @@
 
 use bevy::prelude::*;
 use dd40_core::plugin::CorePlugin;
+use dd40_loot_core::plugin::LootCorePlugin;
 
 pub mod blocks;
 pub mod items;
@@ -64,7 +65,7 @@ pub struct VanillaPalettePlugin;
 
 impl Plugin for VanillaPalettePlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin);
+        dd40_core::ensure_plugins!(app, CorePlugin, LootCorePlugin);
         app.add_plugins((VanillaToolsPlugin, VanillaBlocksPlugin, VanillaItemsPlugin));
     }
 }
