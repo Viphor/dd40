@@ -54,8 +54,8 @@ use bevy::prelude::*;
 use dd40_character_core::components::Character;
 use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::targeted_block::TargetedBlock;
+use dd40_core::chunk::ChunkChange;
 use dd40_core::chunk::cache::ChunkCache;
-use dd40_core::chunk::{ChunkChange, change::BlockLocal};
 use dd40_core::prelude::*;
 use dd40_item_core::active_item::ActiveItem;
 use dd40_item_core::registry::{ItemDefinition, ItemRegistry};
@@ -136,10 +136,7 @@ pub(crate) fn try_place_block(
 
         let destination = |place_pos: BlockPos| -> Option<bool> {
             let chunk_pos = place_pos.chunk_pos();
-            let local = place_pos.chunk_local();
-            if local.y < 0 {
-                return None;
-            }
+            let local = place_pos.to_local();
             let chunk = cache.get(&chunk_pos)?;
             let existing = chunk.get(local.x as usize, local.y as usize, local.z as usize)?;
             Some(registry.is_replaceable(&existing))
@@ -149,22 +146,7 @@ pub(crate) fn try_place_block(
 
         if let Some((place_pos, block_id)) = step.place {
             let chunk_pos = place_pos.chunk_pos();
-            let local_world = place_pos.chunk_local();
-            // We already validated `local.y >= 0` inside `destination`,
-            // and the X/Z bounds are guaranteed by `chunk_local`'s
-            // `rem_euclid`. Build the typed `BlockLocal` accordingly.
-            let Some(local) = BlockLocal::try_new(
-                local_world.x as u8,
-                local_world.y as u16,
-                local_world.z as u8,
-            ) else {
-                warn!(
-                    "Refusing placement at {} — could not build a valid BlockLocal",
-                    place_pos
-                );
-                input.place = false;
-                continue;
-            };
+            let local = place_pos.to_local();
             debug!(
                 "Predicting placement of {:?} at {} (chunk {} local {:?})",
                 block_id, place_pos, chunk_pos, local

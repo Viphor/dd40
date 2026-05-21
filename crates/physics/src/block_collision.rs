@@ -115,7 +115,7 @@ fn get_block(pos: BlockPos, cache: &ChunkCache) -> Block {
     let Some(chunk) = cache.get(&chunk_pos) else {
         return Block::default();
     };
-    let local = pos.chunk_local();
+    let local = pos.to_local();
     chunk
         .get(local.x as usize, local.y as usize, local.z as usize)
         .unwrap_or_default()

@@ -112,7 +112,7 @@ fn dda_raycast(
         let chunk_pos = pos.chunk_pos();
 
         if let Some(chunk) = cache.get(&chunk_pos) {
-            let local = pos.chunk_local();
+            let local = pos.to_local();
             if let Some(block) = chunk.get(local.x as usize, local.y as usize, local.z as usize)
                 && block.block_id != BlockId::AIR
                 && registry.is_solid(&block)

@@ -49,7 +49,7 @@ use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::{
     block::{Block, BlockId},
-    chunk::{ChunkChange, cache::ChunkCache, change::BlockLocal},
+    chunk::{ChunkChange, cache::ChunkCache},
     prelude::*,
     tools::{ToolKindId, ToolTierId, mining_duration},
 };
@@ -197,26 +197,13 @@ pub(crate) fn update_mining(
 
         if let Some(pos) = step.mine {
             let chunk_pos = pos.chunk_pos();
-            let local_world = pos.chunk_local();
-            if local_world.y < 0 {
-                warn!("Refusing mine at {} — y is below world floor", pos);
-            } else if let Some(local) = BlockLocal::try_new(
-                local_world.x as u8,
-                local_world.y as u16,
-                local_world.z as u8,
-            ) {
-                debug!(
-                    "Predicting removal at {} (chunk {} local {:?})",
-                    pos, chunk_pos, local
-                );
-                if !cache.push_predicted(chunk_pos, ChunkChange::new_remove(local)) {
-                    debug!("Removal dropped — chunk {} not present in cache", chunk_pos);
-                }
-            } else {
-                warn!(
-                    "Refusing mine at {} — could not build a valid BlockLocal",
-                    pos
-                );
+            let local = pos.to_local();
+            debug!(
+                "Predicting removal at {} (chunk {} local {:?})",
+                pos, chunk_pos, local
+            );
+            if !cache.push_predicted(chunk_pos, ChunkChange::new_remove(local)) {
+                debug!("Removal dropped — chunk {} not present in cache", chunk_pos);
             }
         }
 
