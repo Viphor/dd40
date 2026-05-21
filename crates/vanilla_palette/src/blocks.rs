@@ -15,6 +15,7 @@
 //! | `VanillaBlocks::SAND` | 4  |
 //! | `VanillaBlocks::WOOD` | 5  |
 //! | `VanillaBlocks::LEAVES`| 6 |
+//! | `VanillaBlocks::COBBLESTONE`| 7 |
 //!
 //! Custom-crate blocks should start at ID `1000` to leave room for future
 //! vanilla additions.
@@ -29,7 +30,9 @@ use dd40_core::{
     },
     prelude::*,
 };
+use dd40_loot_core::table::{LootEntry, LootTable};
 
+use crate::items::VanillaItems;
 use crate::tools::VanillaToolKinds;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -53,6 +56,8 @@ impl VanillaBlocks {
     pub const WOOD: BlockId = BlockId(5);
     /// Leaves — mined with shears (or bare hands, slowly).
     pub const LEAVES: BlockId = BlockId(6);
+    /// Cobblestone — drops when stone is broken without silk touch.
+    pub const COBBLESTONE: BlockId = BlockId(7);
 }
 
 // ── Registration system ───────────────────────────────────────────────────────
@@ -66,7 +71,11 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_solid(true)
             .with_renderable(true)
             .with_toughness(1.5)
-            .with_preferred_tool(VanillaToolKinds::PICKAXE),
+            .with_preferred_tool(VanillaToolKinds::PICKAXE)
+            .with_data(LootTable::with_entries(vec![LootEntry::Fixed {
+                item: VanillaItems::COBBLESTONE,
+                count: 1,
+            }])),
         &mut commands,
     );
 
@@ -117,6 +126,16 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(0.2)
             .with_preferred_tool(VanillaToolKinds::SHEARS),
+        &mut commands,
+    );
+
+    registry.register(
+        BlockDefinition::new(VanillaBlocks::COBBLESTONE, "cobblestone")
+            .with_color(Color::srgb(0.4, 0.4, 0.4))
+            .with_solid(true)
+            .with_renderable(true)
+            .with_toughness(2.0)
+            .with_preferred_tool(VanillaToolKinds::PICKAXE),
         &mut commands,
     );
 }
@@ -187,9 +206,27 @@ mod tests {
             VanillaBlocks::SAND,
             VanillaBlocks::WOOD,
             VanillaBlocks::LEAVES,
+            VanillaBlocks::COBBLESTONE,
         ] {
             assert!(registry.get(id).is_some(), "Block {:?} not registered", id);
         }
+    }
+
+    #[test]
+    fn stone_loot_table_drops_cobblestone() {
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+        let mut app = make_test_app();
+        app.update();
+
+        let registry = app.world().resource::<BlockRegistry>();
+        let table = registry
+            .block_data::<LootTable>(VanillaBlocks::STONE)
+            .expect("stone should have a LootTable attached");
+        let mut rng = StdRng::seed_from_u64(0);
+        let stacks = table.roll(&mut rng);
+        assert_eq!(stacks.len(), 1);
+        assert_eq!(stacks[0].item, VanillaItems::COBBLESTONE);
     }
 
     #[test]

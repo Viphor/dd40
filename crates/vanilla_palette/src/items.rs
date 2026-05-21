@@ -50,6 +50,8 @@ impl VanillaItems {
     pub const WOOD: ItemId = ItemId(5);
     /// Leaves block item — places [`VanillaBlocks::LEAVES`].
     pub const LEAVES: ItemId = ItemId(6);
+    /// Cobblestone block item — places [`VanillaBlocks::COBBLESTONE`].
+    pub const COBBLESTONE: ItemId = ItemId(7);
 
     // Tool items (100..=124). Layout is kind-major: 5 tiers per kind,
     // in the order WOOD, STONE, IRON, DIAMOND, GOLD.
@@ -149,13 +151,18 @@ const TOOL_KINDS: [(&str, dd40_core::tools::ToolKindId, ItemId); 5] = [
     ),
 ];
 
-const PLACEABLE_ITEMS: [(ItemId, &str, dd40_core::block::BlockId); 6] = [
+const PLACEABLE_ITEMS: [(ItemId, &str, dd40_core::block::BlockId); 7] = [
     (VanillaItems::STONE, "stone", VanillaBlocks::STONE),
     (VanillaItems::DIRT, "dirt", VanillaBlocks::DIRT),
     (VanillaItems::GRASS, "grass", VanillaBlocks::GRASS),
     (VanillaItems::SAND, "sand", VanillaBlocks::SAND),
     (VanillaItems::WOOD, "wood", VanillaBlocks::WOOD),
     (VanillaItems::LEAVES, "leaves", VanillaBlocks::LEAVES),
+    (
+        VanillaItems::COBBLESTONE,
+        "cobblestone",
+        VanillaBlocks::COBBLESTONE,
+    ),
 ];
 
 fn register_vanilla_items(mut registry: ResMut<ItemRegistry>) {
@@ -239,11 +246,11 @@ mod tests {
     }
 
     #[test]
-    fn registers_exactly_31_vanilla_items() {
+    fn registers_exactly_32_vanilla_items() {
         let app = build_app();
         let registry = app.world().resource::<ItemRegistry>();
-        // 6 placeables + 25 tools = 31 entries up to ID 124, with the gap
-        // (0, 7..=99) filled by `unknown_*` placeholders.
+        // 7 placeables + 25 tools = 32 entries up to ID 124, with the gap
+        // (0, 8..=99) filled by `unknown_*` placeholders.
         let count = registry
             .iter()
             .filter(|d| !d.name.starts_with("unknown_"))
