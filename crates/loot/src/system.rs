@@ -129,6 +129,7 @@ pub fn emit_loot_drops(
 
             if !stacks.is_empty() {
                 let bp = ev.pos.block_pos(*local);
+                trace!("Dropping items {stacks:?}");
                 drops.write(DropItems {
                     origin: block_centre(bp),
                     velocity: Vec3::ZERO,
