@@ -21,6 +21,7 @@ use dd40_core::prelude::*;
 
 use crate::provider::DiskChunkProvider;
 
+pub mod entity_sidecar;
 pub mod plugin;
 pub mod provider;
 pub mod serialization;
