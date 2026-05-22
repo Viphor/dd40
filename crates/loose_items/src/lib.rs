@@ -32,7 +32,9 @@
 //! ```
 
 pub mod merge;
+pub mod persister;
 pub mod plugin;
 pub mod spawn;
 
+pub use persister::{LOOSE_ITEM_KIND, LooseItemPersister};
 pub use plugin::LooseItemsPlugin;

@@ -1,33 +1,68 @@
 //! Spawning + lifecycle tick for loose items.
 
 use bevy::prelude::*;
-use bevy::time::Timer;
+use bevy::time::{Timer, TimerMode};
 use std::num::NonZero;
+use std::time::Duration;
 
 use dd40_inventory_core::drop::DropItems;
 use dd40_item_core::active_item::ItemStack;
 use dd40_item_core::registry::ItemRegistry;
 use dd40_loose_item_core::{DespawnTimer, LooseItem, LooseItemConfig, PickupCooldown};
-use dd40_physics_core::prelude::{Aabb, GravityScale, PhysicsBody, PhysicsCollider, Velocity};
+use dd40_physics_core::prelude::{
+    Aabb, GravityScale, PhysicsBody, PhysicsCollider, PhysicsPosition, Velocity,
+};
 
 /// Half-extent of a freshly spawned loose item's collider, in world
 /// units.  0.125 m (¼ block) feels right visually and stops items
 /// from getting stuck in narrow gaps.
-const LOOSE_ITEM_HALF_EXTENT: f32 = 0.125;
+pub(crate) const LOOSE_ITEM_HALF_EXTENT: f32 = 0.125;
+
+/// Full component bundle for a loose-item entity.
+///
+/// This is the **single source of truth** for which components a
+/// loose item must have; every spawn path — [`spawn_loose_items`] for
+/// fresh drops and
+/// [`LooseItemPersister::spawn`](crate::persister::LooseItemPersister::spawn)
+/// for loaded ones — builds and inserts the bundle returned here.
+/// Adding a required component means editing this function alone.
+///
+/// `PhysicsPosition` is inserted explicitly (rather than relying on
+/// its `on_add` hook reading `Transform.translation`) so that
+/// persistence-restored entities and freshly spawned entities reach
+/// `update_physics_position` in the same state.
+#[must_use]
+pub(crate) fn loose_item_bundle(
+    position: Vec3,
+    velocity: Vec3,
+    stack: ItemStack,
+    despawn_remaining: Duration,
+    pickup_cooldown_remaining: Duration,
+) -> impl Bundle {
+    (
+        Transform::from_translation(position),
+        PhysicsBody,
+        PhysicsCollider,
+        PhysicsPosition(position),
+        Aabb::new(
+            LOOSE_ITEM_HALF_EXTENT,
+            LOOSE_ITEM_HALF_EXTENT,
+            LOOSE_ITEM_HALF_EXTENT,
+        ),
+        Velocity(velocity),
+        GravityScale(1.0),
+        LooseItem::new(stack),
+        DespawnTimer(Timer::new(despawn_remaining, TimerMode::Once)),
+        PickupCooldown(Timer::new(pickup_cooldown_remaining, TimerMode::Once)),
+    )
+}
 
 /// Drains [`DropItems`] messages and spawns one entity per stack
 /// (splitting oversized stacks at the item's `max_stack`).
 ///
-/// Each spawned entity carries:
-///
-/// - [`LooseItem`] with the (possibly split) stack
-/// - [`Transform`] at the message's `origin`
-/// - [`PhysicsBody`] + [`PhysicsCollider`] + a small [`Aabb`]
-/// - [`Velocity`] copied verbatim from the message (emitters add
-///   their own scatter)
-/// - [`GravityScale(1.0)`]
-/// - [`DespawnTimer`] and [`PickupCooldown`] initialised from
-///   [`LooseItemConfig`]
+/// Each spawned entity carries the components produced by
+/// [`loose_item_bundle`], with timers initialised from
+/// [`LooseItemConfig`].
 ///
 /// Runs in [`LooseItemSet::Spawn`](dd40_loose_item_core::LooseItemSet::Spawn).
 pub fn spawn_loose_items(
@@ -39,26 +74,12 @@ pub fn spawn_loose_items(
     for drop in drops.read() {
         for stack in &drop.stacks {
             for sub_stack in split_to_max_stack(*stack, &registry) {
-                commands.spawn((
-                    Transform::from_translation(drop.origin),
-                    PhysicsBody,
-                    PhysicsCollider,
-                    Aabb::new(
-                        LOOSE_ITEM_HALF_EXTENT,
-                        LOOSE_ITEM_HALF_EXTENT,
-                        LOOSE_ITEM_HALF_EXTENT,
-                    ),
-                    Velocity(drop.velocity),
-                    GravityScale(1.0),
-                    LooseItem::new(sub_stack),
-                    DespawnTimer(Timer::new(
-                        config.default_lifetime,
-                        bevy::time::TimerMode::Once,
-                    )),
-                    PickupCooldown(Timer::new(
-                        config.default_pickup_cooldown,
-                        bevy::time::TimerMode::Once,
-                    )),
+                commands.spawn(loose_item_bundle(
+                    drop.origin,
+                    drop.velocity,
+                    sub_stack,
+                    config.default_lifetime,
+                    config.default_pickup_cooldown,
                 ));
             }
         }

@@ -2883,11 +2883,13 @@ name = "dd40_loose_items"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bincode 1.3.3",
  "dd40_core",
  "dd40_inventory_core",
  "dd40_item_core",
  "dd40_loose_item_core",
  "dd40_physics_core",
+ "serde",
 ]
 
 [[package]]
