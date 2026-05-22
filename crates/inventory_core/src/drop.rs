@@ -32,11 +32,11 @@ use dd40_item_core::active_item::ItemStack;
 /// - `origin` — world-space position at which the items should appear,
 ///   typically the centre of the source block or the world position of
 ///   the dying entity.
-/// - `velocity` — initial velocity applied to the spawned entities.
-///   Pass [`Vec3::ZERO`] for "drop in place".  Consumers may add a
-///   small random scatter on top — that randomness should originate
-///   from [`GameRng`][dd40_rng::GameRng] so it stays deterministic and
-///   server-authoritative.
+/// - `velocity` — initial velocity applied to the spawned entity.
+///   Emitters that want a scatter effect (e.g. fanning out a block's
+///   loot table across several stacks) should bake the scatter in
+///   here, using [`GameRng`][dd40_rng::GameRng] for determinism.
+///   Consumers (the spawner) apply this velocity verbatim.
 /// - `stacks` — the stacks to spawn.  Empty `stacks` is a no-op and
 ///   consumers must tolerate it.  How many entities the consumer
 ///   spawns per stack (one per stack vs one per item) is the

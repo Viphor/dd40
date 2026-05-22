@@ -129,12 +129,15 @@ pub fn emit_loot_drops(
 
             if !stacks.is_empty() {
                 let bp = ev.pos.block_pos(*local);
+                let origin = block_centre(bp);
                 trace!("Dropping items {stacks:?}");
-                drops.write(DropItems {
-                    origin: block_centre(bp),
-                    velocity: Vec3::ZERO,
-                    stacks,
-                });
+                for stack in stacks {
+                    drops.write(DropItems {
+                        origin,
+                        velocity: scatter_velocity(rng.as_mut()),
+                        stacks: vec![stack],
+                    });
+                }
             }
 
             if snapshot.had_inventory {
@@ -180,4 +183,21 @@ fn fallback_drop(prior_block: BlockId, item_registry: &ItemRegistry) -> Vec<Item
 
 fn block_centre(pos: BlockPos) -> Vec3 {
     Vec3::new(pos.x as f32 + 0.5, pos.y as f32 + 0.5, pos.z as f32 + 0.5)
+}
+
+/// Small random kick applied to each dropped stack so a pile of
+/// simultaneous drops fans out instead of stacking on the source
+/// block.
+///
+/// The horizontal component is uniform in `[-0.15, 0.15]` m/s on each
+/// axis; the vertical component is uniform in `[0.10, 0.30]` m/s so
+/// the item visibly hops up before settling.  All randomness is drawn
+/// from the supplied [`GameRng`][dd40_rng::GameRng]-backed
+/// [`rand::RngCore`] so it stays deterministic.
+fn scatter_velocity(rng: &mut dyn rand::RngCore) -> Vec3 {
+    use rand::Rng;
+    let x = rng.gen_range(-0.15..=0.15);
+    let z = rng.gen_range(-0.15..=0.15);
+    let y = rng.gen_range(0.10..=0.30);
+    Vec3::new(x, y, z)
 }

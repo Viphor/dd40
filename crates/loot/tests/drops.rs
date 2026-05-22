@@ -81,7 +81,15 @@ fn breaks_block_with_definition_loot_table_drops_rolled_stacks() {
     let drops = collect_drops(&app);
     assert_eq!(drops.len(), 1, "expected one DropItems");
     assert_eq!(drops[0].stacks, vec![ItemStack::single(COBBLESTONE_ITEM)]);
-    assert_eq!(drops[0].velocity, Vec3::ZERO);
+    // Emitter scatters drops: horizontal in [-0.15, 0.15], vertical in
+    // [0.10, 0.30].
+    let v = drops[0].velocity;
+    assert!(v.x.abs() <= 0.15, "scatter x out of range: {v:?}");
+    assert!(v.z.abs() <= 0.15, "scatter z out of range: {v:?}");
+    assert!(
+        (0.10..=0.30).contains(&v.y),
+        "scatter y out of range: {v:?}"
+    );
 }
 
 #[test]
@@ -121,10 +129,12 @@ fn breaks_block_with_block_inventory_appends_contents_and_clears_cell_data() {
     app.update();
 
     let drops = collect_drops(&app);
-    assert_eq!(drops.len(), 1);
-    // Fallback (chest item) plus inventory contents (apple).
-    assert!(drops[0].stacks.contains(&ItemStack::single(CHEST_ITEM)));
-    assert!(drops[0].stacks.contains(&ItemStack::single(APPLE_ITEM)));
+    // Emitter now writes one DropItems per stack (each gets its own
+    // independently scattered velocity).
+    assert_eq!(drops.len(), 2);
+    let stacks: Vec<ItemStack> = drops.iter().flat_map(|d| d.stacks.clone()).collect();
+    assert!(stacks.contains(&ItemStack::single(CHEST_ITEM)));
+    assert!(stacks.contains(&ItemStack::single(APPLE_ITEM)));
 
     // The cell-data clear is pushed as a predicted change; commit on the next
     // frame should evict the BlockInventory.
