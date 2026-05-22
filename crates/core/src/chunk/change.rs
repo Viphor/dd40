@@ -370,9 +370,6 @@ mod tests {
     // CellDataChange
     // -----------------------------------------------------------------
 
-    use serde::Deserialize as _;
-    use serde::Serialize as _;
-
     #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
     struct ChestState {
         slots: u32,
