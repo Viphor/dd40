@@ -5,6 +5,7 @@ pub mod common;
 pub mod debug;
 pub mod loading;
 pub mod macros;
+pub mod persistence;
 pub mod plugin;
 pub mod state;
 pub mod tools;
@@ -23,6 +24,7 @@ pub mod prelude {
             SerializableCellDataChange, SerializableChunkChange, cache::ChunkCache, events::*,
         },
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
+        persistence::{EntityPersister, EntityPersisterRegistry, PersistedEntity},
         state::{AppState, GameState},
         tools::{
             ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet, ToolTierDefinition,

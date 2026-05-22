@@ -21,6 +21,7 @@ impl Plugin for CorePlugin {
             .insert_resource(ToolRegistry::new())
             .init_resource::<crate::block::BlockDataTypeRegistry>()
             .init_resource::<MaxDeltaBehind>()
+            .init_resource::<crate::persistence::EntityPersisterRegistry>()
             .register_type::<BlockId>()
             .register_type::<Block>()
             .register_type::<BlockRegistry>()
