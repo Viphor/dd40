@@ -2793,6 +2793,7 @@ dependencies = [
  "bevy",
  "bincode 1.3.3",
  "crossbeam-channel",
+ "ctrlc",
  "erased-serde",
  "serde",
  "serde_json",

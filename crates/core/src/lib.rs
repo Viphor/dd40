@@ -3,6 +3,7 @@ pub mod builder_extra;
 pub mod chunk;
 pub mod common;
 pub mod debug;
+pub mod graceful_shutdown;
 pub mod loading;
 pub mod macros;
 pub mod persistence;
@@ -23,6 +24,7 @@ pub mod prelude {
             CellDataWireError, Chunk, ChunkChange, ChunkPos, MaxDeltaBehind,
             SerializableCellDataChange, SerializableChunkChange, cache::ChunkCache, events::*,
         },
+        graceful_shutdown::GracefulShutdownPlugin,
         loading::{LoadingPlugin, LoadingSet, LoadingTracker},
         persistence::{EntityPersister, EntityPersisterRegistry, PersistedEntity},
         state::{AppState, GameState},
