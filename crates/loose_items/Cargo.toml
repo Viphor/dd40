@@ -1,0 +1,13 @@
+[package]
+name = "dd40_loose_items"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+bevy = { workspace = true, default-features = false }
+dd40_core = { workspace = true }
+dd40_physics_core = { workspace = true }
+dd40_item_core = { workspace = true }
+dd40_inventory_core = { workspace = true }
+dd40_loose_item_core = { workspace = true }

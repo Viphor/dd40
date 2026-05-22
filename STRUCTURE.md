@@ -54,6 +54,7 @@ There are currently no tracked exceptions to this rule.
 | `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
 | `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
 | `dd40_loot` | Server-only: turns accepted `ChunkChange::Remove` into `DropItems` messages, consulting cell-data and `BlockDefinition`-level `LootTable`s with `placeable`-item fallback | `dd40_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loot_core`, `dd40_rng` |
+| `dd40_loose_items` | Server-only: drains `DropItems` into spawned `LooseItem` entities (with physics body) and ticks `DespawnTimer` / `PickupCooldown` | `dd40_core`, `dd40_physics_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loose_item_core` |
 
 ### Tier 2 — Binary
 

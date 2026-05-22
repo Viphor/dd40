@@ -2854,6 +2854,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_loose_items"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "dd40_inventory_core",
+ "dd40_item_core",
+ "dd40_loose_item_core",
+ "dd40_physics_core",
+]
+
+[[package]]
 name = "dd40_loot"
 version = "0.1.0"
 dependencies = [
@@ -2947,6 +2959,7 @@ dependencies = [
  "dd40_chunk_storage",
  "dd40_core",
  "dd40_integration_character_physics",
+ "dd40_loose_items",
  "dd40_loot",
  "dd40_network",
  "dd40_physics",

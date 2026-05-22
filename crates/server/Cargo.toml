@@ -20,3 +20,4 @@ dd40_chunk_storage = { workspace = true }
 dd40_vanilla_palette = { workspace = true }
 dd40_character_interaction = { workspace = true }
 dd40_loot = { workspace = true }
+dd40_loose_items = { workspace = true }
