@@ -54,15 +54,16 @@ There are currently no tracked exceptions to this rule.
 | `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
 | `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
 | `dd40_loot` | Server-only: turns accepted `ChunkChange::Remove` into `DropItems` messages, consulting cell-data and `BlockDefinition`-level `LootTable`s with `placeable`-item fallback | `dd40_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loot_core`, `dd40_rng` |
-| `dd40_loose_items` | Server-only: drains `DropItems` into spawned `LooseItem` entities (with physics body) and ticks `DespawnTimer` / `PickupCooldown` | `dd40_core`, `dd40_physics_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loose_item_core` |
+| `dd40_loose_items` | Server-only: drains `DropItems` into spawned `LooseItem` entities (with physics body), ticks `DespawnTimer` / `PickupCooldown`, merges same-item stacks on `BodyBodyContact`, registers `LooseItemPersister` so loose items survive restart | `dd40_core`, `dd40_physics_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loose_item_core` |
 | `dd40_integration_loose_item_pickup` | Server-only: only crate where `LooseItem` and `InventoryComponent` meet — subscribes to `BodyBodyContact` and grants stacks to the closest eligible character | `dd40_core`, `dd40_character_core`, `dd40_inventory_core`, `dd40_item_core`, `dd40_loose_item_core`, `dd40_physics_core` |
+| `dd40_loose_item_render` | Client-only: spinning, bobbing cube visual per `LooseItem` with placeable-block colour fallback | `dd40_core`, `dd40_item_core`, `dd40_loose_item_core` |
 
 ### Tier 2 — Binary
 
 | Crate | Plugins wired |
 |---|---|
-| `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin` |
-| `dd40_server` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `DiskStoragePlugin`, `WorldPlugin`, `LootPlugin`, `ServerNetworkPlugin` |
+| `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin`, `CharacterGuiPlugin`, `LooseItemRenderPlugin` |
+| `dd40_server` | `CorePlugin`, `GracefulShutdownPlugin`, `PhysicsPlugin`, `IntegrationCharacterPhysicsPlugin`, `VanillaPalettePlugin`, `DiskStoragePlugin`, `WorldPlugin`, `CharacterInteractionPlugin`, `LootPlugin`, `LooseItemsPlugin`, `LooseItemPickupPlugin`, `ServerNetworkPlugin` |
 
 ---
 
@@ -72,30 +73,36 @@ There are currently no tracked exceptions to this rule.
 
 Foundation crate. Supplies the shared vocabulary every other crate speaks:
 block types, the registry, chunk data structures, app/game state, tool system,
+the cross-crate entity-persistence trait, the headless-binary shutdown helper,
 and all messages that flow between subsystems.
 
 ```
 src/
-├── lib.rs             — public re-exports and prelude
-├── plugin.rs          — CorePlugin (system-set ordering, message registration)
-├── state.rs           — AppState, GameState
-├── loading.rs         — LoadingPlugin, LoadingTracker, LoadingSet
-├── common.rs          — log_plugin() helper
-├── debug.rs           — DebugInfo component
-├── macros.rs          — ensure_plugins! macro
-├── tools.rs           — ToolKindId, ToolTierId, ToolRegistry, ToolRegistrySet,
-│                        mining_duration()
+├── lib.rs               — public re-exports and prelude
+├── plugin.rs            — CorePlugin (system-set ordering, message registration,
+│                           initialises EntityPersisterRegistry)
+├── state.rs             — AppState, GameState
+├── loading.rs           — LoadingPlugin, LoadingTracker, LoadingSet
+├── common.rs            — log_plugin() helper
+├── debug.rs             — DebugInfo component
+├── macros.rs            — ensure_plugins! macro
+├── tools.rs             — ToolKindId, ToolTierId, ToolRegistry, ToolRegistrySet,
+│                          mining_duration()
+├── persistence.rs       — EntityPersister trait, EntityPersisterRegistry resource,
+│                          PersistedEntity payload
+├── graceful_shutdown.rs — GracefulShutdownPlugin: Ctrl-C / SIGTERM → AppExit for
+│                          headless binaries with no windowing layer
 ├── block/
-│   ├── mod.rs         — Block, BlockId, BlockPos, BlockCoord, CollisionShape
-│   ├── registry.rs    — BlockDefinition, BlockRegistry, BlockRegistrySet
-│   └── events.rs      — PlaceBlockRequest, BlockPlaced, BlockRemoved, BlockChanged,
-│                        StartMiningRequest, AbortMiningRequest, MineBlockRequest
+│   ├── mod.rs           — Block, BlockId, BlockPos, BlockCoord, CollisionShape
+│   ├── registry.rs      — BlockDefinition, BlockRegistry, BlockRegistrySet
+│   └── events.rs        — PlaceBlockRequest, BlockPlaced, BlockRemoved, BlockChanged,
+│                          StartMiningRequest, AbortMiningRequest, MineBlockRequest
 ├── chunk/
-│   ├── mod.rs         — Chunk, ChunkPos, CHUNK_SIZE_* constants
-│   ├── cache.rs       — ChunkCache, ChunkCachePlugin
-│   └── events.rs      — GenerateChunk, RequestChunk, ChunkReady
+│   ├── mod.rs           — Chunk, ChunkPos, CHUNK_SIZE_* constants
+│   ├── cache.rs         — ChunkCache, ChunkCachePlugin
+│   └── events.rs        — GenerateChunk, RequestChunk, ChunkReady
 └── world/
-    └── mod.rs         — WorldGenerationSet system set
+    └── mod.rs           — WorldGenerationSet system set
 ```
 
 ---
@@ -301,16 +308,23 @@ src/
 ### `dd40_chunk_storage`
 
 Disk-backed chunk persistence. Delegates missing chunks to the generation
-pipeline via `GenerateChunk` messages.
+pipeline via `GenerateChunk` messages, flushes the in-memory `ChunkCache`
+to disk on `AppExit`, and hosts the per-chunk **entity sidecar** layer —
+the dispatch + I/O half of [`dd40_core::persistence::EntityPersister`].
 
 ```
 src/
-├── lib.rs             — plugin wiring, channel newtypes, dispatch/collect systems
-├── plugin.rs          — DiskStoragePlugin
-├── provider.rs        — DiskChunkProvider (async file I/O via crossbeam channels)
+├── lib.rs                 — plugin wiring, channel newtypes, dispatch/collect systems
+├── plugin.rs              — DiskStoragePlugin (also wires entity persistence + on-exit savers)
+├── provider.rs            — DiskChunkProvider (async file I/O via crossbeam channels)
+├── chunk_save_on_exit.rs  — saves every cached chunk on AppExit (idempotent Last-schedule system)
+├── entity_persistence.rs  — EntityPersistenceConfig resource, load_entities_for_ready_chunks,
+│                            save_entities_on_exit, save_all_entities; SAVE_ENTITIES_ENV
+├── entity_sidecar.rs      — entities_X_Y_Z.bin file format (magic + version + coords + bincode body),
+│                            EntitySidecarError
 └── serialization/
-    ├── mod.rs         — versioned entry point
-    └── v1.rs          — version-1 bincode format
+    ├── mod.rs             — versioned entry point
+    └── v1.rs              — version-1 bincode format
 ```
 
 ---
@@ -460,16 +474,101 @@ src/
 └── main.rs   — DefaultPlugins + CorePlugin + PhysicsPlugin + VanillaPalettePlugin
                + PlayerInputPlugin + RendererPlugin + ClientNetworkPlugin
                + DebugUiPlugin + GuiPlugin + CharacterGuiPlugin
+               + LooseItemRenderPlugin
 ```
 
 ---
 
 ### `dd40_server`
 
-Default server binary. Configuration only.
+Default server binary. Configuration only.  Adds `GracefulShutdownPlugin`
+so Ctrl-C / SIGTERM trigger the `Last`-schedule chunk and entity sidecar
+flushes instead of yanking the process.
 
 ```
 src/
-└── main.rs   — MinimalPlugins + CorePlugin + PhysicsPlugin + VanillaPalettePlugin
-               + DiskStoragePlugin + WorldPlugin + ServerNetworkPlugin
+└── main.rs   — MinimalPlugins + CorePlugin + GracefulShutdownPlugin
+               + PhysicsPlugin + IntegrationCharacterPhysicsPlugin
+               + VanillaPalettePlugin + DiskStoragePlugin + WorldPlugin
+               + CharacterInteractionPlugin + LootPlugin + LooseItemsPlugin
+               + LooseItemPickupPlugin + ServerNetworkPlugin
+```
+
+---
+
+### `dd40_loose_item_core`
+
+Foundation crate.  The shared vocabulary for every system that touches
+ground items: the `LooseItem` component, the per-item `DespawnTimer` and
+`PickupCooldown`, the tunable `LooseItemConfig`, and the
+`LooseItemSet` ordering (`Spawn` → `Attract` → `Resolve` → `Lifecycle`)
+that downstream crates anchor against.
+
+```
+src/
+├── lib.rs
+├── plugin.rs       — LooseItemCorePlugin (registers types, inits config, configures set)
+├── prelude.rs
+├── components.rs   — LooseItem, DespawnTimer, PickupCooldown
+├── resources.rs    — LooseItemConfig (default_lifetime, default_pickup_cooldown,
+│                     attraction_radius, attraction_strength, merge_contact_duration)
+└── system_sets.rs  — LooseItemSet
+```
+
+---
+
+### `dd40_loose_items`
+
+Server-only Tier-1 crate.  Drains
+[`DropItems`](dd40_inventory_core::drop::DropItems) into spawned
+`LooseItem` entities, merges same-item stacks that stay in contact for
+`LooseItemConfig::merge_contact_duration`, ticks lifetimes, and
+registers `LooseItemPersister` with the
+[`EntityPersisterRegistry`](dd40_core::persistence::EntityPersisterRegistry)
+so loose items survive a server restart.
+
+```
+src/
+├── lib.rs
+├── plugin.rs     — LooseItemsPlugin (also auto-registers LooseItemPersister)
+├── spawn.rs      — loose_item_bundle (single source of truth for required components),
+│                   spawn_loose_items, tick_lifetimes
+├── merge.rs      — MergeAccumulator, accumulate_and_merge_loose_items
+└── persister.rs  — LooseItemPersister, LooseItemPayload::V1, LOOSE_ITEM_KIND
+```
+
+---
+
+### `dd40_integration_loose_item_pickup`
+
+Server-only Tier-1 integration crate.  The only place in the workspace
+where `LooseItem` and `InventoryComponent` meet — keeps both
+foundations decoupled.  Listens for
+[`BodyBodyContact`](dd40_physics_core::messages::BodyBodyContact),
+selects the closest eligible character (lowest `Entity` id breaks
+exact ties) with a free or stackable slot, and grants the stack.
+
+```
+src/
+├── lib.rs       — public re-exports
+├── plugin.rs    — LooseItemPickupPlugin
+├── pickup.rs    — contact handler, candidate ranking, inventory grant
+└── attract.rs   — magnetises eligible loose items toward nearby characters
+                   inside LooseItemConfig::attraction_radius
+```
+
+---
+
+### `dd40_loose_item_render`
+
+Client-only Tier-1 crate.  Attaches a spinning, slowly bobbing cube
+visual to every replicated `LooseItem`.  Colour resolves through a
+fallback chain: custom item render (TODO) → placeable block colour →
+neutral billboard.
+
+```
+src/
+├── lib.rs
+└── plugin.rs     — LooseItemRenderPlugin: spawns child-cube visuals,
+                    drives bob + spin, resolves colour via the fallback chain
 ```
