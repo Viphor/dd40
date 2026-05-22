@@ -9,6 +9,7 @@ use dd40_loose_item_core::plugin::LooseItemCorePlugin;
 use dd40_loose_item_core::system_sets::LooseItemSet;
 use dd40_physics_core::plugin::PhysicsCorePlugin;
 
+use crate::merge::{MergeAccumulator, accumulate_and_merge_loose_items};
 use crate::spawn::{spawn_loose_items, tick_lifetimes};
 
 /// Server-side plugin: spawns loose items from
@@ -31,7 +32,12 @@ impl Plugin for LooseItemsPlugin {
             LooseItemCorePlugin,
         );
 
-        app.add_systems(Update, spawn_loose_items.in_set(LooseItemSet::Spawn))
+        app.init_resource::<MergeAccumulator>()
+            .add_systems(Update, spawn_loose_items.in_set(LooseItemSet::Spawn))
+            .add_systems(
+                Update,
+                accumulate_and_merge_loose_items.in_set(LooseItemSet::Resolve),
+            )
             .add_systems(Update, tick_lifetimes.in_set(LooseItemSet::Lifecycle));
     }
 }

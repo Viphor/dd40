@@ -1,21 +1,26 @@
-//! Server-side spawning + lifecycle for loose items.
+//! Server-side spawning, lifecycle, and merging for loose items.
 //!
 //! # Overview
 //!
-//! This crate is the **producer half** of the loose-item pipeline:
+//! This crate is the **producer + maintenance half** of the
+//! loose-item pipeline:
 //!
-//! 1. Drains [`DropItems`](dd40_inventory_core::DropItems) messages
-//!    and spawns one [`LooseItem`](dd40_loose_item_core::LooseItem)
-//!    entity per stack (splitting oversized stacks against
+//! 1. Drains [`DropItems`](dd40_inventory_core::drop::DropItems)
+//!    messages and spawns one
+//!    [`LooseItem`](dd40_loose_item_core::LooseItem) entity per
+//!    stack (splitting against
 //!    [`ItemDefinition::max_stack`](dd40_item_core::registry::ItemDefinition::max_stack)).
-//! 2. Ticks [`DespawnTimer`](dd40_loose_item_core::DespawnTimer) and
+//! 2. Subscribes to
+//!    [`BodyBodyContact`](dd40_physics_core::messages::BodyBodyContact)
+//!    and merges same-item loose items that stay in contact for
+//!    [`LooseItemConfig::merge_contact_duration`](dd40_loose_item_core::LooseItemConfig::merge_contact_duration).
+//! 3. Ticks
+//!    [`DespawnTimer`](dd40_loose_item_core::DespawnTimer) and
 //!    [`PickupCooldown`](dd40_loose_item_core::PickupCooldown) every
 //!    frame; removes entities whose lifetime has elapsed.
 //!
-//! Pickup, merging, attraction, visuals, and persistence live in
-//! separate crates. Spawned entities carry only physics + the
-//! `LooseItem` payload — every other crate slots its behaviour in
-//! by querying those same components.
+//! Pickup, attraction, visuals and persistence live in separate
+//! crates that read these same foundation components.
 //!
 //! # Usage
 //!
@@ -26,6 +31,7 @@
 //! App::new().add_plugins(LooseItemsPlugin).run();
 //! ```
 
+pub mod merge;
 pub mod plugin;
 pub mod spawn;
 

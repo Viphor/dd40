@@ -29,6 +29,13 @@ pub struct LooseItemConfig {
     ///
     /// Default: **1.5 m**. Setting this to zero disables attraction.
     pub attraction_radius: f32,
+
+    /// How long two same-item loose items must stay in contact
+    /// before they merge into one stack.
+    ///
+    /// Default: **1 second**.  Anything shorter feels twitchy in a
+    /// pile of dropped items; anything longer feels broken.
+    pub merge_contact_duration: Duration,
 }
 
 impl Default for LooseItemConfig {
@@ -37,6 +44,7 @@ impl Default for LooseItemConfig {
             default_lifetime: Duration::from_secs(5 * 60),
             default_pickup_cooldown: Duration::from_millis(500),
             attraction_radius: 1.5,
+            merge_contact_duration: Duration::from_secs(1),
         }
     }
 }

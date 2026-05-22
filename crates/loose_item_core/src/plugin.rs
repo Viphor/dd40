@@ -56,6 +56,7 @@ mod tests {
         assert_eq!(cfg.default_lifetime.as_secs(), 5 * 60);
         assert_eq!(cfg.default_pickup_cooldown.as_millis(), 500);
         assert!((cfg.attraction_radius - 1.5).abs() < f32::EPSILON);
+        assert_eq!(cfg.merge_contact_duration.as_secs(), 1);
     }
 
     #[test]
