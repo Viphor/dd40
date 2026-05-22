@@ -8,6 +8,7 @@ use bevy::math::Curve;
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
 use dd40_core::prelude::*;
+use dd40_loose_item_core::LooseItem;
 use dd40_physics_core::prelude::Velocity;
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -279,6 +280,30 @@ impl Default for PlayerSpeed {
 }
 
 // ============================================================================
+// LOOSE ITEMS
+// ============================================================================
+
+/// Replicated position for server-spawned [`LooseItem`] entities.
+///
+/// Loose items are server-authoritative and **interpolated by every
+/// client** (no prediction).  We replicate this newtype instead of
+/// [`PhysicsPosition`](dd40_physics_core::prelude::PhysicsPosition)
+/// directly so the physics type stays free of `Serialize` /
+/// `Deserialize` / `Ease` bounds, and so the client knows which
+/// entities to drive purely from interpolated network state.
+#[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Reflect, Default)]
+#[reflect(Component)]
+pub struct LooseItemPosition(pub Vec3);
+
+impl Ease for LooseItemPosition {
+    fn interpolating_curve_unbounded(start: Self, end: Self) -> impl Curve<Self> {
+        FunctionCurve::new(Interval::UNIT, move |t| {
+            LooseItemPosition(start.0 + (end.0 - start.0) * t)
+        })
+    }
+}
+
+// ============================================================================
 // PROTOCOL PLUGIN
 // ============================================================================
 
@@ -296,7 +321,8 @@ impl Plugin for ProtocolPlugin {
             .register_type::<PlayerPosition>()
             .register_type::<PlayerRotation>()
             .register_type::<PlayerSpeed>()
-            .register_type::<NetworkCharacter>();
+            .register_type::<NetworkCharacter>()
+            .register_type::<LooseItemPosition>();
 
         // Register the native input plugin so PlayerInput is tick-synced
         // between client and server via lightyear's input pipeline.
@@ -339,6 +365,15 @@ impl Plugin for ProtocolPlugin {
             .add_linear_interpolation();
 
         app.register_component::<PlayerSpeed>();
+
+        // ── Loose items ──────────────────────────────────────────────────
+        // `LooseItem` is the stack payload — replicated once at spawn and
+        // again whenever the server-side merge system mutates it.
+        // `LooseItemPosition` is interpolated on every client (no client
+        // prediction).
+        app.register_component::<LooseItem>();
+        app.register_component::<LooseItemPosition>()
+            .add_linear_interpolation();
 
         // Register messages with directions
         // Client -> Server

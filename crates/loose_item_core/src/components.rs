@@ -7,6 +7,7 @@
 use bevy::prelude::*;
 use bevy::time::Timer;
 use dd40_item_core::active_item::ItemStack;
+use serde::{Deserialize, Serialize};
 
 /// Marker + payload for an item stack lying in the world.
 ///
@@ -18,7 +19,7 @@ use dd40_item_core::active_item::ItemStack;
 /// The [`stack`](LooseItem::stack) field is the single source of truth
 /// for the item identity and count; visuals and pickup hooks read it
 /// directly.
-#[derive(Component, Debug, Clone, Reflect)]
+#[derive(Component, Debug, Clone, Reflect, Serialize, Deserialize, PartialEq)]
 #[reflect(Component)]
 pub struct LooseItem {
     /// The item stack this entity represents.

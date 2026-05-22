@@ -2864,6 +2864,7 @@ dependencies = [
  "bevy",
  "dd40_core",
  "dd40_item_core",
+ "serde",
 ]
 
 [[package]]
@@ -2910,6 +2911,7 @@ dependencies = [
  "crossbeam-channel",
  "dd40_character_core",
  "dd40_core",
+ "dd40_loose_item_core",
  "dd40_physics_core",
  "lightyear",
  "rand 0.8.5",

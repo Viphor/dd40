@@ -22,6 +22,7 @@ pub mod character;
 pub mod chunk_provider;
 pub mod chunk_requests;
 pub mod connection;
+pub mod loose_items;
 pub mod spawn;
 pub mod user;
 
@@ -61,7 +62,14 @@ impl Plugin for ServerNetworkPlugin {
             .add_observer(add_message_handlers)
             .add_systems(Update, receive_chunk_requests)
             .add_systems(Update, send_chunk_data)
-            .add_systems(Update, broadcast_chunk_updates);
+            .add_systems(Update, broadcast_chunk_updates)
+            .add_systems(
+                PostUpdate,
+                (
+                    loose_items::add_loose_item_replication,
+                    loose_items::sync_loose_item_position,
+                ),
+            );
     }
 }
 

@@ -8,3 +8,4 @@ authors.workspace = true
 bevy = { workspace = true, default-features = false }
 dd40_core = { workspace = true }
 dd40_item_core = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
