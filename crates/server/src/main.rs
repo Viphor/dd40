@@ -1,7 +1,9 @@
 use bevy::{diagnostic::DiagnosticsPlugin, prelude::*};
 use dd40_character_interaction::CharacterInteractionPlugin;
 use dd40_chunk_storage::plugin::DiskStoragePlugin;
-use dd40_core::{common::log_plugin, plugin::CorePlugin};
+use dd40_core::{
+    common::log_plugin, graceful_shutdown::GracefulShutdownPlugin, plugin::CorePlugin,
+};
 use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
 use dd40_integration_loose_item_pickup::LooseItemPickupPlugin;
 use dd40_loose_items::LooseItemsPlugin;
@@ -26,6 +28,10 @@ fn main() {
         .add_plugins(DiagnosticsPlugin)
         .add_plugins((
             CorePlugin,
+            // Headless: translate Ctrl-C / SIGTERM into AppExit so the
+            // Last schedule (which flushes entity sidecars) actually
+            // runs before the process exits.
+            GracefulShutdownPlugin,
             PhysicsPlugin,
             IntegrationCharacterPhysicsPlugin,
             VanillaPalettePlugin,
