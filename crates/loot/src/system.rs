@@ -196,8 +196,8 @@ fn block_centre(pos: BlockPos) -> Vec3 {
 /// [`rand::RngCore`] so it stays deterministic.
 fn scatter_velocity(rng: &mut dyn rand::RngCore) -> Vec3 {
     use rand::Rng;
-    let x = rng.gen_range(-0.15..=0.15);
-    let z = rng.gen_range(-0.15..=0.15);
-    let y = rng.gen_range(0.10..=0.30);
+    let x = rng.random_range(-0.15..=0.15);
+    let z = rng.random_range(-0.15..=0.15);
+    let y = rng.random_range(0.10..=0.30);
     Vec3::new(x, y, z)
 }
