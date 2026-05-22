@@ -107,14 +107,14 @@ src/
 ├── lib.rs
 ├── plugin.rs          — PhysicsCorePlugin
 ├── prelude.rs         — re-exports of all stable public types
-├── components.rs      — PhysicsBody, CharacterPosition, Velocity, GravityScale,
-│                        Grounded, Impulse, CharacterCollider, Aabb
+├── components.rs      — PhysicsBody, PhysicsPosition, Velocity, GravityScale,
+│                        Grounded, Impulse, PhysicsCollider, Aabb
 ├── resources/
 │   ├── mod.rs         — PhysicsConfig (gravity, ground_friction, air_friction,
 │   │                    terminal_velocity)
-│   └── spatial_cache.rs — CharacterSpatialCache
+│   └── spatial_cache.rs — PhysicsSpatialCache
 └── system_sets.rs     — PhysicsSet (InputSync → Integrate → BlockCollision →
-                         CharacterCollision → Finalise)
+                         BodyCollision → Finalise)
 ```
 
 ---
@@ -150,7 +150,7 @@ src/
 `CharacterBuilder` is the **only** sanctioned way to spawn a character.
 Every spawn site (single-player, server, predicted client) goes through
 it.  Bypassing the builder risks forgetting to insert `Transform` before
-`PhysicsBody`, which silently leaves `CharacterPosition` at `Vec3::ZERO`.
+`PhysicsBody`, which silently leaves `PhysicsPosition` at `Vec3::ZERO`.
 
 The builder owns three in-crate methods (which only need types from
 `dd40_character_core` itself):
@@ -259,7 +259,7 @@ src/
 ├── plugin.rs             — PhysicsPlugin (wires sub-plugins; ensure_plugins!)
 ├── integration.rs        — gravity + velocity → tentative position
 ├── block_collision.rs    — O(1) voxel AABB resolution
-└── character_collision.rs — character-vs-character push-apart
+└── body_collision.rs     — body-vs-body push-apart (PhysicsCollider entities)
 ```
 
 ---
@@ -316,7 +316,7 @@ src/
 
 Greedy-mesh chunk renderer. Listens for `ChunkReady` messages and produces
 optimised Bevy meshes off the main thread. LOD is anchored to
-`CharacterPosition` (from `dd40_physics_core`).
+`PhysicsPosition` (from `dd40_physics_core`).
 
 ```
 src/

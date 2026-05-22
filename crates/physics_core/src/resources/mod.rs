@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 mod spatial_cache;
 
-pub use spatial_cache::CharacterSpatialCache;
+pub use spatial_cache::PhysicsSpatialCache;
 
 /// Global physics configuration resource.
 #[derive(Resource, Debug, Clone, Reflect)]

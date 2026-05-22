@@ -93,7 +93,7 @@ impl Plugin for PhysicsPlugin {
         // Satisfy every direct runtime dependency, in any order.
         dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
 
-        app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, CharacterCollisionPlugin));
+        app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, BodyCollisionPlugin));
     }
 }
 ```

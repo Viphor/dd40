@@ -50,7 +50,7 @@ would let the spawn system be reused for NPCs or alternative transports.
 
 | # | Description | Resolved in |
 |---|---|---|
-| — | `dd40_renderer` depended on `dd40_player` for LOD anchor | SPEC.md Task 5.1 — renderer now uses `CharacterPosition` from `dd40_physics_core` |
+| — | `dd40_renderer` depended on `dd40_player` for LOD anchor | SPEC.md Task 5.1 — renderer now uses `PhysicsPosition` from `dd40_physics_core` |
 | — | `MiningState` lived in `dd40_player` (now-deleted wrapper) | SPEC.md Task 5.3 — moved to `dd40_character_core::mining_state` |
 | — | `dd40_player` was a Tier 1 → Tier 1 dependency exception (wrapper composing input + interaction + debug-info) | core-rewrite — wrapper deleted; `dd40_client` now adds `PlayerInputPlugin` and `CharacterInteractionPlugin` directly. The FreeCam reset moved into `dd40_player_input`; the physics+interaction debug overlay was dropped (a future HUD crate may reinstate it) |
 | — | Block crack animation was unimplemented | core-rewrite — `dd40_character_gui::block_highlight::draw_targeted_block_highlight` now draws a gizmo break overlay scaled to mining progress; `break_overlay_for_progress` keeps the easing curve unit-testable. A textured crack overlay is still future work. |

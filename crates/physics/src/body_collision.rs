@@ -1,19 +1,19 @@
 //! Character-vs-character collision resolution.
 //!
-//! This module owns [`PhysicsSet::CharacterCollision`]: the third stage of
-//! each physics tick.  It pushes apart any two [`CharacterCollider`] entities
+//! This module owns [`PhysicsSet::BodyCollision`]: the third stage of
+//! each physics tick.  It pushes apart any two [`PhysicsCollider`] entities
 //! whose [`Aabb`]s overlap in their [`TentativePosition`]s.
 //!
 //! # Algorithm
 //!
-//! Each tick, two systems run in sequence inside [`PhysicsSet::CharacterCollision`]:
+//! Each tick, two systems run in sequence inside [`PhysicsSet::BodyCollision`]:
 //!
-//! 1. **[`crate::spatial_cache::update_character_spatial_cache`]** — rebuilds the
-//!    [`CharacterSpatialCache`] from the current [`TentativePosition`]s.
+//! 1. **[`crate::spatial_cache::update_physics_spatial_cache`]** — rebuilds the
+//!    [`PhysicsSpatialCache`] from the current [`TentativePosition`]s.
 //!    This is O(n) in the number of characters.
 //!
-//! 2. **[`resolve_character_collisions`]** — iterates only the *candidate
-//!    pairs* emitted by [`CharacterSpatialCache::candidate_pairs`]: pairs that
+//! 2. **[`resolve_body_collisions`]** — iterates only the *candidate
+//!    pairs* emitted by [`PhysicsSpatialCache::candidate_pairs`]: pairs that
 //!    share at least one chunk.  Characters in different chunks are culled
 //!    entirely.  For each candidate pair it calls [`Aabb::penetration`] and,
 //!    if an overlap is found, splits the horizontal correction between the two
@@ -27,7 +27,7 @@
 //!
 //! # Static characters
 //!
-//! A [`CharacterCollider`] entity without a [`Velocity`] component is treated
+//! A [`PhysicsCollider`] entity without a [`Velocity`] component is treated
 //! as an immovable obstacle: the dynamic entity absorbs the full correction.
 
 use bevy::platform::collections::HashMap;
@@ -41,31 +41,31 @@ use crate::integration::TentativePosition;
 // Collision system
 // ---------------------------------------------------------------------------
 
-/// Rebuilds [`CharacterSpatialCache`] from the current [`TentativePosition`]s
-/// of all [`CharacterCollider`] entities.
+/// Rebuilds [`PhysicsSpatialCache`] from the current [`TentativePosition`]s
+/// of all [`PhysicsCollider`] entities.
 ///
-/// Runs at the **beginning** of [`PhysicsSet::CharacterCollision`], before the
+/// Runs at the **beginning** of [`PhysicsSet::BodyCollision`], before the
 /// pair-scan, so positions are always up-to-date.
 #[allow(clippy::type_complexity)]
-pub(crate) fn update_character_spatial_cache(
-    mut cache: ResMut<CharacterSpatialCache>,
-    query: Query<(Entity, &TentativePosition, &Aabb), (With<CharacterCollider>, With<PhysicsBody>)>,
+pub(crate) fn update_physics_spatial_cache(
+    mut cache: ResMut<PhysicsSpatialCache>,
+    query: Query<(Entity, &TentativePosition, &Aabb), (With<PhysicsCollider>, With<PhysicsBody>)>,
 ) {
     cache.rebuild(query.iter().map(|(e, t, a)| (e, t.0, a)));
 }
 
-/// Resolves overlaps between candidate-pair [`CharacterCollider`] entities by
+/// Resolves overlaps between candidate-pair [`PhysicsCollider`] entities by
 /// adjusting their [`TentativePosition`]s.
 ///
 /// Only the X and Z components of the penetration vector are applied.
 ///
-/// Runs in [`PhysicsSet::CharacterCollision`] during [`FixedUpdate`].
+/// Runs in [`PhysicsSet::BodyCollision`] during [`FixedUpdate`].
 #[allow(clippy::type_complexity)]
-fn resolve_character_collisions(
-    cache: Res<CharacterSpatialCache>,
+fn resolve_body_collisions(
+    cache: Res<PhysicsSpatialCache>,
     mut query: Query<
         (&Aabb, &mut TentativePosition, Option<&mut Velocity>),
-        (With<CharacterCollider>, With<PhysicsBody>),
+        (With<PhysicsCollider>, With<PhysicsBody>),
     >,
 ) {
     // ── Pass 1: accumulate corrections ───────────────────────────────────
@@ -137,16 +137,16 @@ fn resolve_character_collisions(
 // ---------------------------------------------------------------------------
 
 /// Wires the spatial-cache update and collision-resolution systems into the
-/// Bevy schedule, both inside [`PhysicsSet::CharacterCollision`].
-pub(crate) struct CharacterCollisionPlugin;
+/// Bevy schedule, both inside [`PhysicsSet::BodyCollision`].
+pub(crate) struct BodyCollisionPlugin;
 
-impl Plugin for CharacterCollisionPlugin {
+impl Plugin for BodyCollisionPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CharacterSpatialCache>().add_systems(
+        app.init_resource::<PhysicsSpatialCache>().add_systems(
             FixedUpdate,
-            (update_character_spatial_cache, resolve_character_collisions)
+            (update_physics_spatial_cache, resolve_body_collisions)
                 .chain()
-                .in_set(PhysicsSet::CharacterCollision),
+                .in_set(PhysicsSet::BodyCollision),
         );
     }
 }
@@ -189,7 +189,7 @@ mod tests {
             .spawn((
                 Transform::from_translation(pos),
                 PhysicsBody,
-                CharacterCollider,
+                PhysicsCollider,
                 Aabb::player(),
                 GravityScale(0.0),
             ))
@@ -264,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn y_axis_not_affected_by_character_collision() {
+    fn y_axis_not_affected_by_body_collision() {
         let mut app = make_app(1.0 / 60.0);
 
         let a = spawn_character(&mut app, Vec3::new(0.0, 0.0, 0.0));
@@ -400,7 +400,7 @@ mod tests {
 
         tick(&mut app);
         {
-            let cache = app.world().resource::<CharacterSpatialCache>();
+            let cache = app.world().resource::<PhysicsSpatialCache>();
             let pairs: Vec<_> = cache.candidate_pairs().collect();
             assert!(
                 pairs.is_empty(),
@@ -439,7 +439,7 @@ mod tests {
             .spawn((
                 Transform::from_translation(obstacle_pos),
                 PhysicsBody,
-                CharacterCollider,
+                PhysicsCollider,
                 Aabb::player(),
                 GravityScale(0.0),
             ))
@@ -475,7 +475,7 @@ mod tests {
 
         tick(&mut app);
 
-        let cache = app.world().resource::<CharacterSpatialCache>();
+        let cache = app.world().resource::<PhysicsSpatialCache>();
         assert!(
             cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&e),
             "entity should appear in chunk (0,0) after a tick"
@@ -490,12 +490,12 @@ mod tests {
 
         tick(&mut app);
         {
-            let mut cp = app.world_mut().get_mut::<CharacterPosition>(e).unwrap();
+            let mut cp = app.world_mut().get_mut::<PhysicsPosition>(e).unwrap();
             cp.0.x = 20.0;
         }
         tick(&mut app);
 
-        let cache = app.world().resource::<CharacterSpatialCache>();
+        let cache = app.world().resource::<PhysicsSpatialCache>();
         assert!(
             !cache.entities_in_chunk(ChunkPos::new(0, 0, 0)).contains(&e),
             "entity should have left chunk (0,0)"
@@ -514,7 +514,7 @@ mod tests {
 
         tick(&mut app);
 
-        let cache = app.world().resource::<CharacterSpatialCache>();
+        let cache = app.world().resource::<PhysicsSpatialCache>();
         let pairs: Vec<_> = cache.candidate_pairs().collect();
         let found = pairs
             .iter()
@@ -533,7 +533,7 @@ mod tests {
 
         tick(&mut app);
 
-        let cache = app.world().resource::<CharacterSpatialCache>();
+        let cache = app.world().resource::<PhysicsSpatialCache>();
         let pairs: Vec<_> = cache.candidate_pairs().collect();
         assert!(
             pairs.is_empty(),

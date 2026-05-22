@@ -26,7 +26,7 @@
 //! list, so:
 //!
 //! - downstream validators can read **any** resource they need
-//!   (e.g. `CharacterSpatialCache`, query world state, talk to plugins
+//!   (e.g. `PhysicsSpatialCache`, query world state, talk to plugins
 //!   that don't exist in `dd40_core`),
 //! - the commit pass is **never an exclusive system** — only `ChunkCache`,
 //!   `PendingChunkRejections`, and the `ChunkChanged` message queue are

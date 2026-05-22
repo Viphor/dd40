@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::time::{Fixed, TimeUpdateStrategy};
 use dd40_core::{block::BlockRegistry, chunk::cache::ChunkCache};
 use dd40_physics::plugin::PhysicsPlugin;
-use dd40_physics_core::components::{Aabb, CharacterPosition, PhysicsBody};
+use dd40_physics_core::components::{Aabb, PhysicsBody, PhysicsPosition};
 
 fn make_app(dt_secs: f32) -> App {
     let duration = Duration::from_secs_f32(dt_secs);
@@ -48,11 +48,7 @@ fn physics_body_falls_under_gravity() {
         tick(&mut app);
     }
 
-    let pos = *app
-        .world()
-        .entity(entity)
-        .get::<CharacterPosition>()
-        .unwrap();
+    let pos = *app.world().entity(entity).get::<PhysicsPosition>().unwrap();
     assert!(
         pos.0.y < 100.0,
         "gravity should have moved entity downward, y={:.3}",

@@ -10,17 +10,17 @@
 //! | Component | Role |
 //! |-----------|------|
 //! | [`PlayerPosition`] | Network / rollback truth — lightyear checkpoints and restores this |
-//! | [`CharacterPosition`] | Physics truth — the pipeline reads and writes this each tick |
+//! | [`PhysicsPosition`] | Physics truth — the pipeline reads and writes this each tick |
 //! | [`Transform`] | Visual truth — set by [`apply_frame_interpolation`] in `Update` |
 //!
 //! Each `FixedUpdate` tick:
 //! 1. [`restore_and_record_previous`] detects rollbacks by comparing `PlayerPosition`
-//!    (restored to the confirmed checkpoint by lightyear) against `CharacterPosition`
+//!    (restored to the confirmed checkpoint by lightyear) against `PhysicsPosition`
 //!    (the last predicted result).  If they differ, a [`VisualCorrectionOffset`] is
-//!    inserted.  Then `CharacterPosition` is synced from `PlayerPosition`.
+//!    inserted.  Then `PhysicsPosition` is synced from `PlayerPosition`.
 //! 2. [`client_apply_inputs`] forwards buffered [`PlayerInput`] into [`CharacterInput`].
 //! 3. The physics pipeline runs.
-//! 4. [`record_and_sync_post_physics`] saves `CharacterPosition` as `current`, then
+//! 4. [`record_and_sync_post_physics`] saves `PhysicsPosition` as `current`, then
 //!    copies it back to `PlayerPosition` so lightyear records the new prediction.
 //!
 //! Each render frame (`Update`):
@@ -33,7 +33,7 @@ use dd40_character_core::{
     builder::CharacterBuilder, controller::CharacterInput, system_sets::CharacterRenderSet,
 };
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
-use dd40_physics_core::prelude::{CharacterPosition, PhysicsSet};
+use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
 use lightyear::prelude::{
     Interpolated, Predicted,
     client::input::InputSystems,
@@ -51,7 +51,7 @@ use crate::{
 // COMPONENTS
 // ============================================================================
 
-/// Stores the [`CharacterPosition`] from the two most recent physics ticks for
+/// Stores the [`PhysicsPosition`] from the two most recent physics ticks for
 /// sub-tick frame interpolation.
 ///
 /// Updated each `FixedUpdate` by [`restore_and_record_previous`] (writes
@@ -184,12 +184,12 @@ fn bridge_input_to_action_state(
     }
 }
 
-/// Saves the current [`CharacterPosition`] as the interpolation `previous`
+/// Saves the current [`PhysicsPosition`] as the interpolation `previous`
 /// value, then restores it from the lightyear rollback checkpoint
 /// ([`PlayerPosition`]).
 ///
 /// Also detects rollbacks: when `PlayerPosition` (restored by lightyear to a
-/// confirmed checkpoint) differs from `CharacterPosition` (the last predicted
+/// confirmed checkpoint) differs from `PhysicsPosition` (the last predicted
 /// result), a [`VisualCorrectionOffset`] is inserted so the rendered entity
 /// slides smoothly to the corrected position rather than popping.
 ///
@@ -202,7 +202,7 @@ fn restore_and_record_previous(
         (
             Entity,
             &PlayerPosition,
-            &mut CharacterPosition,
+            &mut PhysicsPosition,
             &mut PhysicsInterpolationData,
             Option<&VisualCorrectionOffset>,
         ),
@@ -248,7 +248,7 @@ fn client_apply_inputs(
     }
 }
 
-/// Records the post-physics [`CharacterPosition`] as the interpolation
+/// Records the post-physics [`PhysicsPosition`] as the interpolation
 /// `current` value, then copies it back to [`PlayerPosition`] so lightyear
 /// stores this prediction in its history for future rollback comparisons.
 ///
@@ -256,7 +256,7 @@ fn client_apply_inputs(
 fn record_and_sync_post_physics(
     mut query: Query<
         (
-            &CharacterPosition,
+            &PhysicsPosition,
             &mut PlayerPosition,
             &mut PhysicsInterpolationData,
         ),

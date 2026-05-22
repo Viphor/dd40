@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 use dd40_character_core::{builder::CharacterBuilder, controller::CharacterInput};
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
-use dd40_physics_core::prelude::{CharacterPosition, PhysicsSet};
+use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
 use lightyear::prelude::{Connected, RemoteId, input::native::ActionState, server::ClientOf};
 
 use crate::character_ext::CharacterServerNetworkExt;
@@ -107,7 +107,7 @@ fn server_apply_inputs(
 fn server_sync_state(
     mut query: Query<
         (
-            &CharacterPosition,
+            &PhysicsPosition,
             &CharacterInput,
             &mut PlayerPosition,
             &mut PlayerRotation,

@@ -15,7 +15,7 @@ use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
 use dd40_core::prelude::*;
-use dd40_physics_core::prelude::CharacterPosition;
+use dd40_physics_core::prelude::PhysicsPosition;
 use lightyear::prelude::{ControlledBy, MessageSender};
 
 use crate::protocol::{BlockChannel, ChunkUpdate};
@@ -74,7 +74,7 @@ fn chebyshev(a: ChunkPos, b: ChunkPos) -> i32 {
 pub(crate) fn broadcast_chunk_updates(
     mut reader: MessageReader<ChunkChanged>,
     render_distance: Res<NetworkRenderDistance>,
-    characters: Query<(&CharacterPosition, &ControlledBy), With<Character>>,
+    characters: Query<(&PhysicsPosition, &ControlledBy), With<Character>>,
     mut senders: Query<(Entity, &mut MessageSender<ChunkUpdate>)>,
 ) {
     let updates: Vec<ChunkChanged> = reader.read().cloned().collect();

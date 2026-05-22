@@ -217,15 +217,15 @@ impl Grounded {
 #[derive(Debug, Default, Clone, Copy, Component, Reflect, PartialEq)]
 #[reflect(Component)]
 #[component(on_add)]
-pub struct CharacterPosition(pub Vec3);
+pub struct PhysicsPosition(pub Vec3);
 
-impl CharacterPosition {
+impl PhysicsPosition {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let translation = world
             .get::<Transform>(context.entity)
             .map(|t| t.translation)
             .unwrap_or(Vec3::ZERO);
-        if let Some(mut pos) = world.get_mut::<CharacterPosition>(context.entity) {
+        if let Some(mut pos) = world.get_mut::<PhysicsPosition>(context.entity) {
             pos.0 = translation;
         }
     }
@@ -258,29 +258,29 @@ pub struct Impulse(pub Vec3);
 /// fall through all geometry.
 ///
 /// Entities that should collide with other characters should also add
-/// [`CharacterCollider`].
+/// [`PhysicsCollider`].
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
-#[require(Velocity, GravityScale, Grounded, Impulse, CharacterPosition)]
+#[require(Velocity, GravityScale, Grounded, Impulse, PhysicsPosition)]
 pub struct PhysicsBody;
 
 // ---------------------------------------------------------------------------
 
 /// Opts this entity into **character-vs-character** collision resolution.
 ///
-/// Entities with [`PhysicsBody`] but without [`CharacterCollider`] are still
+/// Entities with [`PhysicsBody`] but without [`PhysicsCollider`] are still
 /// resolved against the block grid; they do not push other characters away.
 #[derive(Debug, Default, Component, Reflect)]
 #[reflect(Component)]
-pub struct CharacterCollider;
+pub struct PhysicsCollider;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// `CharacterPosition::on_add` reads the entity's `Transform.translation`
+    /// `PhysicsPosition::on_add` reads the entity's `Transform.translation`
     /// at component-insertion time. When `Transform` is part of the same
-    /// spawn tuple as `PhysicsBody` (which auto-requires `CharacterPosition`),
+    /// spawn tuple as `PhysicsBody` (which auto-requires `PhysicsPosition`),
     /// the hook sees the spawn position and the physics solver starts there.
     #[test]
     fn character_position_picks_up_transform_present_in_spawn_tuple() {
@@ -289,34 +289,34 @@ mod tests {
             .world_mut()
             .spawn((Transform::from_xyz(0.0, 74.0, 0.0), PhysicsBody))
             .id();
-        let cp = app.world().get::<CharacterPosition>(entity).unwrap();
+        let cp = app.world().get::<PhysicsPosition>(entity).unwrap();
         assert_eq!(cp.0, Vec3::new(0.0, 74.0, 0.0));
     }
 
     /// Regression test for the player-stuck-at-bottom-of-world bug.
     ///
     /// If `PhysicsBody` is inserted **before** `Transform` is on the entity,
-    /// `CharacterPosition::on_add` reads no Transform and falls back to
+    /// `PhysicsPosition::on_add` reads no Transform and falls back to
     /// `Vec3::ZERO`. Inserting `Transform` afterwards does **not** retro-fix
-    /// `CharacterPosition`. Spawn flows must include `Transform` (or another
-    /// initial `CharacterPosition`) in the same tuple as `PhysicsBody`.
+    /// `PhysicsPosition`. Spawn flows must include `Transform` (or another
+    /// initial `PhysicsPosition`) in the same tuple as `PhysicsBody`.
     #[test]
     fn character_position_is_zero_when_transform_is_inserted_after_physics_body() {
         let mut app = App::new();
         let entity = app.world_mut().spawn(PhysicsBody).id();
-        // CharacterPosition was initialised to ZERO at on_add time.
-        let cp_before = *app.world().get::<CharacterPosition>(entity).unwrap();
+        // PhysicsPosition was initialised to ZERO at on_add time.
+        let cp_before = *app.world().get::<PhysicsPosition>(entity).unwrap();
         assert_eq!(cp_before.0, Vec3::ZERO);
 
-        // Inserting Transform afterwards does NOT update CharacterPosition.
+        // Inserting Transform afterwards does NOT update PhysicsPosition.
         app.world_mut()
             .entity_mut(entity)
             .insert(Transform::from_xyz(0.0, 74.0, 0.0));
-        let cp_after = *app.world().get::<CharacterPosition>(entity).unwrap();
+        let cp_after = *app.world().get::<PhysicsPosition>(entity).unwrap();
         assert_eq!(
             cp_after.0,
             Vec3::ZERO,
-            "documents the contract: CharacterPosition::on_add only fires once"
+            "documents the contract: PhysicsPosition::on_add only fires once"
         );
     }
 }

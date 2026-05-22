@@ -70,9 +70,9 @@ All physics types are in `dd40_physics_core::prelude`.
 ### `PhysicsBody`
 Marker. Entities with this component participate in the physics simulation.
 
-### `CharacterPosition`
+### `PhysicsPosition`
 ```rust
-pub struct CharacterPosition(pub Vec3);
+pub struct PhysicsPosition(pub Vec3);
 ```
 The authoritative physics position. Distinct from `Transform`, which is the
 visual-only output updated by frame interpolation in `Update`.
@@ -97,9 +97,9 @@ pub struct Impulse(pub Vec3);
 One-shot velocity addition applied on the next physics tick, then cleared.
 Use this for jumps, knockback, and explosions.
 
-### `CharacterCollider`
+### `PhysicsCollider`
 ```rust
-pub struct CharacterCollider { pub half_extents: Vec3 }
+pub struct PhysicsCollider { pub half_extents: Vec3 }
 ```
 AABB collider dimensions (half-extents in each axis) used by block collision
 and character-vs-character push-apart.
@@ -124,7 +124,7 @@ pub struct PhysicsConfig {
 ```
 Override by inserting this resource before `PhysicsCorePlugin`.
 
-### `CharacterSpatialCache`
+### `PhysicsSpatialCache`
 Resource. A spatial index of all character AABB positions, rebuilt each physics
 tick. Used by the character-vs-character push-apart stage.
 
@@ -140,8 +140,8 @@ Five ordered stages, all in `FixedUpdate` (from `dd40_physics_core::system_sets`
 | `PhysicsSet::InputSync` | Network / remote input writes `CharacterInput` here |
 | `PhysicsSet::Integrate` | Apply gravity + velocity → tentative position |
 | `PhysicsSet::BlockCollision` | Sweep tentative position against the block grid |
-| `PhysicsSet::CharacterCollision` | Push overlapping character colliders apart |
-| `PhysicsSet::Finalise` | Write resolved `CharacterPosition` back to `Transform` |
+| `PhysicsSet::BodyCollision` | Push overlapping physics colliders apart |
+| `PhysicsSet::Finalise` | Write resolved `PhysicsPosition` back to `Transform` |
 
 ### `CharacterRenderSet`
 Two ordered stages in `Update` (from `dd40_character_core::system_sets`):

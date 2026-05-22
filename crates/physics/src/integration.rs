@@ -20,11 +20,11 @@ use dd40_physics_core::prelude::*;
 
 /// Scratch component: the **tentative** world position produced by
 /// [`PhysicsSet::Integrate`] and refined by the collision stages before being
-/// written back to [`CharacterPosition`] in [`PhysicsSet::Finalise`].
+/// written back to [`PhysicsPosition`] in [`PhysicsSet::Finalise`].
 ///
 /// Inserted automatically by [`crate::plugin::PhysicsPlugin`] on any entity
 /// that gains a [`PhysicsBody`]. External code must not read or write this —
-/// use [`CharacterPosition`] for the authoritative position.
+/// use [`PhysicsPosition`] for the authoritative position.
 #[derive(Debug, Default, Clone, Copy, Component)]
 pub(crate) struct TentativePosition(pub(crate) Vec3);
 
@@ -35,7 +35,7 @@ pub(crate) struct TentativePosition(pub(crate) Vec3);
 /// Resets [`Grounded`] and applies gravity + velocity integration to produce
 /// a [`TentativePosition`].
 ///
-/// Reads [`CharacterPosition`] as the physics-authoritative starting point.
+/// Reads [`PhysicsPosition`] as the physics-authoritative starting point.
 /// [`Transform`] is not touched here — it is written by the rendering layer.
 ///
 /// Runs in [`PhysicsSet::Integrate`] during [`FixedUpdate`].
@@ -45,7 +45,7 @@ fn integrate(
     config: Res<PhysicsConfig>,
     mut query: Query<
         (
-            &CharacterPosition,
+            &PhysicsPosition,
             &mut Velocity,
             &mut Impulse,
             &GravityScale,
@@ -81,10 +81,10 @@ fn integrate(
     }
 }
 
-/// Copies the resolved [`TentativePosition`] into [`CharacterPosition`] and
+/// Copies the resolved [`TentativePosition`] into [`PhysicsPosition`] and
 /// [`Transform`], then applies velocity damping (friction).
 ///
-/// [`CharacterPosition`] is the physics-authoritative value read next tick.
+/// [`PhysicsPosition`] is the physics-authoritative value read next tick.
 /// [`Transform`] is kept in sync so non-networked entities render correctly
 /// without any additional bridge system. Networked predicted entities have
 /// their [`Transform`] overridden by the frame-interpolation system in
@@ -97,7 +97,7 @@ fn finalise(
     mut query: Query<
         (
             &mut Transform,
-            &mut CharacterPosition,
+            &mut PhysicsPosition,
             &mut Velocity,
             &Grounded,
             &TentativePosition,

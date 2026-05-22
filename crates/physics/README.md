@@ -2,7 +2,7 @@
 
 Tier 1 implementation crate. Contains all physics simulation systems:
 gravity integration, block-collision resolution (O(1) voxel AABB), and
-character-vs-character push-apart.
+body-vs-body push-apart between `PhysicsCollider` entities.
 
 A `TentativePosition` component (internal to this crate) is inserted on every
 `PhysicsBody` entity via an observer on component addition.
@@ -15,7 +15,7 @@ src/
 ├── plugin.rs              — PhysicsPlugin (wires sub-plugins; ensure_plugins!)
 ├── integration.rs         — gravity + velocity → tentative position
 ├── block_collision.rs     — O(1) voxel AABB resolution
-└── character_collision.rs — character-vs-character push-apart
+└── body_collision.rs      — body-vs-body push-apart (PhysicsCollider entities)
 ```
 
 ## Dependencies (dd40)

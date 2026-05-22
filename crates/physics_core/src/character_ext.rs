@@ -20,7 +20,7 @@
 
 use dd40_core::builder_extra::AddExtra;
 
-use crate::components::{Aabb, CharacterCollider, PhysicsBody};
+use crate::components::{Aabb, PhysicsBody, PhysicsCollider};
 
 /// Caller-tunable parameters for [`CharacterPhysicsExt::with_physics_config`].
 ///
@@ -62,11 +62,11 @@ impl Default for CharacterPhysicsConfig {
 ///
 /// - [`PhysicsBody`] — marks the entity as participating in physics.
 ///   Auto-requires `Velocity`, `GravityScale`, `Grounded`, `Impulse`,
-///   `CharacterPosition`. The `CharacterPosition::on_add` hook reads the
+///   `PhysicsPosition`. The `PhysicsPosition::on_add` hook reads the
 ///   entity's `Transform` at insert time, which is why builders should
 ///   guarantee `Transform` is present **before** running extras (see the
 ///   [`AddExtra`][dd40_core::builder_extra::AddExtra] contract).
-/// - [`CharacterCollider`] — marker enabling per-frame block collision.
+/// - [`PhysicsCollider`] — marker enabling per-frame block collision.
 /// - [`Aabb`] — the collision shape (player-sized by default; configurable
 ///   via [`Self::with_physics_config`]).
 ///
@@ -94,7 +94,7 @@ where
     fn with_physics_config(mut self, config: CharacterPhysicsConfig) -> Self {
         let collider = config.collider;
         self.add_extra(move |e| {
-            e.insert((PhysicsBody, CharacterCollider, collider));
+            e.insert((PhysicsBody, PhysicsCollider, collider));
         });
         self
     }
@@ -110,7 +110,7 @@ mod tests {
     /// `dd40_character_core`. It only carries the bare minimum the
     /// [`CharacterPhysicsExt`] blanket impl requires: an extras vector
     /// and a `Transform` insert before extras run (so
-    /// `CharacterPosition::on_add` sees the right value).
+    /// `PhysicsPosition::on_add` sees the right value).
     struct TestBuilder {
         transform: Transform,
         extras: Vec<Box<dyn FnOnce(&mut EntityCommands) + Send + 'static>>,
@@ -163,7 +163,7 @@ mod tests {
 
         let mut q = app
             .world_mut()
-            .query::<(&PhysicsBody, &CharacterCollider, &Aabb, &Transform)>();
+            .query::<(&PhysicsBody, &PhysicsCollider, &Aabb, &Transform)>();
         let (_, _, aabb, transform) = q.iter(app.world()).next().expect("entity spawned");
         assert_eq!(aabb.half_x, 0.3);
         assert_eq!(aabb.half_y, 0.9);
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn character_position_picks_up_transform_inserted_before_extras() {
-        use crate::components::CharacterPosition;
+        use crate::components::PhysicsPosition;
 
         let mut app = make_app();
         app.world_mut()
@@ -205,12 +205,12 @@ mod tests {
             })
             .unwrap();
 
-        let mut q = app.world_mut().query::<&CharacterPosition>();
+        let mut q = app.world_mut().query::<&PhysicsPosition>();
         let pos = q.iter(app.world()).next().expect("entity spawned");
         assert_eq!(
             pos.0,
             Vec3::new(10.0, 20.0, 30.0),
-            "CharacterPosition::on_add must see the Transform inserted before extras"
+            "PhysicsPosition::on_add must see the Transform inserted before extras"
         );
     }
 }

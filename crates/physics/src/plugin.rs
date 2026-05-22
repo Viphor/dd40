@@ -4,7 +4,7 @@ use dd40_physics_core::{components::PhysicsBody, plugin::PhysicsCorePlugin};
 
 use crate::{
     block_collision::BlockCollisionPlugin,
-    character_collision::CharacterCollisionPlugin,
+    body_collision::BodyCollisionPlugin,
     integration::{IntegrationPlugin, TentativePosition},
 };
 
@@ -23,11 +23,7 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
-        app.add_plugins((
-            IntegrationPlugin,
-            BlockCollisionPlugin,
-            CharacterCollisionPlugin,
-        ));
+        app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, BodyCollisionPlugin));
         app.add_observer(on_physics_body_added);
     }
 }

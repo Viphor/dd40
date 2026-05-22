@@ -1,4 +1,4 @@
-//! Chunk-keyed spatial cache for [`CharacterCollider`] entities.
+//! Chunk-keyed spatial cache for [`PhysicsCollider`] entities.
 //!
 //! # Problem
 //!
@@ -9,7 +9,7 @@
 //!
 //! # Design
 //!
-//! [`CharacterSpatialCache`] is a [`Resource`] that maps each [`ChunkPos`] to
+//! [`PhysicsSpatialCache`] is a [`Resource`] that maps each [`ChunkPos`] to
 //! the set of [`Entity`] handles whose AABB currently overlaps that chunk's
 //! XZ footprint.
 //!
@@ -19,15 +19,15 @@
 //!
 //! ## Update cadence
 //!
-//! [`update_character_spatial_cache`] runs at the start of
-//! [`PhysicsSet::CharacterCollision`] (before the pair-scan) and rebuilds the
+//! [`update_physics_spatial_cache`] runs at the start of
+//! [`PhysicsSet::BodyCollision`] (before the pair-scan) and rebuilds the
 //! cache from the current [`TentativePosition`]s.  It runs every fixed tick so
 //! positions are always fresh.
 //!
 //! ## Pair deduplication
 //!
 //! Two characters that straddle the same boundary will appear together in
-//! multiple chunks.  [`CharacterSpatialCache::candidate_pairs`] returns each
+//! multiple chunks.  [`PhysicsSpatialCache::candidate_pairs`] returns each
 //! `(Entity, Entity)` pair **at most once** using a [`HashSet`] keyed on
 //! `(min(a, b), max(a, b))`.
 //!
@@ -51,9 +51,9 @@ use dd40_core::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
 // Resource
 // ---------------------------------------------------------------------------
 
-/// Chunk-keyed index of all [`CharacterCollider`] entities.
+/// Chunk-keyed index of all [`PhysicsCollider`] entities.
 ///
-/// Updated every [`PhysicsSet::CharacterCollision`] tick from the current
+/// Updated every [`PhysicsSet::BodyCollision`] tick from the current
 /// [`TentativePosition`]s before the pair-scan runs.
 ///
 /// # Multi-chunk membership
@@ -62,16 +62,16 @@ use dd40_core::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
 /// of those chunks.  This guarantees that cross-boundary collisions are always
 /// detected, at the cost of a character appearing in up to four entries.
 #[derive(Resource, Default)]
-pub struct CharacterSpatialCache {
+pub struct PhysicsSpatialCache {
     /// Map from chunk position to the entities whose AABBs overlap that chunk.
     chunks: HashMap<ChunkPos, Vec<Entity>>,
 }
 
-impl CharacterSpatialCache {
+impl PhysicsSpatialCache {
     /// Clears all entries and rebuilds the cache from the provided iterator of
     /// `(entity, world-space foot-origin, aabb)` tuples.
     ///
-    /// This is called once per fixed tick by [`update_character_spatial_cache`].
+    /// This is called once per fixed tick by [`update_physics_spatial_cache`].
     pub fn rebuild<'a>(&mut self, entries: impl Iterator<Item = (Entity, Vec3, &'a Aabb)>) {
         self.chunks.clear();
 
@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn single_character_well_inside_one_chunk_registers_once() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let e = Entity::from_bits(1);
         let aabb = player_aabb();
         cache.rebuild(std::iter::once((e, Vec3::new(4.0, 0.0, 4.0), &aabb)));
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn character_on_x_chunk_boundary_appears_in_both_chunks() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let e = Entity::from_bits(2);
         let aabb = player_aabb();
 
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn character_on_z_chunk_boundary_appears_in_both_chunks() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let e = Entity::from_bits(3);
         let aabb = player_aabb();
 
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn character_on_xz_corner_appears_in_all_four_chunks() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let e = Entity::from_bits(4);
         let aabb = player_aabb();
 
@@ -294,7 +294,7 @@ mod tests {
 
     #[test]
     fn candidate_pairs_returns_each_pair_once() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let e1 = Entity::from_bits(10);
         let e2 = Entity::from_bits(11);
         let aabb = player_aabb();
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn two_characters_in_different_chunks_produce_no_pair() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let e1 = Entity::from_bits(20);
         let e2 = Entity::from_bits(21);
         let aabb = player_aabb();
@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn rebuild_clears_previous_state() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let old = Entity::from_bits(30);
         let new = Entity::from_bits(31);
         let aabb = player_aabb();
@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn negative_chunk_coordinates_handled_correctly() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         let e = Entity::from_bits(40);
         let aabb = player_aabb();
 
@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn empty_rebuild_leaves_cache_empty() {
-        let mut cache = CharacterSpatialCache::default();
+        let mut cache = PhysicsSpatialCache::default();
         cache.rebuild(std::iter::empty());
         assert_eq!(cache.occupied_chunk_count(), 0);
         assert_eq!(cache.registration_count(), 0);

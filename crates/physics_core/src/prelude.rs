@@ -1,10 +1,10 @@
 pub use crate::{
     character_ext::{CharacterPhysicsConfig, CharacterPhysicsExt},
     components::{
-        Aabb, CharacterCollider, CharacterPosition, GravityScale, Grounded, Impulse, PhysicsBody,
+        Aabb, GravityScale, Grounded, Impulse, PhysicsBody, PhysicsCollider, PhysicsPosition,
         Velocity,
     },
     plugin::PhysicsCorePlugin,
-    resources::{CharacterSpatialCache, PhysicsConfig},
+    resources::{PhysicsConfig, PhysicsSpatialCache},
     system_sets::PhysicsSet,
 };

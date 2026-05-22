@@ -2,10 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     components::{
-        Aabb, CharacterCollider, CharacterPosition, GravityScale, Grounded, Impulse, PhysicsBody,
+        Aabb, GravityScale, Grounded, Impulse, PhysicsBody, PhysicsCollider, PhysicsPosition,
         Velocity,
     },
-    resources::{CharacterSpatialCache, PhysicsConfig},
+    resources::{PhysicsConfig, PhysicsSpatialCache},
     system_sets::PhysicsSet,
 };
 
@@ -23,16 +23,16 @@ pub struct PhysicsCorePlugin;
 impl Plugin for PhysicsCorePlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Aabb>()
-            .register_type::<CharacterPosition>()
+            .register_type::<PhysicsPosition>()
             .register_type::<Velocity>()
             .register_type::<Impulse>()
             .register_type::<GravityScale>()
             .register_type::<Grounded>()
             .register_type::<PhysicsBody>()
-            .register_type::<CharacterCollider>()
+            .register_type::<PhysicsCollider>()
             .register_type::<PhysicsConfig>()
             .init_resource::<PhysicsConfig>()
-            .init_resource::<CharacterSpatialCache>()
+            .init_resource::<PhysicsSpatialCache>()
             .configure_sets(
                 FixedUpdate,
                 PhysicsSet::InputSync.before(PhysicsSet::Integrate),
@@ -42,7 +42,7 @@ impl Plugin for PhysicsCorePlugin {
                 (
                     PhysicsSet::Integrate,
                     PhysicsSet::BlockCollision,
-                    PhysicsSet::CharacterCollision,
+                    PhysicsSet::BodyCollision,
                     PhysicsSet::Finalise,
                 )
                     .chain(),

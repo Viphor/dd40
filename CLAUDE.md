@@ -63,7 +63,7 @@ Never write `if !app.is_plugin_added` by hand — always use `ensure_plugins!`.
 | Implementation | `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999) |
 | Implementation | `dd40_world` | World generation (generic over `WorldGenerator` trait) |
 | Implementation | `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) |
-| Implementation | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD anchored on `CharacterPosition` |
+| Implementation | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD anchored on `PhysicsPosition` |
 | Implementation | `dd40_player_input` | Keyboard/mouse → CharacterInput, first-person camera, `PlayerMode` state |
 | Implementation | `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity |
 | Implementation | `dd40_network` | lightyear client-server networking (feature-gated) |

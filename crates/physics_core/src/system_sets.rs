@@ -5,7 +5,7 @@ use bevy::prelude::*;
 /// Configure your own systems against these labels to hook into the pipeline.
 ///
 /// **Expected order:**
-/// `InputSync` → `Integrate` → `BlockCollision` → `CharacterCollision` → `Finalise`
+/// `InputSync` → `Integrate` → `BlockCollision` → `BodyCollision` → `Finalise`
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhysicsSet {
     /// External input injection phase.
@@ -20,7 +20,7 @@ pub enum PhysicsSet {
     /// Resolve the tentative position against the solid block grid.
     BlockCollision,
     /// Push overlapping character colliders apart.
-    CharacterCollision,
+    BodyCollision,
     /// Copy the resolved tentative position back into [`Transform`] and
     /// clear per-frame transient state.
     Finalise,

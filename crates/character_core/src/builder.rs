@@ -224,7 +224,7 @@ fn spawn_face_child(entity: &mut EntityCommands<'_>, offset: Vec3) {
 /// Extras run in registration order, **after** [`CharacterBundle`] (which
 /// carries [`Transform`]) is inserted but **before** the face child is
 /// spawned. This guarantees that `on_add` hooks fired by an extra — such
-/// as `CharacterPosition::on_add` (required by `PhysicsBody`) — see the
+/// as `PhysicsPosition::on_add` (required by `PhysicsBody`) — see the
 /// correct initial [`Transform`].
 impl AddExtra for CharacterBuilder {
     fn add_extra<F>(&mut self, f: F) -> &mut Self

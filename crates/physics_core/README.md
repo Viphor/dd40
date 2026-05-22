@@ -11,14 +11,14 @@ src/
 ├── lib.rs
 ├── plugin.rs          — PhysicsCorePlugin
 ├── prelude.rs         — re-exports of all stable public types
-├── components.rs      — PhysicsBody, CharacterPosition, Velocity, GravityScale,
-│                        Grounded, Impulse, CharacterCollider, Aabb
+├── components.rs      — PhysicsBody, PhysicsPosition, Velocity, GravityScale,
+│                        Grounded, Impulse, PhysicsCollider, Aabb
 ├── resources/
 │   ├── mod.rs         — PhysicsConfig (gravity, ground_friction, air_friction,
 │   │                    terminal_velocity)
-│   └── spatial_cache.rs — CharacterSpatialCache
+│   └── spatial_cache.rs — PhysicsSpatialCache
 └── system_sets.rs     — PhysicsSet (InputSync → Integrate → BlockCollision →
-                         CharacterCollision → Finalise)
+                         BodyCollision → Finalise)
 ```
 
 ## Dependencies (dd40)

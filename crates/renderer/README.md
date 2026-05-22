@@ -5,7 +5,7 @@ optimised 3-D meshes off the main thread using face culling and greedy meshing,
 manages level-of-detail (LOD), and uploads the finished meshes into Bevy's
 asset system.
 
-LOD distance is anchored to `CharacterPosition` from `dd40_physics_core`.
+LOD distance is anchored to `PhysicsPosition` from `dd40_physics_core`.
 Swapping this renderer requires only changing which plugin the client adds.
 
 ## Module overview

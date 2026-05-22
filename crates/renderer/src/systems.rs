@@ -47,7 +47,7 @@ use dd40_core::{
     chunk::events::{ChunkChanged, ChunkPredicted, ChunkReady},
     chunk::{ChunkPos, cache::ChunkCache},
 };
-use dd40_physics_core::prelude::CharacterPosition;
+use dd40_physics_core::prelude::PhysicsPosition;
 
 use crate::{
     chunk_mesh::build_chunk_quads,
@@ -132,9 +132,9 @@ pub fn mark_dirty_on_chunk_changed(
 /// When a chunk's LOD level changes the entry is automatically marked dirty by
 /// [`ChunkRenderState::update_lod`], so the mesh will be rebuilt this frame.
 ///
-/// If no [`CharacterPosition`] entity exists the system is a no-op.
+/// If no [`PhysicsPosition`] entity exists the system is a no-op.
 pub fn update_lod_levels(
-    anchor_query: Query<&CharacterPosition>,
+    anchor_query: Query<&PhysicsPosition>,
     mut render_state: ResMut<ChunkRenderState>,
     lod_config: Res<LodConfig>,
     chunk_cache: Res<ChunkCache>,

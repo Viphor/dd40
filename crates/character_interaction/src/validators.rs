@@ -26,7 +26,7 @@ use dd40_core::block::{Block, CollisionShape};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::chunk::{ChunkChange, ChunkPos, PendingChunkRejections, RejectReason};
 use dd40_core::prelude::BlockRegistry;
-use dd40_physics_core::prelude::{Aabb, CharacterPosition, CharacterSpatialCache};
+use dd40_physics_core::prelude::{Aabb, PhysicsPosition, PhysicsSpatialCache};
 
 /// Reject any predicted [`ChunkChange::Place`] whose target cell would
 /// overlap a [`Character`](dd40_character_core::components::Character)'s
@@ -49,7 +49,7 @@ use dd40_physics_core::prelude::{Aabb, CharacterPosition, CharacterSpatialCache}
 ///    these blocks have no physical presence.
 /// 2. Convert the chunk-local coordinate to world space via
 ///    [`ChunkPos::block_pos`].
-/// 3. Use the [`CharacterSpatialCache`] to narrow the candidate set to
+/// 3. Use the [`PhysicsSpatialCache`] to narrow the candidate set to
 ///    characters that share a chunk with the target cell, then run a
 ///    precise [`Aabb::overlaps`] check on each candidate.
 /// 4. If any character overlaps the cell's 1×1×1 AABB, write a rejection
@@ -62,8 +62,8 @@ use dd40_physics_core::prelude::{Aabb, CharacterPosition, CharacterSpatialCache}
 pub fn character_collision_validator(
     cache: Res<ChunkCache>,
     registry: Res<BlockRegistry>,
-    spatial_cache: Res<CharacterSpatialCache>,
-    characters: Query<(&CharacterPosition, &Aabb)>,
+    spatial_cache: Res<PhysicsSpatialCache>,
+    characters: Query<(&PhysicsPosition, &Aabb)>,
     mut pending: ResMut<PendingChunkRejections>,
 ) {
     // Snapshot dirty positions so the iteration borrow on the cache is
@@ -142,7 +142,7 @@ mod tests {
         app.add_plugins(bevy::MinimalPlugins);
         app.add_message::<ChunkChanged>();
         app.insert_resource(registry_with_solid_stone());
-        app.insert_resource(CharacterSpatialCache::default());
+        app.insert_resource(PhysicsSpatialCache::default());
 
         let mut cache = ChunkCache::new();
         cache.insert(Chunk::new(ChunkPos::new(0, 0, 0)));
@@ -158,15 +158,12 @@ mod tests {
         // convention places the origin at bottom-centre.
         let aabb = Aabb::new(0.3, 0.9, 0.3);
         let origin = Vec3::new(0.5, 0.0, 0.5);
-        let entity = app
-            .world_mut()
-            .spawn((CharacterPosition(origin), aabb))
-            .id();
+        let entity = app.world_mut().spawn((PhysicsPosition(origin), aabb)).id();
 
         // Rebuild the spatial cache so the validator can find the
         // character via `candidates_for_block`.
         app.world_mut()
-            .resource_mut::<CharacterSpatialCache>()
+            .resource_mut::<PhysicsSpatialCache>()
             .rebuild(std::iter::once((entity, origin, &aabb)));
 
         (app, entity)

@@ -124,15 +124,15 @@ Foundation
   dd40_core              — AppState, LoadingTracker, BlockRegistry, chunk
                            pipeline messages; infrastructure only
   dd40_physics_core      — Aabb, CollisionShape*, Velocity, Impulse,
-                           GravityScale, CharacterPosition,
+                           GravityScale, PhysicsPosition,
                            TentativePosition, Grounded, PhysicsBody,
-                           CharacterCollider, PhysicsConfig, PhysicsSet
+                           PhysicsCollider, PhysicsConfig, PhysicsSet
   dd40_character_core    — Player, Character, CharacterInput,
                            MovementSpeed, JumpImpulse, CharacterBuilder,
                            CharacterBundle, CharacterRenderSet, SpawnPosition
 
 Implementation
-  dd40_physics           — Integration, BlockCollision, CharacterCollision
+  dd40_physics           — Integration, BlockCollision, BodyCollision
                            systems (moved from dd40_core::character::physics)
   dd40_vanilla_palette   — Vanilla block/tool definitions (unchanged)
   dd40_world             — WorldGenerator trait + flat generator (unchanged)
@@ -205,8 +205,8 @@ new rules from the start.
 - Empty `lib.rs` with module stubs.
 
 **Task 1.2** Move physics vocabulary to `dd40_physics_core`
-- Move: `Aabb`, `Velocity`, `Impulse`, `GravityScale`, `CharacterPosition`,
-  `TentativePosition`, `Grounded`, `PhysicsBody`, `CharacterCollider`,
+- Move: `Aabb`, `Velocity`, `Impulse`, `GravityScale`, `PhysicsPosition`,
+  `TentativePosition`, `Grounded`, `PhysicsBody`, `PhysicsCollider`,
   `PhysicsConfig`, `PhysicsSet` from `dd40_core::character::physics`.
 - `PhysicsCorePlugin`: registers all types, inserts `PhysicsConfig::default()`,
   configures `PhysicsSet` ordering; checks for `CorePlugin`.
@@ -214,7 +214,7 @@ new rules from the start.
 **Task 1.3** Create `dd40_physics` (implementation crate)
 - `crates/physics/Cargo.toml` depending on `dd40_physics_core` +
   `dd40_core` + bevy.
-- Move `IntegrationPlugin`, `BlockCollisionPlugin`, `CharacterCollisionPlugin`
+- Move `IntegrationPlugin`, `BlockCollisionPlugin`, `BodyCollisionPlugin`
   here verbatim.
 - `PhysicsPlugin`: calls `ensure_plugins!(app, CorePlugin, PhysicsCorePlugin)`,
   then composes the three system plugins.
@@ -329,7 +329,7 @@ any foundation plugins that are now guaranteed by auto-plugin.
 ### Phase 5 — Fix INCONSISTENCIES.md items
 
 **Task 5.1** Fix renderer LOD dependency on `dd40_player` (item 1)
-- Add `PlayerPosition` or reuse `CharacterPosition` from `dd40_character_core`
+- Add `PlayerPosition` or reuse `PhysicsPosition` from `dd40_character_core`
   as the LOD anchor.
 - Remove `dd40_player` from `dd40_renderer`'s dependencies.
 
@@ -362,7 +362,7 @@ impl Plugin for PhysicsPlugin {
         app.register_type::<SomeType>();
 
         // 3. Add systems / resources
-        app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, CharacterCollisionPlugin));
+        app.add_plugins((IntegrationPlugin, BlockCollisionPlugin, BodyCollisionPlugin));
     }
 }
 ```

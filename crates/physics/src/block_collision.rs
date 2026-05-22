@@ -350,7 +350,7 @@ fn resolve_block_collisions(
     registry: Res<BlockRegistry>,
     mut query: Query<
         (
-            &CharacterPosition,
+            &PhysicsPosition,
             &Aabb,
             &mut TentativePosition,
             &mut Velocity,
