@@ -35,6 +35,7 @@ There are currently no tracked exceptions to this rule.
 | `dd40_inventory_core` | Pure-data `Inventory` + `InventoryComponent` (entity-keyed) + `BlockInventory` (block-cell, `BlockData`) + `DropItems` message + `CharacterInventoryExt` builder extension | `dd40_core`, `dd40_item_core` |
 | `dd40_rng` | Pluggable `GameRng` resource, `RngPlugin` | — |
 | `dd40_loot_core` | `LootTable`, `LootEntry`, `LootMode`; `BlockData` impl so tables can attach to `BlockDefinition` | `dd40_core`, `dd40_item_core` |
+| `dd40_loose_item_core` | `LooseItem`, `DespawnTimer`, `PickupCooldown`, `LooseItemConfig`, `LooseItemSet` — vocabulary for items lying in the world | `dd40_core`, `dd40_item_core` |
 
 ### Tier 1 — Implementation
 

@@ -22,6 +22,7 @@ members = [
     "crates/loot_core",
     "crates/loot",
     "crates/rng",
+    "crates/loose_item_core",
 ]
 resolver = "3"
 
@@ -54,3 +55,4 @@ dd40_loot_core = { path = "crates/loot_core" }
 dd40_loot = { path = "crates/loot" }
 dd40_integration_character_physics = { path = "crates/integration_character_physics" }
 dd40_rng = { path = "crates/rng" }
+dd40_loose_item_core = { path = "crates/loose_item_core" }
