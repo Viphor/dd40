@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 use dd40_character_core::{builder::CharacterBuilder, controller::CharacterInput};
+use dd40_inventory_core::character_ext::CharacterInventoryExt;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
 use lightyear::prelude::{Connected, RemoteId, input::native::ActionState, server::ClientOf};
@@ -71,6 +72,7 @@ fn server_spawn_character(
         .transform(Transform::from_translation(spawn_pos))
         .with_physics()
         .with_controller()
+        .with_inventory(36)
         .with_server_replication(client_id, spawn_pos, trigger.entity)
         .spawn(&mut commands);
 }
