@@ -101,6 +101,110 @@ fn block_world_aabb(pos: BlockPos, block: Block, registry: &BlockRegistry) -> Op
 }
 
 // ---------------------------------------------------------------------------
+// Stuck-body fallback
+// ---------------------------------------------------------------------------
+
+/// Maximum Manhattan distance (in cells) the unstuck fallback searches.
+///
+/// When a body's AABB still overlaps a solid cell after swept-axis
+/// resolution — typically because a block was placed on top of it, or
+/// it was spawned mid-block — the fallback walks outward in Manhattan
+/// shells looking for an offset where the AABB is overlap-free. If
+/// nothing fits within this radius, the body is left in place and a
+/// warning is logged.
+const MAX_UNSTUCK_RADIUS: i32 = 8;
+
+/// Minimum penetration (per axis) required before considering a body
+/// "stuck" inside a solid. The block-collision sweep snaps bodies flush
+/// against walls, and floating-point rounding can leave a sub-micron
+/// nominal overlap. Requiring at least 1 mm of penetration prevents the
+/// unstuck fallback from spuriously teleporting a body that is merely
+/// pressed against a wall (which would otherwise yank a player running
+/// along a wall sideways by one cell).
+const STUCK_PENETRATION_EPSILON: f32 = 1.0e-3;
+
+/// True if the AABB anchored at `pos` overlaps any solid cell with at
+/// least [`STUCK_PENETRATION_EPSILON`] of penetration on every axis.
+fn aabb_overlaps_any_solid(
+    pos: Vec3,
+    aabb: &Aabb,
+    cache: &ChunkCache,
+    registry: &BlockRegistry,
+) -> bool {
+    let e_min = aabb.min(pos);
+    let e_max = aabb.max(pos);
+    let x0 = e_min.x.floor() as i32;
+    let x1 = (e_max.x - f32::EPSILON).floor() as i32;
+    let y0 = e_min.y.floor() as i32;
+    let y1 = (e_max.y - f32::EPSILON).floor() as i32;
+    let z0 = e_min.z.floor() as i32;
+    let z1 = (e_max.z - f32::EPSILON).floor() as i32;
+
+    for bx in x0..=x1 {
+        for by in y0..=y1 {
+            for bz in z0..=z1 {
+                let bp = BlockPos::new(bx, by, bz);
+                let block = get_block(bp, cache);
+                let Some(baabb) = block_world_aabb(bp, block, registry) else {
+                    continue;
+                };
+                if e_min.x + STUCK_PENETRATION_EPSILON < baabb.max.x
+                    && e_max.x > baabb.min.x + STUCK_PENETRATION_EPSILON
+                    && e_min.y + STUCK_PENETRATION_EPSILON < baabb.max.y
+                    && e_max.y > baabb.min.y + STUCK_PENETRATION_EPSILON
+                    && e_min.z + STUCK_PENETRATION_EPSILON < baabb.max.z
+                    && e_max.z > baabb.min.z + STUCK_PENETRATION_EPSILON
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Searches Manhattan shells outward from `current` for an integer
+/// cell-offset that yields a non-overlapping AABB position.
+///
+/// Within a shell, offsets are tried in this order:
+/// 1. Least absolute vertical displacement (`|dy|`).
+/// 2. Then prefer **upward** (positive `dy`) — matches the player
+///    expectation that a body squashed by a placed block pops up,
+///    not into the floor.
+/// 3. Then lexicographic (`dx`, `dz`).
+///
+/// Returns the displaced position if a free spot is found within
+/// [`MAX_UNSTUCK_RADIUS`], else `None`.
+fn nearest_empty_position(
+    current: Vec3,
+    aabb: &Aabb,
+    cache: &ChunkCache,
+    registry: &BlockRegistry,
+) -> Option<Vec3> {
+    let mut shell: Vec<(i32, i32, i32)> = Vec::new();
+    for r in 1..=MAX_UNSTUCK_RADIUS {
+        shell.clear();
+        for dx in -r..=r {
+            for dy in -r..=r {
+                for dz in -r..=r {
+                    if dx.abs() + dy.abs() + dz.abs() == r {
+                        shell.push((dx, dy, dz));
+                    }
+                }
+            }
+        }
+        shell.sort_by_key(|&(dx, dy, dz)| (dy.abs(), -dy, dx, dz));
+        for &(dx, dy, dz) in &shell {
+            let candidate = current + Vec3::new(dx as f32, dy as f32, dz as f32);
+            if !aabb_overlaps_any_solid(candidate, aabb, cache, registry) {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
 // Block lookup helpers
 // ---------------------------------------------------------------------------
 
@@ -396,7 +500,29 @@ fn resolve_block_collisions(
             &mut grounded,
         );
 
-        tentative.0 = Vec3::new(after_x.x, after_y.y, after_z.z);
+        let mut resolved = Vec3::new(after_x.x, after_y.y, after_z.z);
+
+        if aabb_overlaps_any_solid(resolved, aabb, &cache, &registry) {
+            match nearest_empty_position(resolved, aabb, &cache, &registry) {
+                Some(snapped) => {
+                    trace!(
+                        "block_collision: body stuck inside solid at {:.3?} — snapping to nearest empty cell at {:.3?}",
+                        resolved, snapped,
+                    );
+                    resolved = snapped;
+                    velocity.0 = Vec3::ZERO;
+                    grounded.0 = false;
+                }
+                None => {
+                    warn!(
+                        "block_collision: body at {:.3?} is fully encased within {} cells — leaving in place",
+                        resolved, MAX_UNSTUCK_RADIUS,
+                    );
+                }
+            }
+        }
+
+        tentative.0 = resolved;
     }
 }
 
@@ -973,5 +1099,272 @@ mod tests {
             "entity penetrated ceiling block across chunk Y boundary: y={}",
             transform.translation.y,
         );
+    }
+
+    // ------------------------------------------------------------------
+    // Nearest-empty-cell unstuck fallback
+    // ------------------------------------------------------------------
+
+    /// Spawn a small (0.5-cube) physics body — sized so that any single
+    /// empty cell can host it.  Used by the unstuck tests.
+    fn spawn_small_body(app: &mut App, origin: Vec3) -> Entity {
+        app.world_mut()
+            .spawn((
+                Transform::from_translation(origin),
+                PhysicsBody,
+                Aabb::new(0.25, 0.25, 0.25),
+                GravityScale(0.0),
+            ))
+            .id()
+    }
+
+    /// Register a default solid block kind in the registry.
+    fn register_stone(app: &mut App) {
+        let mut registry = app.world_mut().resource_mut::<BlockRegistry>();
+        registry.register_without_event(
+            BlockDefinition::new(BlockId(1), "stone")
+                .with_solid(true)
+                .with_renderable(false),
+        );
+    }
+
+    /// Build a chunk at the origin with `set_cells` filled with stone.
+    fn insert_chunk_with_cells(app: &mut App, set_cells: impl Fn(&mut Chunk)) {
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
+        set_cells(&mut chunk);
+        let mut cache = app.world_mut().resource_mut::<ChunkCache>();
+        cache.insert(chunk);
+    }
+
+    #[test]
+    fn body_stuck_in_block_snaps_to_nearest_empty() {
+        // Single solid block at (5,5,5); body has zero velocity (so the
+        // swept-axis pass cannot eject it) and is centred inside the
+        // block.  Unstuck fires and snaps to a Manhattan-distance-1
+        // empty neighbour.  Specifically: tie-break `(|dy|, -dy, dx, dz)`
+        // prefers least vertical displacement, then lex(dx, dz), so the
+        // chosen neighbour is `dx = -1` → (4.5, 5.5, 5.5).
+        let mut app = make_app(1.0 / 20.0);
+        register_stone(&mut app);
+        insert_chunk_with_cells(&mut app, |c| {
+            c.set(5, 5, 5, Block::new(BlockId(1)));
+        });
+
+        let entity = spawn_small_body(&mut app, Vec3::new(5.5, 5.5, 5.5));
+        tick(&mut app);
+
+        let transform = app.world().get::<Transform>(entity).unwrap();
+        assert!(
+            (transform.translation.x - 4.5).abs() < 1e-3
+                && (transform.translation.y - 5.5).abs() < 1e-3
+                && (transform.translation.z - 5.5).abs() < 1e-3,
+            "expected snap to (-x) neighbour at (4.5, 5.5, 5.5), got {:?}",
+            transform.translation,
+        );
+
+        // Sanity: the resulting position is genuinely empty.
+        assert!(
+            !aabb_overlaps_any_solid(
+                transform.translation,
+                &Aabb::new(0.25, 0.25, 0.25),
+                app.world().resource::<ChunkCache>(),
+                app.world().resource::<BlockRegistry>(),
+            ),
+            "post-snap position must not overlap any solid",
+        );
+    }
+
+    #[test]
+    fn unstuck_clears_grounded_flag() {
+        // Body stationary inside a solid block; pre-set Grounded so we
+        // can observe it being cleared by the unstuck branch.
+        let mut app = make_app(1.0 / 20.0);
+        register_stone(&mut app);
+        insert_chunk_with_cells(&mut app, |c| {
+            c.set(5, 5, 5, Block::new(BlockId(1)));
+        });
+
+        let entity = spawn_small_body(&mut app, Vec3::new(5.5, 5.5, 5.5));
+        {
+            let mut grounded = app.world_mut().get_mut::<Grounded>(entity).unwrap();
+            grounded.0 = true;
+        }
+
+        tick(&mut app);
+
+        let grounded = app.world().get::<Grounded>(entity).unwrap();
+        assert!(
+            !grounded.0,
+            "Grounded must be cleared on unstuck — next tick re-establishes it",
+        );
+    }
+
+    #[test]
+    fn unstuck_prefers_side_when_directly_above_is_blocked() {
+        // Body inside (5,5,5); +y also blocked.  With tie-break
+        // (|dy|, -dy, dx, dz) the radius-1 candidates with dy=0 are
+        // tried before any dy=-1 candidate, and within dy=0 the
+        // smallest dx wins → snap to (4.5, 5.5, 5.5).
+        let mut app = make_app(1.0 / 20.0);
+        register_stone(&mut app);
+        insert_chunk_with_cells(&mut app, |c| {
+            c.set(5, 5, 5, Block::new(BlockId(1)));
+            c.set(5, 6, 5, Block::new(BlockId(1)));
+        });
+
+        let entity = spawn_small_body(&mut app, Vec3::new(5.5, 5.5, 5.5));
+        tick(&mut app);
+
+        let transform = app.world().get::<Transform>(entity).unwrap();
+        assert!(
+            (transform.translation.x - 4.5).abs() < 1e-3
+                && (transform.translation.y - 5.5).abs() < 1e-3
+                && (transform.translation.z - 5.5).abs() < 1e-3,
+            "expected snap to (-x) neighbour at (4.5, 5.5, 5.5), got {:?}",
+            transform.translation,
+        );
+    }
+
+    #[test]
+    fn body_not_inside_solid_is_not_displaced() {
+        let mut app = make_app(1.0 / 20.0);
+        register_stone(&mut app);
+        insert_chunk_with_cells(&mut app, |c| {
+            c.set(5, 5, 5, Block::new(BlockId(1)));
+        });
+
+        // Body in the air cell next to the solid; unstuck must not fire.
+        let entity = spawn_small_body(&mut app, Vec3::new(7.5, 5.5, 5.5));
+        tick(&mut app);
+
+        let transform = app.world().get::<Transform>(entity).unwrap();
+        assert!(
+            (transform.translation.x - 7.5).abs() < 1e-3
+                && (transform.translation.y - 5.5).abs() < 1e-3
+                && (transform.translation.z - 5.5).abs() < 1e-3,
+            "free-air body must not be displaced, got {:?}",
+            transform.translation,
+        );
+    }
+
+    #[test]
+    fn block_placed_on_resting_body_snaps_it_to_neighbour() {
+        // Body resting on the floor at cell (5,1,5); next tick a
+        // block is placed at (5,1,5) on top of the body.  The
+        // collision pass must move the body to an empty neighbour.
+        let mut app = make_app(1.0 / 20.0);
+        register_stone(&mut app);
+        insert_chunk_with_cells(&mut app, |c| {
+            c.set(5, 0, 5, Block::new(BlockId(1)));
+        });
+
+        let entity = spawn_small_body(&mut app, Vec3::new(5.5, 1.5, 5.5));
+        tick(&mut app);
+        // Body should now be resting in the cell above the floor.
+        let before = app.world().get::<Transform>(entity).unwrap().translation;
+        assert!(
+            (before.x - 5.5).abs() < 1e-3 && (before.z - 5.5).abs() < 1e-3,
+            "body should be stable at x=5.5, z=5.5 before block placement, got {:?}",
+            before,
+        );
+
+        // Place a block exactly where the body's centre is.
+        {
+            let mut cache = app.world_mut().resource_mut::<ChunkCache>();
+            let mut chunk = cache.get(&ChunkPos::new(0, 0, 0)).unwrap().clone();
+            chunk.set(5, before.y.floor() as usize, 5, Block::new(BlockId(1)));
+            cache.insert(chunk);
+        }
+        tick(&mut app);
+
+        let after = app.world().get::<Transform>(entity).unwrap().translation;
+        assert!(
+            !aabb_overlaps_any_solid(
+                after,
+                &Aabb::new(0.25, 0.25, 0.25),
+                app.world().resource::<ChunkCache>(),
+                app.world().resource::<BlockRegistry>(),
+            ),
+            "after unstuck the body's AABB must not overlap any solid, got {:?}",
+            after,
+        );
+    }
+
+    #[test]
+    fn aabb_overlaps_any_solid_detects_centre_inside_block() {
+        let mut registry = BlockRegistry::new();
+        registry.register_without_event(
+            BlockDefinition::new(BlockId(1), "stone")
+                .with_solid(true)
+                .with_renderable(false),
+        );
+        let mut cache = ChunkCache::default();
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
+        chunk.set(5, 5, 5, Block::new(BlockId(1)));
+        cache.insert(chunk);
+
+        let aabb = Aabb::new(0.25, 0.25, 0.25);
+        assert!(aabb_overlaps_any_solid(
+            Vec3::new(5.5, 5.5, 5.5),
+            &aabb,
+            &cache,
+            &registry,
+        ));
+        assert!(!aabb_overlaps_any_solid(
+            Vec3::new(7.5, 5.5, 5.5),
+            &aabb,
+            &cache,
+            &registry,
+        ));
+    }
+
+    #[test]
+    fn flush_against_wall_is_not_considered_stuck() {
+        // Regression: a body resting flush against a wall (or with
+        // sub-epsilon floating-point overlap from the collision sweep)
+        // must NOT trigger the unstuck fallback — otherwise a player
+        // running along a wall gets teleported one cell sideways.
+        let mut registry = BlockRegistry::new();
+        registry.register_without_event(
+            BlockDefinition::new(BlockId(1), "stone")
+                .with_solid(true)
+                .with_renderable(false),
+        );
+        let mut cache = ChunkCache::default();
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
+        // Wall along x = 6 (block [6,7] is solid).
+        for y in 0..8 {
+            for z in 0..8 {
+                chunk.set(6, y, z, Block::new(BlockId(1)));
+            }
+        }
+        cache.insert(chunk);
+
+        let aabb = Aabb::player();
+        // Player flush against wall: e_max.x exactly at 6.0.
+        let flush_x = 6.0 - aabb.half_x;
+        assert!(!aabb_overlaps_any_solid(
+            Vec3::new(flush_x, 1.0, 3.5),
+            &aabb,
+            &cache,
+            &registry,
+        ));
+        // Floating-point rounding: e_max.x = 6.0 + 1e-6 (≈ 1 micron of
+        // penetration). Must still not count as stuck.
+        let nearly_flush_x = flush_x + 1.0e-6;
+        assert!(!aabb_overlaps_any_solid(
+            Vec3::new(nearly_flush_x, 1.0, 3.5),
+            &aabb,
+            &cache,
+            &registry,
+        ));
+        // But 1 cm of penetration IS considered stuck.
+        let real_overlap_x = flush_x + 1.0e-2;
+        assert!(aabb_overlaps_any_solid(
+            Vec3::new(real_overlap_x, 1.0, 3.5),
+            &aabb,
+            &cache,
+            &registry,
+        ));
     }
 }
