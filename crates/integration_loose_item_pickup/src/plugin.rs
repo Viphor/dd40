@@ -9,6 +9,7 @@ use dd40_loose_item_core::plugin::LooseItemCorePlugin;
 use dd40_loose_item_core::system_sets::LooseItemSet;
 use dd40_physics_core::plugin::PhysicsCorePlugin;
 
+use crate::attract::attract_loose_items;
 use crate::pickup::pickup_loose_items;
 
 /// Server-only plugin: subscribes to `BodyBodyContact` and grants
@@ -31,6 +32,7 @@ impl Plugin for LooseItemPickupPlugin {
             LooseItemCorePlugin,
         );
 
-        app.add_systems(Update, pickup_loose_items.in_set(LooseItemSet::Resolve));
+        app.add_systems(Update, attract_loose_items.in_set(LooseItemSet::Attract))
+            .add_systems(Update, pickup_loose_items.in_set(LooseItemSet::Resolve));
     }
 }

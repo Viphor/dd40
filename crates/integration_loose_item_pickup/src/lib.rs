@@ -21,6 +21,7 @@
 //! [`LooseItem`]: dd40_loose_item_core::LooseItem
 //! [`Inventory`]: dd40_inventory_core::inventory::Inventory
 
+pub mod attract;
 pub mod pickup;
 pub mod plugin;
 
