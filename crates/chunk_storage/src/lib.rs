@@ -21,6 +21,7 @@ use dd40_core::prelude::*;
 
 use crate::provider::DiskChunkProvider;
 
+pub mod chunk_save_on_exit;
 pub mod entity_persistence;
 pub mod entity_sidecar;
 pub mod plugin;

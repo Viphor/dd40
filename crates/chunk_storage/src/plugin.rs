@@ -6,6 +6,7 @@ use dd40_core::plugin::CorePlugin;
 
 use crate::{
     ChunkResponse, ChunkResponseReceiver, ChunkResponseSender, collect_chunk_responses,
+    chunk_save_on_exit::save_chunks_on_exit,
     dispatch_chunk_requests,
     entity_persistence::{
         EntityPersistenceConfig, SAVE_ENTITIES_ENV, load_entities_for_ready_chunks,
@@ -135,6 +136,7 @@ impl Plugin for DiskStoragePlugin {
             load_entities_for_ready_chunks.after(collect_chunk_responses),
         );
         app.add_systems(Last, save_entities_on_exit);
+        app.add_systems(Last, save_chunks_on_exit);
 
         // Snapshot the live BlockDataTypeRegistry into the disk provider
         // once startup finishes — at that point every plugin has had a
