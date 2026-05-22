@@ -24,6 +24,7 @@ members = [
     "crates/rng",
     "crates/loose_item_core",
     "crates/loose_items",
+    "crates/loose_item_render",
     "crates/integration_loose_item_pickup",
 ]
 resolver = "3"
@@ -59,4 +60,5 @@ dd40_integration_character_physics = { path = "crates/integration_character_phys
 dd40_rng = { path = "crates/rng" }
 dd40_loose_item_core = { path = "crates/loose_item_core" }
 dd40_loose_items = { path = "crates/loose_items" }
+dd40_loose_item_render = { path = "crates/loose_item_render" }
 dd40_integration_loose_item_pickup = { path = "crates/integration_loose_item_pickup" }

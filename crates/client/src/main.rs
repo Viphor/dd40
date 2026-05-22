@@ -5,6 +5,7 @@ use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
 use dd40_gui::plugin::GuiPlugin;
 use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
+use dd40_loose_item_render::LooseItemRenderPlugin;
 use dd40_network::ClientNetworkPlugin;
 use dd40_physics::PhysicsPlugin;
 use dd40_player_input::PlayerInputPlugin;
@@ -35,6 +36,7 @@ fn main() {
         DebugUiPlugin,
         ClientNetworkPlugin,
         RendererPlugin,
+        LooseItemRenderPlugin,
         GuiPlugin,
         CharacterGuiPlugin,
     ))

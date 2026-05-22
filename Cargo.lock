@@ -2776,6 +2776,7 @@ dependencies = [
  "dd40_debug_ui",
  "dd40_gui",
  "dd40_integration_character_physics",
+ "dd40_loose_item_render",
  "dd40_network",
  "dd40_physics",
  "dd40_player_input",
@@ -2868,6 +2869,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_loose_item_render"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "dd40_item_core",
+ "dd40_loose_item_core",
+]
+
+[[package]]
 name = "dd40_loose_items"
 version = "0.1.0"
 dependencies = [
@@ -2911,6 +2922,7 @@ dependencies = [
  "crossbeam-channel",
  "dd40_character_core",
  "dd40_core",
+ "dd40_inventory_core",
  "dd40_loose_item_core",
  "dd40_physics_core",
  "lightyear",
