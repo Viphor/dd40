@@ -5,6 +5,7 @@ use crate::{
         Aabb, GravityScale, Grounded, Impulse, PhysicsBody, PhysicsCollider, PhysicsPosition,
         Velocity,
     },
+    messages::{BodyBlockContact, BodyBodyContact},
     resources::{PhysicsConfig, PhysicsSpatialCache},
     system_sets::PhysicsSet,
 };
@@ -33,6 +34,8 @@ impl Plugin for PhysicsCorePlugin {
             .register_type::<PhysicsConfig>()
             .init_resource::<PhysicsConfig>()
             .init_resource::<PhysicsSpatialCache>()
+            .add_message::<BodyBlockContact>()
+            .add_message::<BodyBodyContact>()
             .configure_sets(
                 FixedUpdate,
                 PhysicsSet::InputSync.before(PhysicsSet::Integrate),

@@ -139,9 +139,32 @@ Five ordered stages, all in `FixedUpdate` (from `dd40_physics_core::system_sets`
 |---|---|
 | `PhysicsSet::InputSync` | Network / remote input writes `CharacterInput` here |
 | `PhysicsSet::Integrate` | Apply gravity + velocity → tentative position |
-| `PhysicsSet::BlockCollision` | Sweep tentative position against the block grid |
-| `PhysicsSet::BodyCollision` | Push overlapping physics colliders apart |
+| `PhysicsSet::BlockCollision` | Sweep tentative position against the block grid; emit `BodyBlockContact` for every touching face |
+| `PhysicsSet::BodyCollision` | Push overlapping physics colliders apart; emit `BodyBodyContact` for every overlap |
 | `PhysicsSet::Finalise` | Write resolved `PhysicsPosition` back to `Transform` |
+
+---
+
+## Collision-contact messages
+
+Both messages live in `dd40_physics_core::messages` and are registered by
+`PhysicsCorePlugin`. They are written by `dd40_physics` once per
+`FixedUpdate` tick and can be subscribed to by any system via
+`MessageReader<T>`.
+
+### `BodyBlockContact { body, block, normal, penetration }`
+
+Emitted by `dd40_physics::block_collision::detect_block_contacts`
+(parallel scan over `PhysicsBody` AABBs) for every body face that is
+within 1 mm of a solid block face. `normal` points **from the block
+toward the body** (e.g. `+Y` for a body resting on a block).
+
+### `BodyBodyContact { a, b, normal, penetration }`
+
+Emitted by `dd40_physics::body_collision::resolve_body_collisions`
+whenever two physics colliders overlap. `a.index() < b.index()` is
+guaranteed (use `BodyBodyContact::new` to construct correctly).
+`normal` points **from `b` toward `a`**.
 
 ### `CharacterRenderSet`
 Two ordered stages in `Update` (from `dd40_character_core::system_sets`):

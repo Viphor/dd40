@@ -463,67 +463,247 @@ fn resolve_block_collisions(
         With<PhysicsBody>,
     >,
 ) {
-    for (char_pos, aabb, mut tentative, mut velocity, mut grounded) in &mut query {
-        let current = char_pos.0;
-        let target = tentative.0;
+    query
+        .par_iter_mut()
+        .for_each(|(char_pos, aabb, mut tentative, mut velocity, mut grounded)| {
+            let current = char_pos.0;
+            let target = tentative.0;
 
-        let after_y = sweep_axis(
-            current,
-            Vec3::new(current.x, target.y, current.z),
-            aabb,
-            Axis::Y,
-            &cache,
-            &registry,
-            &mut velocity,
-            &mut grounded,
-        );
+            let after_y = sweep_axis(
+                current,
+                Vec3::new(current.x, target.y, current.z),
+                aabb,
+                Axis::Y,
+                &cache,
+                &registry,
+                &mut velocity,
+                &mut grounded,
+            );
 
-        let after_x = sweep_axis(
-            Vec3::new(current.x, after_y.y, current.z),
-            Vec3::new(target.x, after_y.y, current.z),
-            aabb,
-            Axis::X,
-            &cache,
-            &registry,
-            &mut velocity,
-            &mut grounded,
-        );
+            let after_x = sweep_axis(
+                Vec3::new(current.x, after_y.y, current.z),
+                Vec3::new(target.x, after_y.y, current.z),
+                aabb,
+                Axis::X,
+                &cache,
+                &registry,
+                &mut velocity,
+                &mut grounded,
+            );
 
-        let after_z = sweep_axis(
-            Vec3::new(after_x.x, after_y.y, current.z),
-            Vec3::new(after_x.x, after_y.y, target.z),
-            aabb,
-            Axis::Z,
-            &cache,
-            &registry,
-            &mut velocity,
-            &mut grounded,
-        );
+            let after_z = sweep_axis(
+                Vec3::new(after_x.x, after_y.y, current.z),
+                Vec3::new(after_x.x, after_y.y, target.z),
+                aabb,
+                Axis::Z,
+                &cache,
+                &registry,
+                &mut velocity,
+                &mut grounded,
+            );
 
-        let mut resolved = Vec3::new(after_x.x, after_y.y, after_z.z);
+            let mut resolved = Vec3::new(after_x.x, after_y.y, after_z.z);
 
-        if aabb_overlaps_any_solid(resolved, aabb, &cache, &registry) {
-            match nearest_empty_position(resolved, aabb, &cache, &registry) {
-                Some(snapped) => {
-                    trace!(
-                        "block_collision: body stuck inside solid at {:.3?} — snapping to nearest empty cell at {:.3?}",
-                        resolved, snapped,
-                    );
-                    resolved = snapped;
-                    velocity.0 = Vec3::ZERO;
-                    grounded.0 = false;
-                }
-                None => {
-                    warn!(
-                        "block_collision: body at {:.3?} is fully encased within {} cells — leaving in place",
-                        resolved, MAX_UNSTUCK_RADIUS,
-                    );
+            if aabb_overlaps_any_solid(resolved, aabb, &cache, &registry) {
+                match nearest_empty_position(resolved, aabb, &cache, &registry) {
+                    Some(snapped) => {
+                        trace!(
+                            "block_collision: body stuck inside solid at {:.3?} — snapping to nearest empty cell at {:.3?}",
+                            resolved, snapped,
+                        );
+                        resolved = snapped;
+                        velocity.0 = Vec3::ZERO;
+                        grounded.0 = false;
+                    }
+                    None => {
+                        warn!(
+                            "block_collision: body at {:.3?} is fully encased within {} cells — leaving in place",
+                            resolved, MAX_UNSTUCK_RADIUS,
+                        );
+                    }
                 }
             }
-        }
 
-        tentative.0 = resolved;
+            tentative.0 = resolved;
+        });
+}
+
+// ---------------------------------------------------------------------------
+// Contact detection (post-resolution)
+// ---------------------------------------------------------------------------
+
+/// Maximum distance between a body's face and a block's opposing face
+/// for the pair to count as "in contact".
+///
+/// Matches the bias used by the sweep code so a freshly snapped body
+/// reliably reports contact on the next pass.
+const CONTACT_EPSILON: f32 = 1.0e-3;
+
+/// Scans each body's six AABB faces for adjacent solid block faces and
+/// writes a [`BodyBlockContact`] for every hit.
+///
+/// Runs after [`resolve_block_collisions`] in
+/// [`PhysicsSet::BlockCollision`] so it sees the post-resolution
+/// position (including any unstuck snap).
+fn detect_block_contacts(
+    cache: Res<ChunkCache>,
+    registry: Res<BlockRegistry>,
+    mut contacts: MessageWriter<BodyBlockContact>,
+    mut scratch: Local<bevy::utils::Parallel<Vec<BodyBlockContact>>>,
+    query: Query<(Entity, &Aabb, &TentativePosition), With<PhysicsBody>>,
+) {
+    query.par_iter().for_each(|(entity, aabb, tentative)| {
+        scratch.scope(|out| {
+            collect_block_contacts_for_body(entity, aabb, tentative.0, &cache, &registry, out);
+        });
+    });
+
+    for c in scratch.drain() {
+        contacts.write(c);
     }
+}
+
+/// Scans the six faces of one body's AABB and pushes a contact into
+/// `out` for every adjacent solid-block face within
+/// [`CONTACT_EPSILON`].  Pulled out so the parallel scan body stays
+/// flat and so the helper is unit-testable.
+fn collect_block_contacts_for_body(
+    entity: Entity,
+    aabb: &Aabb,
+    pos: Vec3,
+    cache: &ChunkCache,
+    registry: &BlockRegistry,
+    out: &mut Vec<BodyBlockContact>,
+) {
+    let e_min = aabb.min(pos);
+    let e_max = aabb.max(pos);
+
+    let bx0 = e_min.x.floor() as i32;
+    let bx1 = (e_max.x - f32::EPSILON).floor() as i32;
+    let by0 = e_min.y.floor() as i32;
+    let by1 = (e_max.y - f32::EPSILON).floor() as i32;
+    let bz0 = e_min.z.floor() as i32;
+    let bz1 = (e_max.z - f32::EPSILON).floor() as i32;
+
+    // ── -Y face (body's bottom) ─────────────────────────────────────
+    let by_below = (e_min.y - CONTACT_EPSILON).floor() as i32;
+    for bx in bx0..=bx1 {
+        for bz in bz0..=bz1 {
+            if let Some((bp, baabb)) =
+                solid_block_at(BlockPos::new(bx, by_below, bz), cache, registry)
+                && (e_min.y - baabb.max.y).abs() < CONTACT_EPSILON
+            {
+                out.push(BodyBlockContact {
+                    body: entity,
+                    block: bp,
+                    normal: Vec3::Y,
+                    penetration: (baabb.max.y - e_min.y).max(0.0),
+                });
+            }
+        }
+    }
+
+    // ── +Y face (body's top) ────────────────────────────────────────
+    let by_above = (e_max.y + CONTACT_EPSILON).floor() as i32;
+    for bx in bx0..=bx1 {
+        for bz in bz0..=bz1 {
+            if let Some((bp, baabb)) =
+                solid_block_at(BlockPos::new(bx, by_above, bz), cache, registry)
+                && (baabb.min.y - e_max.y).abs() < CONTACT_EPSILON
+            {
+                out.push(BodyBlockContact {
+                    body: entity,
+                    block: bp,
+                    normal: Vec3::NEG_Y,
+                    penetration: (e_max.y - baabb.min.y).max(0.0),
+                });
+            }
+        }
+    }
+
+    // ── -X face ─────────────────────────────────────────────────────
+    let bx_west = (e_min.x - CONTACT_EPSILON).floor() as i32;
+    for by in by0..=by1 {
+        for bz in bz0..=bz1 {
+            if let Some((bp, baabb)) =
+                solid_block_at(BlockPos::new(bx_west, by, bz), cache, registry)
+                && (e_min.x - baabb.max.x).abs() < CONTACT_EPSILON
+            {
+                out.push(BodyBlockContact {
+                    body: entity,
+                    block: bp,
+                    normal: Vec3::X,
+                    penetration: (baabb.max.x - e_min.x).max(0.0),
+                });
+            }
+        }
+    }
+
+    // ── +X face ─────────────────────────────────────────────────────
+    let bx_east = (e_max.x + CONTACT_EPSILON).floor() as i32;
+    for by in by0..=by1 {
+        for bz in bz0..=bz1 {
+            if let Some((bp, baabb)) =
+                solid_block_at(BlockPos::new(bx_east, by, bz), cache, registry)
+                && (baabb.min.x - e_max.x).abs() < CONTACT_EPSILON
+            {
+                out.push(BodyBlockContact {
+                    body: entity,
+                    block: bp,
+                    normal: Vec3::NEG_X,
+                    penetration: (e_max.x - baabb.min.x).max(0.0),
+                });
+            }
+        }
+    }
+
+    // ── -Z face ─────────────────────────────────────────────────────
+    let bz_north = (e_min.z - CONTACT_EPSILON).floor() as i32;
+    for bx in bx0..=bx1 {
+        for by in by0..=by1 {
+            if let Some((bp, baabb)) =
+                solid_block_at(BlockPos::new(bx, by, bz_north), cache, registry)
+                && (e_min.z - baabb.max.z).abs() < CONTACT_EPSILON
+            {
+                out.push(BodyBlockContact {
+                    body: entity,
+                    block: bp,
+                    normal: Vec3::Z,
+                    penetration: (baabb.max.z - e_min.z).max(0.0),
+                });
+            }
+        }
+    }
+
+    // ── +Z face ─────────────────────────────────────────────────────
+    let bz_south = (e_max.z + CONTACT_EPSILON).floor() as i32;
+    for bx in bx0..=bx1 {
+        for by in by0..=by1 {
+            if let Some((bp, baabb)) =
+                solid_block_at(BlockPos::new(bx, by, bz_south), cache, registry)
+                && (baabb.min.z - e_max.z).abs() < CONTACT_EPSILON
+            {
+                out.push(BodyBlockContact {
+                    body: entity,
+                    block: bp,
+                    normal: Vec3::NEG_Z,
+                    penetration: (e_max.z - baabb.min.z).max(0.0),
+                });
+            }
+        }
+    }
+}
+
+/// Returns the block + its world-space AABB if there is a solid (or
+/// shaped) collider at `bp`, else `None`.
+fn solid_block_at(
+    bp: BlockPos,
+    cache: &ChunkCache,
+    registry: &BlockRegistry,
+) -> Option<(BlockPos, BlockAabb)> {
+    let block = get_block(bp, cache);
+    let baabb = block_world_aabb(bp, block, registry)?;
+    Some((bp, baabb))
 }
 
 // ---------------------------------------------------------------------------
@@ -537,7 +717,9 @@ impl Plugin for BlockCollisionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedUpdate,
-            resolve_block_collisions.in_set(PhysicsSet::BlockCollision),
+            (resolve_block_collisions, detect_block_contacts)
+                .chain()
+                .in_set(PhysicsSet::BlockCollision),
         );
     }
 }
@@ -1366,5 +1548,103 @@ mod tests {
             &cache,
             &registry,
         ));
+    }
+
+    // ------------------------------------------------------------------
+    // Contact messages
+    // ------------------------------------------------------------------
+
+    fn collect_block_contacts(app: &App) -> Vec<BodyBlockContact> {
+        let messages = app
+            .world()
+            .resource::<bevy::ecs::message::Messages<BodyBlockContact>>();
+        messages.iter_current_update_messages().cloned().collect()
+    }
+
+    #[test]
+    fn resting_body_emits_block_contact_every_tick_with_upward_normal() {
+        let mut app = make_app(1.0 / 20.0);
+        fill_floor(&mut app, 0);
+
+        let entity = spawn_body(&mut app, Vec3::new(0.5, 1.0, 0.5));
+        // Settle.
+        tick(&mut app);
+        tick(&mut app);
+
+        let contacts = collect_block_contacts(&app);
+        assert!(
+            contacts
+                .iter()
+                .any(|c| c.body == entity && c.normal == Vec3::Y && c.block.y == 0),
+            "resting body should emit a BodyBlockContact with +Y normal each tick, got {contacts:?}"
+        );
+    }
+
+    #[test]
+    fn body_with_no_adjacent_blocks_emits_no_contacts() {
+        let mut app = make_app(1.0 / 20.0);
+        // Register stone but don't fill any blocks.
+        {
+            let mut registry = app.world_mut().resource_mut::<BlockRegistry>();
+            registry.register_without_event(
+                BlockDefinition::new(BlockId(1), "stone")
+                    .with_solid(true)
+                    .with_renderable(false),
+            );
+        }
+
+        let entity = spawn_body(&mut app, Vec3::new(0.5, 50.0, 0.5));
+        // Kill gravity so the body doesn't fall and find nothing anyway.
+        app.world_mut().get_mut::<GravityScale>(entity).unwrap().0 = 0.0;
+        tick(&mut app);
+
+        let contacts = collect_block_contacts(&app);
+        assert!(
+            !contacts.iter().any(|c| c.body == entity),
+            "free-floating body should emit no contacts, got {contacts:?}"
+        );
+    }
+
+    #[test]
+    fn body_against_wall_emits_horizontal_contact() {
+        let mut app = make_app(1.0 / 20.0);
+
+        // Register stone + build a wall along x = 3 (block [3,4]).
+        {
+            let mut registry = app.world_mut().resource_mut::<BlockRegistry>();
+            registry.register_without_event(
+                BlockDefinition::new(BlockId(1), "stone")
+                    .with_solid(true)
+                    .with_renderable(false),
+            );
+        }
+        let mut chunk = Chunk::new(ChunkPos::new(0, 0, 0));
+        for y in 0..4 {
+            for z in 0..4 {
+                chunk.set(3, y, z, Block::new(BlockId(1)));
+            }
+        }
+        // Floor.
+        for x in 0..CHUNK_SIZE_X {
+            for z in 0..CHUNK_SIZE_Z {
+                chunk.set(x, 0, z, Block::new(BlockId(1)));
+            }
+        }
+        app.world_mut().resource_mut::<ChunkCache>().insert(chunk);
+
+        let entity = spawn_body(&mut app, Vec3::new(2.5, 1.0, 1.5));
+        // Push the body into the wall.
+        app.world_mut().get_mut::<Velocity>(entity).unwrap().0.x = 5.0;
+        for _ in 0..10 {
+            tick(&mut app);
+        }
+
+        let contacts = collect_block_contacts(&app);
+        assert!(
+            contacts
+                .iter()
+                .any(|c| c.body == entity && c.normal == Vec3::NEG_X && c.block.x == 3),
+            "body pressed against wall on its +X face should emit a -X-normal contact, got {contacts:?}"
+        );
     }
 }

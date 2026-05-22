@@ -4,6 +4,7 @@ pub use crate::{
         Aabb, GravityScale, Grounded, Impulse, PhysicsBody, PhysicsCollider, PhysicsPosition,
         Velocity,
     },
+    messages::{BodyBlockContact, BodyBodyContact},
     plugin::PhysicsCorePlugin,
     resources::{PhysicsConfig, PhysicsSpatialCache},
     system_sets::PhysicsSet,

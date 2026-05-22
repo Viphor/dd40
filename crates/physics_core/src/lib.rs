@@ -1,5 +1,6 @@
 pub mod character_ext;
 pub mod components;
+pub mod messages;
 pub mod plugin;
 pub mod prelude;
 pub mod resources;

@@ -63,6 +63,7 @@ pub(crate) fn update_physics_spatial_cache(
 #[allow(clippy::type_complexity)]
 fn resolve_body_collisions(
     cache: Res<PhysicsSpatialCache>,
+    mut contacts: MessageWriter<BodyBodyContact>,
     mut query: Query<
         (&Aabb, &mut TentativePosition, Option<&mut Velocity>),
         (With<PhysicsCollider>, With<PhysicsBody>),
@@ -82,6 +83,20 @@ fn resolve_body_collisions(
         let Some(pen) = aabb_a.penetration(tentative_a.0, aabb_b, tentative_b.0) else {
             continue;
         };
+
+        // Emit the contact regardless of which axis carries the
+        // correction — downstream consumers (pickup, merging) only
+        // need to know that the two bodies are touching.
+        let depth = pen.length();
+        if depth > f32::EPSILON {
+            let normal_b_to_a = pen.normalize_or_zero();
+            contacts.write(BodyBodyContact::new(
+                entity_a,
+                entity_b,
+                normal_b_to_a,
+                depth,
+            ));
+        }
 
         let horizontal = Vec3::new(pen.x, 0.0, pen.z);
         if horizontal.length_squared() < f32::EPSILON {
@@ -538,6 +553,56 @@ mod tests {
         assert!(
             pairs.is_empty(),
             "characters in different chunks should produce no candidate pair: {pairs:?}"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Contact messages
+    // ------------------------------------------------------------------
+
+    fn collect_body_contacts(app: &App) -> Vec<BodyBodyContact> {
+        let messages = app
+            .world()
+            .resource::<bevy::ecs::message::Messages<BodyBodyContact>>();
+        messages.iter_current_update_messages().cloned().collect()
+    }
+
+    #[test]
+    fn overlapping_bodies_emit_body_body_contact() {
+        let mut app = make_app(1.0 / 60.0);
+        let a = spawn_character(&mut app, Vec3::new(0.0, 0.0, 0.0));
+        let b = spawn_character(&mut app, Vec3::new(0.2, 0.0, 0.0));
+
+        tick(&mut app);
+
+        let contacts = collect_body_contacts(&app);
+        let (lo, hi) = if a.index() < b.index() {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        assert!(
+            contacts
+                .iter()
+                .any(|c| c.a == lo && c.b == hi && c.penetration > 0.0),
+            "overlapping bodies should emit a BodyBodyContact ordered by Entity index, got {contacts:?}"
+        );
+    }
+
+    #[test]
+    fn separated_bodies_emit_no_contact() {
+        let mut app = make_app(1.0 / 60.0);
+        let a = spawn_character(&mut app, Vec3::new(0.0, 0.0, 0.0));
+        let b = spawn_character(&mut app, Vec3::new(10.0, 0.0, 0.0));
+
+        tick(&mut app);
+
+        let contacts = collect_body_contacts(&app);
+        assert!(
+            !contacts
+                .iter()
+                .any(|c| (c.a == a && c.b == b) || (c.a == b && c.b == a)),
+            "well-separated bodies should not emit contacts, got {contacts:?}"
         );
     }
 }
