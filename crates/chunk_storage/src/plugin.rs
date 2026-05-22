@@ -6,7 +6,12 @@ use dd40_core::plugin::CorePlugin;
 
 use crate::{
     ChunkResponse, ChunkResponseReceiver, ChunkResponseSender, collect_chunk_responses,
-    dispatch_chunk_requests, provider::DiskChunkProvider,
+    dispatch_chunk_requests,
+    entity_persistence::{
+        EntityPersistenceConfig, SAVE_ENTITIES_ENV, load_entities_for_ready_chunks,
+        read_save_entities_env, save_entities_on_exit,
+    },
+    provider::DiskChunkProvider,
 };
 
 /// Environment variable that selects the on-disk chunk format written by
@@ -54,6 +59,10 @@ pub struct DiskStoragePlugin {
     /// Whether the writer should persist chunk history. When `None`, the
     /// value is read from [`SAVE_HISTORY_ENV`] at plugin build time.
     pub save_history: Option<bool>,
+    /// Whether the per-chunk entity sidecar systems are active.  When
+    /// `None`, the value is read from [`SAVE_ENTITIES_ENV`] at plugin
+    /// build time (default `true` when unset).
+    pub save_entities: Option<bool>,
 }
 
 impl DiskStoragePlugin {
@@ -63,6 +72,7 @@ impl DiskStoragePlugin {
         Self {
             dir: dir.into(),
             save_history: None,
+            save_entities: None,
         }
     }
 
@@ -72,7 +82,15 @@ impl DiskStoragePlugin {
         Self {
             dir: dir.into(),
             save_history: Some(save_history),
+            save_entities: None,
         }
+    }
+
+    /// Overrides the entity-sidecar toggle (normally driven by
+    /// [`SAVE_ENTITIES_ENV`]).
+    pub fn with_save_entities(mut self, save_entities: bool) -> Self {
+        self.save_entities = Some(save_entities);
+        self
     }
 }
 
@@ -81,12 +99,16 @@ impl Plugin for DiskStoragePlugin {
         dd40_core::ensure_plugins!(app, CorePlugin);
 
         let save_history = self.save_history.unwrap_or_else(read_save_history_env);
+        let save_entities = self.save_entities.unwrap_or_else(read_save_entities_env);
         info!(
-            "DiskStoragePlugin: dir = {}, save_history = {} (env {} = {:?})",
+            "DiskStoragePlugin: dir = {}, save_history = {} (env {} = {:?}), save_entities = {} (env {} = {:?})",
             self.dir.display(),
             save_history,
             SAVE_HISTORY_ENV,
             std::env::var(SAVE_HISTORY_ENV).ok(),
+            save_entities,
+            SAVE_ENTITIES_ENV,
+            std::env::var(SAVE_ENTITIES_ENV).ok(),
         );
 
         let (tx, rx) = crossbeam_channel::unbounded::<ChunkResponse>();
@@ -96,11 +118,23 @@ impl Plugin for DiskStoragePlugin {
             self.dir.clone(),
             save_history,
         ));
+        app.insert_resource(EntityPersistenceConfig {
+            enabled: save_entities,
+            dir: self.dir.clone(),
+        });
 
         app.add_systems(
             PreUpdate,
             (dispatch_chunk_requests, collect_chunk_responses),
         );
+
+        // Sidecar load runs after collect_chunk_responses so any
+        // ChunkReady written this frame is visible to the loader.
+        app.add_systems(
+            PreUpdate,
+            load_entities_for_ready_chunks.after(collect_chunk_responses),
+        );
+        app.add_systems(Last, save_entities_on_exit);
 
         // Snapshot the live BlockDataTypeRegistry into the disk provider
         // once startup finishes — at that point every plugin has had a
