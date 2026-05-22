@@ -3,6 +3,7 @@ use dd40_character_interaction::CharacterInteractionPlugin;
 use dd40_chunk_storage::plugin::DiskStoragePlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
+use dd40_integration_loose_item_pickup::LooseItemPickupPlugin;
 use dd40_loose_items::LooseItemsPlugin;
 use dd40_loot::LootPlugin;
 use dd40_network::{
@@ -52,6 +53,9 @@ fn main() {
             // Server-only: spawn LooseItem entities from DropItems and tick
             // their despawn / pickup-cooldown timers.
             LooseItemsPlugin,
+            // Server-only: grant LooseItems to characters in contact with
+            // an empty inventory slot.
+            LooseItemPickupPlugin,
             ServerNetworkPlugin(DDServer {
                 conditioner: Some(RecvLinkConditioner::new(
                     LinkConditionerConfig::average_condition(),
