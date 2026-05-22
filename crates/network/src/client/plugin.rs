@@ -9,6 +9,7 @@ use crate::{
         chunk_provider::{apply_chunk_updates, receive_chunk_data, send_chunk_requests},
         connection::{DDClient, connect, on_server_connected},
         loading::register_connection_loading_item,
+        loose_items::{ensure_loose_item_transform, sync_loose_item_position_to_transform},
         spawn::{
             SpawnChunkTimeout, receive_spawn_location, timeout_initial_chunks, track_initial_chunks,
         },
@@ -73,6 +74,18 @@ impl Plugin for ClientNetworkPlugin {
         // Communication systems.
         app.add_systems(PreUpdate, send_chunk_requests);
         app.add_systems(PostUpdate, (receive_chunk_data, apply_chunk_updates));
+
+        // Bridge replicated loose items into the client transform stack so
+        // renderers (e.g. `dd40_loose_item_render`) can hang visuals off
+        // them and see them move with the interpolated position.
+        app.add_systems(
+            PostUpdate,
+            (
+                ensure_loose_item_transform,
+                sync_loose_item_position_to_transform,
+            )
+                .chain(),
+        );
 
         // Spawn-location and chunk-tracking systems run after chunk data has
         // been forwarded so notifications are written before we drain them.
