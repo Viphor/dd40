@@ -16,11 +16,12 @@
 //! match.  Missing sidecars on load are treated as "no entities" and
 //! logged at `debug!`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use bevy::app::AppExit;
 use bevy::prelude::*;
+use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::prelude::*;
 
 use crate::entity_sidecar::{
@@ -169,6 +170,11 @@ struct AlreadySavedEntities;
 /// Public API: walks every registered persister, groups the returned
 /// payloads by chunk, and writes one sidecar per chunk.
 ///
+/// Any chunk currently in [`ChunkCache`] that ends up with **no**
+/// entities has its sidecar file removed (if one exists), so a chunk
+/// whose entities have all been picked up / despawned does not
+/// re-spawn its stale contents on the next load.
+///
 /// Useful for tests and for any future per-chunk eviction system that
 /// wants to flush a single chunk on demand (which can be added by
 /// composing this with a `for_chunk: Option<ChunkPos>` filter).
@@ -192,14 +198,30 @@ pub fn save_all_entities(world: &mut World) {
         }
     }
 
-    if by_chunk.is_empty() {
+    // Collect the set of currently-loaded chunk positions so we can
+    // remove stale sidecars: a chunk that previously had entities but
+    // is now empty must not keep its old sidecar on disk, otherwise
+    // the entities reappear (duplicated) on the next load.
+    let loaded_positions: HashSet<ChunkPos> = world
+        .get_resource::<ChunkCache>()
+        .map(|cache| cache.iter_positions().copied().collect())
+        .unwrap_or_default();
+
+    let stale_positions: Vec<ChunkPos> = loaded_positions
+        .into_iter()
+        .filter(|pos| !by_chunk.contains_key(pos))
+        .collect();
+
+    if by_chunk.is_empty() && stale_positions.is_empty() {
         debug!("entity-sidecar flush: nothing to write");
         return;
     }
 
-    if let Err(err) = std::fs::create_dir_all(&dir) {
-        warn!("failed to create entity-sidecar directory {dir:?}: {err}");
-        return;
+    if !by_chunk.is_empty() {
+        if let Err(err) = std::fs::create_dir_all(&dir) {
+            warn!("failed to create entity-sidecar directory {dir:?}: {err}");
+            return;
+        }
     }
 
     for (chunk, entities) in by_chunk {
@@ -211,6 +233,15 @@ pub fn save_all_entities(world: &mut World) {
                 "wrote {} entity payload(s) to {path:?}",
                 entities.len()
             );
+        }
+    }
+
+    for chunk in stale_positions {
+        let path = entity_sidecar_path(&dir, chunk);
+        match std::fs::remove_file(&path) {
+            Ok(()) => debug!("removed stale entity sidecar {path:?} (chunk {chunk} now empty)"),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => warn!("failed to remove stale entity sidecar {path:?}: {err}"),
         }
     }
 }
@@ -300,6 +331,7 @@ mod tests {
         app.add_message::<AppExit>();
         app.add_message::<ChunkReady>();
         app.init_resource::<EntityPersisterRegistry>();
+        app.init_resource::<dd40_core::chunk::cache::ChunkCache>();
         app.insert_resource(EntityPersistenceConfig { enabled: true, dir });
         app
     }
@@ -455,6 +487,77 @@ mod tests {
         assert!(
             entity_sidecar_path(&dir, ChunkPos::new(7, 0, 0)).exists(),
             "sidecar should exist after AppExit"
+        );
+    }
+
+    #[test]
+    fn save_removes_stale_sidecar_for_loaded_chunk_that_is_now_empty() {
+        let dir = tmp_dir("stale_cleanup");
+        let pos = ChunkPos::new(2, 0, 3);
+
+        // 1) First save: chunk has one entity → sidecar is written.
+        let mut app = make_app(dir.clone());
+        app.world_mut()
+            .resource_mut::<dd40_core::chunk::cache::ChunkCache>()
+            .insert(make_chunk(pos));
+        app.world_mut()
+            .resource_mut::<EntityPersisterRegistry>()
+            .register(RecordingPersister {
+                kind: "test.thing",
+                spawned: Arc::new(Mutex::new(Vec::new())),
+                to_emit: vec![(pos, vec![1, 2, 3])],
+            });
+        save_all_entities(app.world_mut());
+        let path = entity_sidecar_path(&dir, pos);
+        assert!(path.exists(), "sidecar should be written on first save");
+
+        // 2) Second save: same chunk is still loaded but the persister
+        //    now reports zero payloads. The stale sidecar must be deleted.
+        let mut app = make_app(dir.clone());
+        app.world_mut()
+            .resource_mut::<dd40_core::chunk::cache::ChunkCache>()
+            .insert(make_chunk(pos));
+        app.world_mut()
+            .resource_mut::<EntityPersisterRegistry>()
+            .register(RecordingPersister {
+                kind: "test.thing",
+                spawned: Arc::new(Mutex::new(Vec::new())),
+                to_emit: Vec::new(),
+            });
+        save_all_entities(app.world_mut());
+        assert!(
+            !path.exists(),
+            "stale sidecar should be removed when chunk has no entities on save"
+        );
+    }
+
+    #[test]
+    fn save_does_not_touch_sidecars_for_unloaded_chunks() {
+        let dir = tmp_dir("unloaded_untouched");
+        let pos = ChunkPos::new(9, 0, 9);
+
+        // Pre-write a sidecar for a chunk that is NOT loaded.
+        let entities = vec![PersistedEntity {
+            kind: "test.thing".into(),
+            payload: vec![7],
+        }];
+        let file = std::fs::File::create(entity_sidecar_path(&dir, pos)).unwrap();
+        serialize_entities(std::io::BufWriter::new(file), pos, &entities).unwrap();
+
+        // Run a save where no chunks are loaded and persister emits nothing.
+        let mut app = make_app(dir.clone());
+        app.world_mut()
+            .resource_mut::<EntityPersisterRegistry>()
+            .register(RecordingPersister {
+                kind: "test.thing",
+                spawned: Arc::new(Mutex::new(Vec::new())),
+                to_emit: Vec::new(),
+            });
+        save_all_entities(app.world_mut());
+
+        assert!(
+            entity_sidecar_path(&dir, pos).exists(),
+            "sidecar for unloaded chunk must not be removed"
         );
     }
 
