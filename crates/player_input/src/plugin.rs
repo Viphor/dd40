@@ -51,27 +51,26 @@ impl Plugin for PlayerInputTranslationPlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin, InputCorePlugin, CharacterCorePlugin);
 
-        // `add_input_context` panics if called twice for the same context.
-        // Lightyear's `InputPlugin::<OnFoot>` will also call this — guard
-        // so whichever plugin is added second is a no-op for the context
-        // registration.
-        if !app.world().contains_resource::<OnFootContextRegistered>() {
-            app.add_input_context_to::<FixedPreUpdate, OnFoot>();
-            app.insert_resource(OnFootContextRegistered);
-        }
-
+        // NOTE: We intentionally do **not** call
+        // `app.add_input_context_to::<FixedPreUpdate, OnFoot>()` here.
+        //
+        // `bevy_enhanced_input` panics on duplicate context registration,
+        // and lightyear's `InputPlugin::<OnFoot>` (added by
+        // `dd40_network::ProtocolPlugin`) registers the context
+        // unconditionally — there is no `is_plugin_added`-style guard
+        // available to us. The network plugin is the canonical registrar
+        // for the networked `OnFoot` context.
+        //
+        // Tests / single-player consumers that use this plugin without
+        // the network layer must register the context themselves with
+        // `app.add_input_context_to::<FixedPreUpdate, OnFoot>()` before
+        // adding this plugin.
         app.register_type::<OnFoot>().add_systems(
             FixedPreUpdate,
             apply_actions_to_character_input.after(EnhancedInputSystems::Apply),
         );
     }
 }
-
-/// Marker resource set by whichever plugin first registers [`OnFoot`] as a
-/// `bevy_enhanced_input` context, so peers can avoid the double-registration
-/// panic.
-#[derive(Resource)]
-struct OnFootContextRegistered;
 
 /// Plugin that handles the locally-controlled player's camera and keyboard/mouse
 /// input.
