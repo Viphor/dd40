@@ -8,6 +8,8 @@ use bevy::math::Curve;
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
 use dd40_core::prelude::*;
+use dd40_input_core::actions::{Attack, CameraRotation, Interact, Jump, Move, Place, Sprint};
+use dd40_input_core::contexts::OnFoot;
 use dd40_loose_item_core::LooseItem;
 use dd40_physics_core::prelude::Velocity;
 use lightyear::prelude::*;
@@ -28,68 +30,6 @@ pub struct ChunkChannel;
 
 /// Reliable ordered channel for important game events
 pub struct EventChannel;
-
-// ============================================================================
-// INPUTS
-// ============================================================================
-
-/// Client input that is sent every fixed tick.
-///
-/// The server applies these inputs authoritatively to the character entity.
-/// The controlling client mirrors the same logic on its [`Predicted`] entity
-/// for client-side prediction.
-///
-/// The action triple ([`attack`](Self::attack) / [`interact`](Self::interact)
-/// / [`place`](Self::place)) is intentionally split: keeping policy ("does
-/// right-click interact or place?") out of the protocol lets the local-player
-/// input layer decide per right-click while the interaction/placement systems
-/// stay agnostic.
-///
-/// [`Predicted`]: lightyear::prelude::client::Predicted
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Reflect)]
-pub struct PlayerInput {
-    /// Movement direction in world space (normalised or zero).
-    pub movement: Vec3,
-    /// Camera pitch (up/down rotation in radians).
-    pub pitch: f32,
-    /// Camera yaw (left/right rotation in radians).
-    pub yaw: f32,
-    /// Whether the player wants to jump this tick.
-    pub jump: bool,
-    /// Whether the player is sprinting (doubles [`MovementSpeed`]).
-    ///
-    /// [`MovementSpeed`]: dd40_core::character::MovementSpeed
-    pub sprint: bool,
-    /// Continuous primary-action intent. Held while the player wants to
-    /// mine (and, eventually, melee-attack).
-    pub attack: bool,
-    /// One-shot secondary-action intent — interact with the targeted
-    /// block (lever, button, container).
-    pub interact: bool,
-    /// One-shot intent to place a block from the player's active item.
-    pub place: bool,
-}
-
-impl Default for PlayerInput {
-    fn default() -> Self {
-        Self {
-            movement: Vec3::ZERO,
-            pitch: 0.0,
-            yaw: 0.0,
-            jump: false,
-            sprint: false,
-            attack: false,
-            interact: false,
-            place: false,
-        }
-    }
-}
-
-impl bevy::ecs::entity::MapEntities for PlayerInput {
-    fn map_entities<M: bevy::ecs::entity::EntityMapper>(&mut self, _mapper: &mut M) {
-        // PlayerInput contains no entity references.
-    }
-}
 
 // ============================================================================
 // MESSAGES
@@ -317,16 +257,33 @@ pub struct ProtocolPlugin;
 impl Plugin for ProtocolPlugin {
     fn build(&self, app: &mut App) {
         // Register reflection types
-        app.register_type::<PlayerInput>()
-            .register_type::<PlayerPosition>()
+        app.register_type::<PlayerPosition>()
             .register_type::<PlayerRotation>()
             .register_type::<PlayerSpeed>()
             .register_type::<NetworkCharacter>()
             .register_type::<LooseItemPosition>();
 
-        // Register the native input plugin so PlayerInput is tick-synced
-        // between client and server via lightyear's input pipeline.
-        app.add_plugins(lightyear::prelude::input::native::InputPlugin::<PlayerInput>::default());
+        // Replicate the OnFoot input context and all of its networked actions
+        // through lightyear's `bevy_enhanced_input` integration. The
+        // controlling client spawns Action<T> entities related to its
+        // predicted character; lightyear ships their per-tick values to the
+        // server, where `PlayerInputTranslationPlugin` (added by the server
+        // binary) folds them into `CharacterInput`.
+        //
+        // `register_input_action::<T>()` makes the Action<T> component
+        // replicable so the server can mirror the client's action set onto
+        // its authoritative entity.
+        use lightyear::input::bei::prelude::InputPlugin as BeiInputPlugin;
+        use lightyear::input::bei::prelude::InputRegistryExt;
+        app.add_plugins(BeiInputPlugin::<OnFoot>::default());
+        (&mut *app)
+            .register_input_action::<Move>()
+            .register_input_action::<Jump>()
+            .register_input_action::<Sprint>()
+            .register_input_action::<Attack>()
+            .register_input_action::<Place>()
+            .register_input_action::<Interact>()
+            .register_input_action::<CameraRotation>();
 
         // Register components with replication.
         //
@@ -495,18 +452,5 @@ mod tests {
         let vec = Vec3::new(1.5, 2.5, 3.5);
         let pos = PlayerPosition::from_vec3(vec);
         assert_eq!(pos.to_vec3(), vec);
-    }
-
-    #[test]
-    fn test_player_input_default() {
-        let input = PlayerInput::default();
-        assert_eq!(input.movement, Vec3::ZERO);
-        assert_eq!(input.pitch, 0.0);
-        assert_eq!(input.yaw, 0.0);
-        assert!(!input.jump);
-        assert!(!input.sprint);
-        assert!(!input.attack);
-        assert!(!input.interact);
-        assert!(!input.place);
     }
 }

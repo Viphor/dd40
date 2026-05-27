@@ -14,6 +14,7 @@ use dd40_network::{
     shared::connection::SHARED_SETTINGS,
 };
 use dd40_physics::PhysicsPlugin;
+use dd40_player_input::PlayerInputTranslationPlugin;
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
 use dd40_world::{
     WorldPlugin,
@@ -34,6 +35,10 @@ fn main() {
             GracefulShutdownPlugin,
             PhysicsPlugin,
             IntegrationCharacterPhysicsPlugin,
+            // Headless: translate the networked OnFoot action set into
+            // CharacterInput each tick. Must be added on both client and
+            // server so prediction/replay stay deterministic.
+            PlayerInputTranslationPlugin,
             VanillaPalettePlugin,
             DiskStoragePlugin::new("world_data/chunks"),
             WorldPlugin::new(BowlWorldGenerator(vec![

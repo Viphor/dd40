@@ -8,13 +8,12 @@ use dd40_character_core::{builder::CharacterBuilder, controller::CharacterInput}
 use dd40_inventory_core::character_ext::CharacterInventoryExt;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
-use lightyear::prelude::{Connected, RemoteId, input::native::ActionState, server::ClientOf};
+use lightyear::prelude::{Connected, RemoteId, server::ClientOf};
 
 use crate::character_ext::CharacterServerNetworkExt;
-use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
+use crate::protocol::{NetworkCharacter, PlayerPosition, PlayerRotation};
 use crate::server::spawn::{PlayerLocations, WorldSpawnConfig};
 use crate::server::user::get_user;
-use crate::shared::character::apply_input_to_controller;
 
 // ============================================================================
 // OBSERVERS
@@ -81,22 +80,6 @@ fn server_spawn_character(
 // SYSTEMS
 // ============================================================================
 
-/// Translates the client's buffered [`PlayerInput`] into [`CharacterInput`]
-/// intent each fixed tick.
-///
-/// Excludes [`Predicted`] entities so this only runs on the authoritative
-/// server copies (which are `Without<Predicted>` by definition on the server,
-/// but the guard is kept explicit for host-server compatibility).
-///
-/// [`Predicted`]: lightyear::prelude::Predicted
-fn server_apply_inputs(
-    mut query: Query<(&ActionState<PlayerInput>, &mut CharacterInput), With<NetworkCharacter>>,
-) {
-    for (action, mut char_input) in &mut query {
-        apply_input_to_controller(action, &mut char_input);
-    }
-}
-
 /// Syncs authoritative physics state back to the replicated network components
 /// after each physics tick so lightyear can replicate the changes to clients.
 ///
@@ -104,8 +87,9 @@ fn server_apply_inputs(
 /// - [`CharacterInput::pitch`] / [`CharacterInput::yaw`] → [`PlayerRotation`]
 ///
 /// Rotation is driven by the client's camera input and arrives via
-/// [`CharacterInput`] after [`server_apply_inputs`] writes it from
-/// [`ActionState<PlayerInput>`].
+/// `CharacterInput` after `PlayerInputTranslationPlugin` (in
+/// `dd40_player_input`) copies the replicated `CameraRotation` action into
+/// pitch / yaw each `FixedPreUpdate`.
 fn server_sync_state(
     mut query: Query<
         (
@@ -132,16 +116,16 @@ fn server_sync_state(
 ///
 /// Registered automatically by [`NetworkCharacterPlugin`] when the `server`
 /// feature is active.
+///
+/// Action → `CharacterInput` translation is handled by
+/// `PlayerInputTranslationPlugin` (added separately by the server binary),
+/// not by this plugin — keeping the dependency graph one-directional
+/// (network is pure transport; input semantics live in `dd40_player_input`).
 pub struct ServerCharacterPlugin;
 
 impl Plugin for ServerCharacterPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(server_spawn_character);
-
-        app.add_systems(
-            FixedUpdate,
-            server_apply_inputs.in_set(PhysicsSet::InputSync),
-        );
 
         app.add_systems(FixedUpdate, server_sync_state.after(PhysicsSet::Finalise));
     }

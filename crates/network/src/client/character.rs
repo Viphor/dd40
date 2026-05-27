@@ -18,7 +18,10 @@
 //!    (restored to the confirmed checkpoint by lightyear) against `PhysicsPosition`
 //!    (the last predicted result).  If they differ, a [`VisualCorrectionOffset`] is
 //!    inserted.  Then `PhysicsPosition` is synced from `PlayerPosition`.
-//! 2. [`client_apply_inputs`] forwards buffered [`PlayerInput`] into [`CharacterInput`].
+//! 2. The local-player [`CharacterInput`] camera orientation is written into the
+//!    replicated `CameraRotation` action by [`bridge_camera_rotation_to_action`];
+//!    `PlayerInputTranslationPlugin` (in `dd40_player_input`) then folds the full
+//!    networked action set into the per-tick [`CharacterInput`].
 //! 3. The physics pipeline runs.
 //! 4. [`record_and_sync_post_physics`] saves `PhysicsPosition` as `current`, then
 //!    copies it back to `PlayerPosition` so lightyear records the new prediction.
@@ -32,20 +35,15 @@ use bevy::{prelude::*, time::Fixed};
 use dd40_character_core::{
     builder::CharacterBuilder, controller::CharacterInput, system_sets::CharacterRenderSet,
 };
+use dd40_input_core::actions::CameraRotation;
+use dd40_input_core::contexts::OnFoot;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
-use lightyear::prelude::{
-    Interpolated, Predicted,
-    client::input::InputSystems,
-    input::native::{ActionState, InputMarker},
-    is_in_rollback,
-};
+use lightyear::input::bei::prelude::{Action, ActionOf, InputMarker};
+use lightyear::prelude::{Interpolated, Predicted, client::input::InputSystems, is_in_rollback};
 
 use crate::character_ext::CharacterClientNetworkExt;
-use crate::{
-    protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation},
-    shared::character::apply_input_to_controller,
-};
+use crate::protocol::{NetworkCharacter, PlayerPosition, PlayerRotation};
 
 // ============================================================================
 // COMPONENTS
@@ -154,33 +152,33 @@ fn on_network_character_added(
 // FIXED-UPDATE SYSTEMS  (run inside lightyear's rollback replay loop)
 // ============================================================================
 
-/// Reads [`CharacterInput`] and forwards it into [`ActionState<PlayerInput>`]
-/// so lightyear buffers it for the current tick and sends it to the server.
+/// Mirrors the local player's persistent camera orientation
+/// (`CharacterInput::pitch` / `yaw`) into the [`CameraRotation`] action so
+/// lightyear ships it to the server each tick.
+///
+/// The action vector is `Vec2 { x: yaw, y: pitch }`. The translator in
+/// `dd40_player_input` reads the same action on both client and server and
+/// writes it back into `CharacterInput`, closing the loop deterministically.
 ///
 /// Runs in [`FixedPreUpdate`] inside [`InputSystems::WriteClientInputs`] so
-/// lightyear sees the fresh input **before** it advances the tick counter.
-/// Placing it here (instead of `FixedUpdate`) eliminates a 1-tick delay on
-/// one-shot flags like [`CharacterInput::jump`].
-///
-/// [`CharacterInput::jump`]: dd40_core::character::controller::CharacterInput::jump
+/// the freshly-written action value is captured before lightyear advances
+/// the tick counter. Skipped during rollback — lightyear restores the
+/// historical action value for each replayed tick, and overwriting it with
+/// the live `CharacterInput` would break replay determinism.
 #[allow(clippy::type_complexity)]
-fn bridge_input_to_action_state(
-    mut query: Query<
-        (&CharacterInput, &mut ActionState<PlayerInput>),
-        (With<Predicted>, With<InputMarker<PlayerInput>>),
+fn bridge_camera_rotation_to_action(
+    characters: Query<
+        (Entity, &CharacterInput),
+        (With<Predicted>, With<InputMarker<OnFoot>>),
     >,
+    mut rotations: Query<(&mut Action<CameraRotation>, &ActionOf<OnFoot>)>,
 ) {
-    for (char_input, mut action) in &mut query {
-        action.0 = PlayerInput {
-            movement: char_input.movement,
-            jump: char_input.jump,
-            sprint: char_input.sprint,
-            pitch: char_input.pitch,
-            yaw: char_input.yaw,
-            attack: char_input.attack,
-            interact: char_input.interact,
-            place: char_input.place,
-        };
+    for (character, input) in &characters {
+        for (mut action, of) in &mut rotations {
+            if **of == character {
+                **action = Vec2::new(input.yaw, input.pitch);
+            }
+        }
     }
 }
 
@@ -232,19 +230,6 @@ fn restore_and_record_previous(
         // Restore the physics position from the lightyear checkpoint so
         // rollback re-simulation starts from the correct confirmed state.
         char_pos.0 = new_physics_pos;
-    }
-}
-
-/// Applies the locally-buffered [`PlayerInput`] to the predicted entity's
-/// [`CharacterInput`], using the same logic as the server for determinism.
-///
-/// Must run **before** [`PhysicsSet::Integrate`] so the physics step uses the
-/// current tick's input.
-fn client_apply_inputs(
-    mut query: Query<(&ActionState<PlayerInput>, &mut CharacterInput), With<Predicted>>,
-) {
-    for (action, mut char_input) in &mut query {
-        apply_input_to_controller(action, &mut char_input);
     }
 }
 
@@ -370,22 +355,21 @@ impl Plugin for ClientCharacterPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_network_character_added);
 
-        // Bridge CharacterInput → ActionState in FixedPreUpdate so lightyear
-        // buffers the current frame's input (including the one-shot jump flag)
-        // before it advances the tick counter.  Skip during rollback: lightyear
-        // already restores the historical ActionState for each replayed tick, and
-        // running the bridge would overwrite it with stale CharacterInput values
-        // (e.g. jump=false after apply_character_controller already consumed it).
+        // Bridge CharacterInput camera orientation → Action<CameraRotation>
+        // in FixedPreUpdate so lightyear buffers it before advancing the tick.
+        // Skip during rollback: lightyear restores historical action state for
+        // each replayed tick, and overwriting it with the live CharacterInput
+        // would break replay determinism.
         app.add_systems(
             FixedPreUpdate,
-            bridge_input_to_action_state
+            bridge_camera_rotation_to_action
                 .in_set(InputSystems::WriteClientInputs)
                 .run_if(not(is_in_rollback)),
         );
 
         app.add_systems(
             FixedUpdate,
-            (restore_and_record_previous, client_apply_inputs).in_set(PhysicsSet::InputSync),
+            restore_and_record_previous.in_set(PhysicsSet::InputSync),
         );
 
         app.add_systems(

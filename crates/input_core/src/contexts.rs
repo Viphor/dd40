@@ -17,6 +17,7 @@
 //! foundation crate — this one.
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 /// The "on foot" input context — the set of actions a character is allowed
 /// to take while playing normally.
@@ -35,6 +36,6 @@ use bevy::prelude::*;
 /// [`Attack`]: crate::actions::Attack
 /// [`Place`]: crate::actions::Place
 /// [`Interact`]: crate::actions::Interact
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Component, Reflect)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Component, Reflect, Serialize, Deserialize)]
 #[reflect(Component)]
 pub struct OnFoot;

@@ -2823,6 +2823,7 @@ dependencies = [
  "bevy",
  "bevy_enhanced_input",
  "dd40_core",
+ "serde",
 ]
 
 [[package]]
@@ -2934,6 +2935,7 @@ dependencies = [
  "crossbeam-channel",
  "dd40_character_core",
  "dd40_core",
+ "dd40_input_core",
  "dd40_inventory_core",
  "dd40_loose_item_core",
  "dd40_physics_core",
@@ -3005,6 +3007,7 @@ dependencies = [
  "dd40_loot",
  "dd40_network",
  "dd40_physics",
+ "dd40_player_input",
  "dd40_vanilla_palette",
  "dd40_world",
 ]

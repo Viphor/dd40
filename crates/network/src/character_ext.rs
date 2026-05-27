@@ -44,8 +44,9 @@ pub trait CharacterServerNetworkExt: Sized {
     ///
     /// Inserts:
     /// - [`NetworkCharacter`](crate::protocol::NetworkCharacter) marker.
-    /// - [`ActionState<PlayerInput>`] so lightyear can buffer the controlling
-    ///   client's inputs into it each tick.
+    /// - [`OnFoot`](dd40_input_core::contexts::OnFoot) input context, so
+    ///   lightyear's BEI integration can target this entity with the
+    ///   controlling client's replicated action set.
     /// - [`PlayerPosition`](crate::protocol::PlayerPosition) and
     ///   [`PlayerRotation`](crate::protocol::PlayerRotation), seeded from
     ///   `spawn_pos`.
@@ -56,6 +57,10 @@ pub trait CharacterServerNetworkExt: Sized {
     ///   targeting every other client.
     /// - [`ControlledBy`](lightyear::prelude::ControlledBy) so the entity
     ///   despawns when the owning connection drops.
+    ///
+    /// `Action<T>` entities are **not** spawned here — the controlling
+    /// client spawns them and lightyear replicates them up to the server
+    /// (see `with_predicted_local_player`).
     ///
     /// # Parameters
     ///
@@ -79,16 +84,16 @@ impl<T: AddExtra> CharacterServerNetworkExt for T {
         spawn_pos: Vec3,
         owner: Entity,
     ) -> Self {
-        use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
+        use crate::protocol::{NetworkCharacter, PlayerPosition, PlayerRotation};
+        use dd40_input_core::contexts::OnFoot;
         use lightyear::prelude::{
             ControlledBy, InterpolationTarget, NetworkTarget, PredictionTarget, Replicate,
-            input::native::ActionState,
         };
 
         self.add_extra(move |entity| {
             entity.insert((
                 NetworkCharacter,
-                ActionState::<PlayerInput>::default(),
+                OnFoot,
                 PlayerPosition::from_vec3(spawn_pos),
                 PlayerRotation::new(0.0, 0.0),
                 Replicate::to_clients(NetworkTarget::All),
@@ -114,8 +119,14 @@ pub trait CharacterClientNetworkExt: Sized {
     /// Configures the character as the local player's predicted entity.
     ///
     /// Inserts:
-    /// - [`InputMarker<PlayerInput>`](lightyear::prelude::input::native::InputMarker)
-    ///   so lightyear knows this client controls the entity.
+    /// - [`OnFoot`](dd40_input_core::contexts::OnFoot) input context (no-op
+    ///   if replication already delivered it).
+    /// - [`InputMarker<OnFoot>`](lightyear::input::bei::prelude::InputMarker)
+    ///   so lightyear treats this client as the controller. Lightyear's
+    ///   observers propagate the marker to every related Action entity.
+    /// - One `(Action<T>, ActionOf<OnFoot>)` entity per networked action —
+    ///   `Move`, `Jump`, `Sprint`, `Attack`, `Place`, `Interact`,
+    ///   `CameraRotation`. Lightyear auto-replicates each up to the server.
     /// - [`Player`](dd40_character_core::components::Player) marker.
     /// - [`PhysicsInterpolationData`] seeded so the first render frame shows
     ///   the entity at the spawn position.
@@ -131,15 +142,32 @@ pub trait CharacterClientNetworkExt: Sized {
 impl<T: AddExtra> CharacterClientNetworkExt for T {
     fn with_predicted_local_player(mut self, initial_pos: Vec3) -> Self {
         use crate::client::character::PhysicsInterpolationData;
-        use crate::protocol::PlayerInput;
         use dd40_character_core::components::Player;
-        use lightyear::prelude::input::native::InputMarker;
+        use dd40_input_core::actions::{
+            Attack, CameraRotation, Interact, Jump, Move, Place, Sprint,
+        };
+        use dd40_input_core::contexts::OnFoot;
+        use lightyear::input::bei::prelude::{Action, ActionOf, InputMarker};
 
         self.add_extra(move |entity| {
             entity.insert((
-                InputMarker::<PlayerInput>::default(),
+                OnFoot,
+                InputMarker::<OnFoot>::default(),
                 Player,
                 PhysicsInterpolationData::new(initial_pos),
+            ));
+
+            let context = entity.id();
+            let mut commands = entity.commands();
+            commands.spawn((Action::<Move>::new(), ActionOf::<OnFoot>::new(context)));
+            commands.spawn((Action::<Jump>::new(), ActionOf::<OnFoot>::new(context)));
+            commands.spawn((Action::<Sprint>::new(), ActionOf::<OnFoot>::new(context)));
+            commands.spawn((Action::<Attack>::new(), ActionOf::<OnFoot>::new(context)));
+            commands.spawn((Action::<Place>::new(), ActionOf::<OnFoot>::new(context)));
+            commands.spawn((Action::<Interact>::new(), ActionOf::<OnFoot>::new(context)));
+            commands.spawn((
+                Action::<CameraRotation>::new(),
+                ActionOf::<OnFoot>::new(context),
             ));
         });
         self
