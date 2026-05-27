@@ -121,3 +121,14 @@ pub struct FreeCamUp;
 #[derive(Debug, InputAction)]
 #[action_output(bool)]
 pub struct FreeCamDown;
+
+/// Internal client-only action that fires on a right-mouse-button press.
+///
+/// Observed by `dd40_player_input` to dispatch to either
+/// [`Place`](crate::actions::Place) or
+/// [`Interact`](crate::actions::Interact) depending on whether the
+/// active item is placeable. Never bound directly to either action so the
+/// dispatch policy stays in one place.
+#[derive(Debug, InputAction)]
+#[action_output(bool)]
+pub struct RmbPress;

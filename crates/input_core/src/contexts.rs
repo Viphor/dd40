@@ -36,6 +36,8 @@ use serde::{Deserialize, Serialize};
 /// [`Attack`]: crate::actions::Attack
 /// [`Place`]: crate::actions::Place
 /// [`Interact`]: crate::actions::Interact
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Component, Reflect, Serialize, Deserialize)]
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Component, Reflect, Serialize, Deserialize,
+)]
 #[reflect(Component)]
 pub struct OnFoot;

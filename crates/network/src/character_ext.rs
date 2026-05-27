@@ -124,12 +124,13 @@ pub trait CharacterClientNetworkExt: Sized {
     /// - [`InputMarker<OnFoot>`](lightyear::input::bei::prelude::InputMarker)
     ///   so lightyear treats this client as the controller. Lightyear's
     ///   observers propagate the marker to every related Action entity.
-    /// - One `(Action<T>, ActionOf<OnFoot>)` entity per networked action —
-    ///   `Move`, `Jump`, `Sprint`, `Attack`, `Place`, `Interact`,
-    ///   `CameraRotation`. Lightyear auto-replicates each up to the server.
     /// - [`Player`](dd40_character_core::components::Player) marker.
     /// - [`PhysicsInterpolationData`] seeded so the first render frame shows
     ///   the entity at the spawn position.
+    ///
+    /// Action entities + bindings are spawned by `dd40_player_input` when
+    /// it sees a new [`Player`](dd40_character_core::components::Player)
+    /// entity, so the network layer stays independent of the input crate.
     ///
     /// # Parameters
     ///
@@ -143,11 +144,8 @@ impl<T: AddExtra> CharacterClientNetworkExt for T {
     fn with_predicted_local_player(mut self, initial_pos: Vec3) -> Self {
         use crate::client::character::PhysicsInterpolationData;
         use dd40_character_core::components::Player;
-        use dd40_input_core::actions::{
-            Attack, CameraRotation, Interact, Jump, Move, Place, Sprint,
-        };
         use dd40_input_core::contexts::OnFoot;
-        use lightyear::input::bei::prelude::{Action, ActionOf, InputMarker};
+        use lightyear::input::bei::prelude::InputMarker;
 
         self.add_extra(move |entity| {
             entity.insert((
@@ -155,19 +153,6 @@ impl<T: AddExtra> CharacterClientNetworkExt for T {
                 InputMarker::<OnFoot>::default(),
                 Player,
                 PhysicsInterpolationData::new(initial_pos),
-            ));
-
-            let context = entity.id();
-            let mut commands = entity.commands();
-            commands.spawn((Action::<Move>::new(), ActionOf::<OnFoot>::new(context)));
-            commands.spawn((Action::<Jump>::new(), ActionOf::<OnFoot>::new(context)));
-            commands.spawn((Action::<Sprint>::new(), ActionOf::<OnFoot>::new(context)));
-            commands.spawn((Action::<Attack>::new(), ActionOf::<OnFoot>::new(context)));
-            commands.spawn((Action::<Place>::new(), ActionOf::<OnFoot>::new(context)));
-            commands.spawn((Action::<Interact>::new(), ActionOf::<OnFoot>::new(context)));
-            commands.spawn((
-                Action::<CameraRotation>::new(),
-                ActionOf::<OnFoot>::new(context),
             ));
         });
         self

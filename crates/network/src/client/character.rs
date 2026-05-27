@@ -167,10 +167,7 @@ fn on_network_character_added(
 /// the live `CharacterInput` would break replay determinism.
 #[allow(clippy::type_complexity)]
 fn bridge_camera_rotation_to_action(
-    characters: Query<
-        (Entity, &CharacterInput),
-        (With<Predicted>, With<InputMarker<OnFoot>>),
-    >,
+    characters: Query<(Entity, &CharacterInput), (With<Predicted>, With<InputMarker<OnFoot>>)>,
     mut rotations: Query<(&mut Action<CameraRotation>, &ActionOf<OnFoot>)>,
 ) {
     for (character, input) in &characters {

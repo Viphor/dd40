@@ -10,11 +10,13 @@ use dd40_input_core::contexts::OnFoot;
 use dd40_input_core::plugin::InputCorePlugin;
 use dd40_physics_core::plugin::PhysicsCorePlugin;
 
+use crate::bindings::spawn_local_player_input_tree;
+use crate::contexts::{FreeCam, LocalUi};
 use crate::state::PlayerMode;
 use crate::systems::{
-    add_debug_info, free_cam_movement, load_nearby_chunks, mouse_look, on_pause, on_resume,
-    pause_on_escape, player_input, setup_camera, sync_camera_to_face, toggle_player_mode,
-    update_local_player_action,
+    add_debug_info, free_cam_movement, load_nearby_chunks, mouse_look, on_pause, on_pause_action,
+    on_resume, on_rmb_press, on_toggle_free_cam_action, setup_camera, sync_camera_to_face,
+    sync_context_activity_to_mode,
 };
 use crate::translation::apply_actions_to_character_input;
 use dd40_character_core::system_sets::CharacterRenderSet;
@@ -53,10 +55,7 @@ impl Plugin for PlayerInputTranslationPlugin {
         // Lightyear's `InputPlugin::<OnFoot>` will also call this — guard
         // so whichever plugin is added second is a no-op for the context
         // registration.
-        if !app
-            .world()
-            .contains_resource::<OnFootContextRegistered>()
-        {
+        if !app.world().contains_resource::<OnFootContextRegistered>() {
             app.add_input_context_to::<FixedPreUpdate, OnFoot>();
             app.insert_resource(OnFootContextRegistered);
         }
@@ -101,15 +100,35 @@ impl Plugin for PlayerInputPlugin {
             ItemCorePlugin
         );
 
+        // Client-local contexts. FreeCam shares OnFoot's FixedPreUpdate
+        // schedule because it drives character-style movement; LocalUi
+        // runs in PreUpdate (the BEI default) since it gates pause /
+        // mode-toggle / mouse-look.
+        if !app.world().contains_resource::<FreeCamContextRegistered>() {
+            app.add_input_context_to::<FixedPreUpdate, FreeCam>();
+            app.insert_resource(FreeCamContextRegistered);
+        }
+        if !app.world().contains_resource::<LocalUiContextRegistered>() {
+            app.add_input_context::<LocalUi>();
+            app.insert_resource(LocalUiContextRegistered);
+        }
+
         let playing_and_running = in_state(AppState::Playing).and(in_state(GameState::Running));
 
         app.init_state::<PlayerMode>()
             .register_type::<PlayerMode>()
+            .register_type::<FreeCam>()
+            .register_type::<LocalUi>()
+            .add_observer(on_pause_action)
+            .add_observer(on_toggle_free_cam_action)
+            .add_observer(on_rmb_press)
             // ── Startup ───────────────────────────────────────────────
             .add_systems(OnEnter(AppState::Playing), setup_camera)
             // ── Cursor management ─────────────────────────────────────
             .add_systems(OnEnter(GameState::Paused), on_pause)
             .add_systems(OnEnter(GameState::Running), on_resume)
+            // ── Spawn input tree for new local players ────────────────
+            .add_systems(PreUpdate, spawn_local_player_input_tree)
             // ── PreUpdate ─────────────────────────────────────────────
             .add_systems(
                 PreUpdate,
@@ -117,21 +136,19 @@ impl Plugin for PlayerInputPlugin {
             )
             // ── Update — always while playing ─────────────────────────
             .add_systems(Update, add_debug_info)
-            .add_systems(
-                Update,
-                (mouse_look, toggle_player_mode).run_if(playing_and_running.clone()),
-            )
-            .add_systems(Update, pause_on_escape.run_if(in_state(AppState::Playing)))
-            // ── FreeCam mode entry — clear stale interaction state ────
+            .add_systems(Update, mouse_look.run_if(playing_and_running.clone()))
+            // ── Mode transitions ──────────────────────────────────────
             .add_systems(OnEnter(PlayerMode::FreeCam), clear_interaction_state)
+            .add_systems(OnEnter(PlayerMode::FreeCam), sync_context_activity_to_mode)
+            .add_systems(
+                OnEnter(PlayerMode::Controller),
+                sync_context_activity_to_mode,
+            )
             // ── Update — Controller mode only ─────────────────────────
             .add_systems(
                 Update,
-                (
-                    player_input,
-                    update_local_player_action,
-                    sync_camera_to_face.in_set(CharacterRenderSet::CameraSync),
-                )
+                sync_camera_to_face
+                    .in_set(CharacterRenderSet::CameraSync)
                     .run_if(
                         playing_and_running
                             .clone()
@@ -145,6 +162,12 @@ impl Plugin for PlayerInputPlugin {
             );
     }
 }
+
+#[derive(Resource)]
+struct FreeCamContextRegistered;
+
+#[derive(Resource)]
+struct LocalUiContextRegistered;
 
 /// Resets per-frame interaction state on the local player when entering
 /// [`PlayerMode::FreeCam`] so stale block highlights and mining progress

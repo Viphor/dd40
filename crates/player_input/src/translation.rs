@@ -59,17 +59,24 @@ pub fn apply_actions_to_character_input(
     mut characters: Query<(Entity, &mut CharacterInput), With<OnFoot>>,
 ) {
     for (entity, mut input) in &mut characters {
-        let movement = action_value_for(entity, &moves).unwrap_or(Vec2::ZERO);
-        input.movement = Vec3::new(movement.x, 0.0, -movement.y);
+        // Pitch / yaw first — movement rotation depends on the up-to-date yaw.
+        if let Some(rot) = action_value_for(entity, &rotations) {
+            input.yaw = rot.x;
+            input.pitch = rot.y;
+        }
+
+        let movement_local = action_value_for(entity, &moves).unwrap_or(Vec2::ZERO);
+        let yaw_rot = Quat::from_rotation_y(input.yaw);
+        let forward = yaw_rot * Vec3::NEG_Z;
+        let right = yaw_rot * Vec3::X;
+        let direction = right * movement_local.x + forward * movement_local.y;
+        input.movement = direction.normalize_or_zero();
+
         input.jump = action_value_for(entity, &jumps).unwrap_or(false);
         input.sprint = action_value_for(entity, &sprints).unwrap_or(false);
         input.attack = action_value_for(entity, &attacks).unwrap_or(false);
         input.place = action_value_for(entity, &places).unwrap_or(false);
         input.interact = action_value_for(entity, &interacts).unwrap_or(false);
-        if let Some(rot) = action_value_for(entity, &rotations) {
-            input.yaw = rot.x;
-            input.pitch = rot.y;
-        }
     }
 }
 
@@ -108,14 +115,26 @@ mod tests {
     /// Spawn a player entity with `OnFoot` and the six networked actions,
     /// each with its default action value.
     fn spawn_player(app: &mut App) -> Entity {
-        let player = app.world_mut().spawn((OnFoot, CharacterInput::default())).id();
-        app.world_mut().spawn((Action::<Move>::new(), ActionOf::<OnFoot>::new(player)));
-        app.world_mut().spawn((Action::<Jump>::new(), ActionOf::<OnFoot>::new(player)));
-        app.world_mut().spawn((Action::<Sprint>::new(), ActionOf::<OnFoot>::new(player)));
-        app.world_mut().spawn((Action::<Attack>::new(), ActionOf::<OnFoot>::new(player)));
-        app.world_mut().spawn((Action::<Place>::new(), ActionOf::<OnFoot>::new(player)));
-        app.world_mut().spawn((Action::<Interact>::new(), ActionOf::<OnFoot>::new(player)));
-        app.world_mut().spawn((Action::<CameraRotation>::new(), ActionOf::<OnFoot>::new(player)));
+        let player = app
+            .world_mut()
+            .spawn((OnFoot, CharacterInput::default()))
+            .id();
+        app.world_mut()
+            .spawn((Action::<Move>::new(), ActionOf::<OnFoot>::new(player)));
+        app.world_mut()
+            .spawn((Action::<Jump>::new(), ActionOf::<OnFoot>::new(player)));
+        app.world_mut()
+            .spawn((Action::<Sprint>::new(), ActionOf::<OnFoot>::new(player)));
+        app.world_mut()
+            .spawn((Action::<Attack>::new(), ActionOf::<OnFoot>::new(player)));
+        app.world_mut()
+            .spawn((Action::<Place>::new(), ActionOf::<OnFoot>::new(player)));
+        app.world_mut()
+            .spawn((Action::<Interact>::new(), ActionOf::<OnFoot>::new(player)));
+        app.world_mut().spawn((
+            Action::<CameraRotation>::new(),
+            ActionOf::<OnFoot>::new(player),
+        ));
         player
     }
 
@@ -132,15 +151,46 @@ mod tests {
     }
 
     #[test]
-    fn movement_is_remapped_from_vec2_to_xz_with_inverted_forward() {
+    fn movement_is_remapped_to_world_space_using_yaw() {
         let mut app = new_app();
         let player = spawn_player(&mut app);
+        // yaw=0 → forward is -Z, right is +X. WASD: x=strafe, y=forward.
         set_action::<Move>(&mut app, player, Vec2::new(1.0, 2.0));
         app.world_mut().run_schedule(FixedPreUpdate);
 
         let ci = app.world().entity(player).get::<CharacterInput>().unwrap();
-        // BEI's Move y is "forward", character movement.z is -forward.
-        assert_eq!(ci.movement, Vec3::new(1.0, 0.0, -2.0));
+        let expected = Vec3::new(1.0, 0.0, -2.0).normalize();
+        assert!(
+            (ci.movement - expected).length() < 1e-5,
+            "movement = {:?}, expected = {:?}",
+            ci.movement,
+            expected
+        );
+    }
+
+    #[test]
+    fn movement_rotates_with_yaw() {
+        let mut app = new_app();
+        let player = spawn_player(&mut app);
+        // 90° left turn: forward axis rotates from -Z to +X (right-handed
+        // about Y).
+        set_action::<CameraRotation>(
+            &mut app,
+            player,
+            Vec2::new(std::f32::consts::FRAC_PI_2, 0.0),
+        );
+        // Pure forward intent.
+        set_action::<Move>(&mut app, player, Vec2::new(0.0, 1.0));
+        app.world_mut().run_schedule(FixedPreUpdate);
+
+        let ci = app.world().entity(player).get::<CharacterInput>().unwrap();
+        let expected = Vec3::new(-1.0, 0.0, 0.0);
+        assert!(
+            (ci.movement - expected).length() < 1e-5,
+            "movement = {:?}, expected = {:?}",
+            ci.movement,
+            expected
+        );
     }
 
     #[test]
