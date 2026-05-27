@@ -39,7 +39,7 @@ use dd40_input_core::actions::CameraRotation;
 use dd40_input_core::contexts::OnFoot;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
-use lightyear::input::bei::prelude::{Action, ActionOf, InputMarker};
+use lightyear::input::bei::prelude::{Action, ActionOf, ActionState, ActionValue, InputMarker};
 use lightyear::prelude::{Interpolated, Predicted, client::input::InputSystems, is_in_rollback};
 
 use crate::character_ext::CharacterClientNetworkExt;
@@ -152,13 +152,21 @@ fn on_network_character_added(
 // FIXED-UPDATE SYSTEMS  (run inside lightyear's rollback replay loop)
 // ============================================================================
 
-/// Mirrors the local player's persistent camera orientation
-/// (`CharacterInput::pitch` / `yaw`) into the [`CameraRotation`] action so
-/// lightyear ships it to the server each tick.
+/// Bridges the locally-driven [`CharacterInput::yaw`] / [`CharacterInput::pitch`]
+/// into the replicated `Action<CameraRotation>` for the predicted player.
 ///
-/// The action vector is `Vec2 { x: yaw, y: pitch }`. The translator in
+/// `Action<CameraRotation>` has no keyboard / mouse binding — its value is
+/// integrated from raw mouse motion in `Update` and lives on `CharacterInput`.
 /// `dd40_player_input` reads the same action on both client and server and
 /// writes it back into `CharacterInput`, closing the loop deterministically.
+///
+/// Writes are made directly to the [`ActionValue`] and [`ActionState`]
+/// components (the data that `buffer_action_state` snapshots into the input
+/// message and that `EnhancedInputSystems::Apply` later copies back into the
+/// typed [`Action<CameraRotation>`]). The action entity carries
+/// [`ExternallyMocked`](bevy_enhanced_input::context::ExternallyMocked), so
+/// `EnhancedInputSystems::Update` does not run for it and will not overwrite
+/// the bridge value with the default-zero from its (non-existent) bindings.
 ///
 /// Runs in [`FixedPreUpdate`] inside [`InputSystems::WriteClientInputs`] so
 /// the freshly-written action value is captured before lightyear advances
@@ -168,12 +176,16 @@ fn on_network_character_added(
 #[allow(clippy::type_complexity)]
 fn bridge_camera_rotation_to_action(
     characters: Query<(Entity, &CharacterInput), (With<Predicted>, With<InputMarker<OnFoot>>)>,
-    mut rotations: Query<(&mut Action<CameraRotation>, &ActionOf<OnFoot>)>,
+    mut rotations: Query<
+        (&mut ActionValue, &mut ActionState, &ActionOf<OnFoot>),
+        With<Action<CameraRotation>>,
+    >,
 ) {
     for (character, input) in &characters {
-        for (mut action, of) in &mut rotations {
+        for (mut value, mut state, of) in &mut rotations {
             if **of == character {
-                **action = Vec2::new(input.yaw, input.pitch);
+                *value = ActionValue::Axis2D(Vec2::new(input.yaw, input.pitch));
+                *state = ActionState::Fired;
             }
         }
     }

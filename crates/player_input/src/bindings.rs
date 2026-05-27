@@ -14,6 +14,7 @@
 //! the input crate touches `dd40_player_input` only.
 
 use bevy::prelude::*;
+use bevy_enhanced_input::context::ExternallyMocked;
 use bevy_enhanced_input::prelude::{
     Action, ActionOf, Bindings, Cardinal, ContextActivity, Negate, Scale,
 };
@@ -84,9 +85,15 @@ fn spawn_on_foot_actions(commands: &mut Commands, ctx: Entity) {
     // CameraRotation has no direct binding — the client bridges
     // CharacterInput::{yaw,pitch} into it each tick (see
     // `dd40_network::client::character::bridge_camera_rotation_to_action`).
+    //
+    // `ExternallyMocked` tells BEI's `EnhancedInputSystems::Update` to skip
+    // this action; otherwise the absence of bindings would cause Update to
+    // zero out `ActionValue` every tick, clobbering the bridge write before
+    // `BufferClientInputs` captures it for the input message.
     commands.spawn((
         Action::<dd40_input_core::actions::CameraRotation>::new(),
         ActionOf::<OnFoot>::new(ctx),
+        ExternallyMocked,
     ));
 }
 
