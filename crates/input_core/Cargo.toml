@@ -1,0 +1,10 @@
+[package]
+name = "dd40_input_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+bevy = { workspace = true, default-features = false }
+bevy_enhanced_input = "0.22"
+dd40_core = { workspace = true }

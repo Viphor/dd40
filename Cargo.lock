@@ -2817,6 +2817,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_input_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_enhanced_input",
+ "dd40_core",
+]
+
+[[package]]
 name = "dd40_integration_character_physics"
 version = "0.1.0"
 dependencies = [
@@ -2957,8 +2966,10 @@ name = "dd40_player_input"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_enhanced_input",
  "dd40_character_core",
  "dd40_core",
+ "dd40_input_core",
  "dd40_item_core",
  "dd40_physics_core",
 ]
