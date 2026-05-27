@@ -67,13 +67,103 @@ fn server_spawn_character(
         client_id, spawn_pos
     );
 
-    CharacterBuilder::new(user.name)
+    let character = CharacterBuilder::new(user.name)
         .transform(Transform::from_translation(spawn_pos))
         .with_physics()
         .with_controller()
         .with_inventory(36)
         .with_server_replication(client_id, spawn_pos, trigger.entity)
-        .spawn(&mut commands);
+        .spawn(&mut commands)
+        .id();
+
+    spawn_on_foot_action_entities_server(&mut commands, character, client_id);
+}
+
+/// Spawns the per-character `OnFoot` BEI action entities authoritatively
+/// on the server and configures them to replicate to the owning client.
+///
+/// lightyear's input pipeline expects each `Action<T>` entity to exist
+/// on both the server and the client and to be linked by a deterministic
+/// [`PreSpawned`] hash. The server is the authority for the player
+/// entity, so it must own the action entities too — the client only
+/// spawns local mirrors keyed by the same hash (see
+/// `dd40_player_input::bindings::spawn_local_player_input_tree`).
+///
+/// We avoid having lightyear spawn a Predicted / Interpolated copy of
+/// these entities on the client by setting both [`PredictionTarget`]
+/// and [`InterpolationTarget`] to empty manual targets — the prespawn
+/// pairing alone is sufficient.
+fn spawn_on_foot_action_entities_server(
+    commands: &mut Commands,
+    character: Entity,
+    client_id: lightyear::prelude::PeerId,
+) {
+    use dd40_input_core::actions::{
+        Attack, CameraRotation, Interact, Jump, Move, Place, Sprint,
+    };
+    use dd40_input_core::contexts::OnFoot;
+    use dd40_input_core::prespawn::{OnFootAction, on_foot_action_prespawn_hash};
+    use lightyear::input::bei::prelude::{Action, ActionOf};
+    use lightyear::prelude::{
+        InterpolationTarget, NetworkTarget, PreSpawned, PredictionTarget, Replicate,
+    };
+
+    let client_bits = client_id.to_bits();
+    let target = NetworkTarget::Single(client_id);
+
+    fn server_bundle(
+        client_bits: u64,
+        action: OnFootAction,
+        target: NetworkTarget,
+    ) -> (
+        PreSpawned,
+        Replicate,
+        PredictionTarget,
+        InterpolationTarget,
+    ) {
+        (
+            PreSpawned::new(on_foot_action_prespawn_hash(client_bits, action)),
+            Replicate::to_clients(target),
+            PredictionTarget::manual(Vec::new()),
+            InterpolationTarget::manual(Vec::new()),
+        )
+    }
+
+    commands.spawn((
+        ActionOf::<OnFoot>::new(character),
+        Action::<Move>::new(),
+        server_bundle(client_bits, OnFootAction::Move, target.clone()),
+    ));
+    commands.spawn((
+        ActionOf::<OnFoot>::new(character),
+        Action::<Jump>::new(),
+        server_bundle(client_bits, OnFootAction::Jump, target.clone()),
+    ));
+    commands.spawn((
+        ActionOf::<OnFoot>::new(character),
+        Action::<Sprint>::new(),
+        server_bundle(client_bits, OnFootAction::Sprint, target.clone()),
+    ));
+    commands.spawn((
+        ActionOf::<OnFoot>::new(character),
+        Action::<Attack>::new(),
+        server_bundle(client_bits, OnFootAction::Attack, target.clone()),
+    ));
+    commands.spawn((
+        ActionOf::<OnFoot>::new(character),
+        Action::<Place>::new(),
+        server_bundle(client_bits, OnFootAction::Place, target.clone()),
+    ));
+    commands.spawn((
+        ActionOf::<OnFoot>::new(character),
+        Action::<Interact>::new(),
+        server_bundle(client_bits, OnFootAction::Interact, target.clone()),
+    ));
+    commands.spawn((
+        ActionOf::<OnFoot>::new(character),
+        Action::<CameraRotation>::new(),
+        server_bundle(client_bits, OnFootAction::CameraRotation, target),
+    ));
 }
 
 // ============================================================================

@@ -37,10 +37,13 @@ use dd40_character_core::{
 };
 use dd40_input_core::actions::CameraRotation;
 use dd40_input_core::contexts::OnFoot;
+use dd40_input_core::prespawn::LocalActionPrespawnRequest;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
 use lightyear::input::bei::prelude::{Action, ActionOf, ActionState, ActionValue, InputMarker};
-use lightyear::prelude::{Interpolated, Predicted, client::input::InputSystems, is_in_rollback};
+use lightyear::prelude::{
+    Interpolated, PreSpawned, Predicted, client::input::InputSystems, is_in_rollback,
+};
 
 use crate::character_ext::CharacterClientNetworkExt;
 use crate::protocol::{NetworkCharacter, PlayerPosition, PlayerRotation};
@@ -363,6 +366,7 @@ pub struct ClientCharacterPlugin;
 impl Plugin for ClientCharacterPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_network_character_added);
+        app.add_observer(install_prespawn_for_local_action);
 
         // Bridge CharacterInput camera orientation → Action<CameraRotation>
         // in FixedPreUpdate so lightyear buffers it before advancing the tick.
@@ -400,4 +404,26 @@ impl Plugin for ClientCharacterPlugin {
         // lightyear's replication receive (PreUpdate) may have overwritten it.
         app.add_systems(PostUpdate, sync_local_rotation);
     }
+}
+
+/// Bridge observer: translates the input-stack-agnostic
+/// [`LocalActionPrespawnRequest`] marker into a real
+/// `PreSpawned::for_receiver(...)` so the locally-spawned action entity is
+/// paired with the server-authoritative twin via lightyear's prespawn hash.
+///
+/// `dd40_player_input` cannot insert `PreSpawned` directly because doing so
+/// would force a hard dependency on lightyear — see the architecture note
+/// in `crates/input_core/src/prespawn.rs`.
+fn install_prespawn_for_local_action(
+    trigger: On<Add, LocalActionPrespawnRequest>,
+    requests: Query<&LocalActionPrespawnRequest>,
+    mut commands: Commands,
+) {
+    let Ok(req) = requests.get(trigger.entity) else {
+        return;
+    };
+    commands
+        .entity(trigger.entity)
+        .insert(PreSpawned::new(req.hash).for_receiver(req.owner))
+        .remove::<LocalActionPrespawnRequest>();
 }

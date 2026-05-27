@@ -5,11 +5,12 @@ use bevy::{
     prelude::*,
 };
 use dd40_core::prelude::{LoadingTracker, RequestChunk};
+use dd40_input_core::prespawn::LocalClientId;
 use lightyear::{
     link::Link,
     netcode::NetcodeClient,
     prelude::{
-        Authentication, Client, Connect, Connected, InputTimelineConfig, LocalAddr,
+        Authentication, Client, Connect, Connected, InputTimelineConfig, LocalAddr, LocalId,
         MessageReceiver, MessageSender, PeerAddr, PredictionManager, ReplicationReceiver, UdpIo,
         client::{InputDelayConfig, NetcodeConfig},
     },
@@ -107,6 +108,7 @@ pub fn on_server_connected(
     trigger: On<Add, Connected>,
     mut commands: Commands,
     mut tracker: ResMut<LoadingTracker>,
+    local_ids: Query<&LocalId>,
 ) {
     let entity = trigger.entity;
 
@@ -118,6 +120,18 @@ pub fn on_server_connected(
         MessageReceiver::<PlayerSpawnLocation>::default(),
         Name::new("ServerConnection"),
     ));
+
+    // Publish the local PeerId as a bit-pattern resource so input-stack
+    // crates (`dd40_player_input`) can compute prespawn hashes without
+    // taking a lightyear dependency. See `LocalClientId` docs.
+    if let Ok(local_id) = local_ids.get(entity) {
+        commands.insert_resource(LocalClientId(local_id.0.to_bits()));
+    } else {
+        warn!(
+            "Connected entity {:?} has no LocalId — BEI action prespawn pairing will be skipped",
+            entity
+        );
+    }
 
     remove_connection_loading_item(&mut tracker);
     register_spawn_location_loading_item(&mut tracker);
