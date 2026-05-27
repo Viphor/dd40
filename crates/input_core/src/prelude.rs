@@ -5,8 +5,8 @@
 //! ```
 
 pub use crate::actions::{
-    Attack, FreeCamDown, FreeCamUp, Interact, Jump, Look, Move, Pause, Place, Sprint,
-    ToggleFreeCam,
+    Attack, CameraRotation, FreeCamDown, FreeCamUp, Interact, Jump, Look, Move, Pause, Place,
+    Sprint, ToggleFreeCam,
 };
 pub use crate::contexts::OnFoot;
 pub use crate::plugin::InputCorePlugin;

@@ -73,6 +73,22 @@ pub struct Place;
 #[action_output(bool)]
 pub struct Interact;
 
+/// Absolute camera orientation, in **radians**.
+///
+/// `x` is yaw (left/right), `y` is pitch (up/down). Unlike [`Look`] this is
+/// the persistent orientation, not a per-frame delta — the controlling
+/// client integrates [`Look`] into [`CameraRotation`] locally and the
+/// translator on both server and client copies [`CameraRotation`] into
+/// `CharacterInput::yaw` / `CharacterInput::pitch`.
+///
+/// Replicated as part of the networked action set so the server-authoritative
+/// entity sees the same orientation as the local client, which lets the
+/// server compute downstream effects (look raycasts, replicated
+/// `PlayerRotation` to other clients) without any extra transport channel.
+#[derive(Debug, InputAction)]
+#[action_output(Vec2)]
+pub struct CameraRotation;
+
 // ----------------------------------------------------------------------------
 // Client-local actions
 // ----------------------------------------------------------------------------

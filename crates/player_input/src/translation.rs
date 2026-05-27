@@ -11,12 +11,17 @@
 //!
 //! - Movement, jump, sprint, attack, place, and interact intents derived
 //!   from networked actions in the [`OnFoot`] context.
+//! - Persistent camera orientation (pitch / yaw) derived from the
+//!   [`CameraRotation`] action. The local client integrates raw [`Look`]
+//!   deltas into [`CameraRotation`] *before* lightyear captures inputs;
+//!   the translator then writes pitch / yaw uniformly on both server and
+//!   client so the value survives rollback and reaches remote clients via
+//!   the replicated rotation component.
 //!
 //! ## What this module is **not** responsible for
 //!
-//! - Camera orientation (pitch / yaw). Look is a client-local delta action
-//!   driving the camera directly; the persistent orientation lives on a
-//!   separate replicated component and is not translated through here.
+//! - Raw mouse-look deltas ([`Look`]). The client integrates them into
+//!   [`CameraRotation`] in a separate system.
 //! - Bindings. The keyboard / mouse → action mapping lives in
 //!   [`crate::actions_setup`]; this translator is binding-agnostic.
 //! - Inserting [`Actions::<OnFoot>`] on the player entity. That happens in
@@ -25,7 +30,7 @@
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::{Action, ActionOf};
 use dd40_character_core::controller::CharacterInput;
-use dd40_input_core::actions::{Attack, Interact, Jump, Move, Place, Sprint};
+use dd40_input_core::actions::{Attack, CameraRotation, Interact, Jump, Move, Place, Sprint};
 use dd40_input_core::contexts::OnFoot;
 
 /// Writes the per-tick [`CharacterInput`] for every entity that owns an
@@ -50,6 +55,7 @@ pub fn apply_actions_to_character_input(
     attacks: Query<(&Action<Attack>, &ActionOf<OnFoot>)>,
     places: Query<(&Action<Place>, &ActionOf<OnFoot>)>,
     interacts: Query<(&Action<Interact>, &ActionOf<OnFoot>)>,
+    rotations: Query<(&Action<CameraRotation>, &ActionOf<OnFoot>)>,
     mut characters: Query<(Entity, &mut CharacterInput), With<OnFoot>>,
 ) {
     for (entity, mut input) in &mut characters {
@@ -60,6 +66,10 @@ pub fn apply_actions_to_character_input(
         input.attack = action_value_for(entity, &attacks).unwrap_or(false);
         input.place = action_value_for(entity, &places).unwrap_or(false);
         input.interact = action_value_for(entity, &interacts).unwrap_or(false);
+        if let Some(rot) = action_value_for(entity, &rotations) {
+            input.yaw = rot.x;
+            input.pitch = rot.y;
+        }
     }
 }
 
@@ -105,6 +115,7 @@ mod tests {
         app.world_mut().spawn((Action::<Attack>::new(), ActionOf::<OnFoot>::new(player)));
         app.world_mut().spawn((Action::<Place>::new(), ActionOf::<OnFoot>::new(player)));
         app.world_mut().spawn((Action::<Interact>::new(), ActionOf::<OnFoot>::new(player)));
+        app.world_mut().spawn((Action::<CameraRotation>::new(), ActionOf::<OnFoot>::new(player)));
         player
     }
 
@@ -177,6 +188,19 @@ mod tests {
         let ci = app.world().entity(player).get::<CharacterInput>().unwrap();
         assert!(ci.jump);
         assert!(ci.sprint);
+    }
+
+    #[test]
+    fn propagates_camera_rotation_to_pitch_and_yaw() {
+        let mut app = new_app();
+        let player = spawn_player(&mut app);
+        // x=yaw, y=pitch.
+        set_action::<CameraRotation>(&mut app, player, Vec2::new(1.25, -0.5));
+        app.world_mut().run_schedule(FixedPreUpdate);
+
+        let ci = app.world().entity(player).get::<CharacterInput>().unwrap();
+        assert_eq!(ci.yaw, 1.25);
+        assert_eq!(ci.pitch, -0.5);
     }
 
     #[test]
