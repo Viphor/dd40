@@ -4,6 +4,7 @@ use dd40_character_core::mining_state::MiningState;
 use dd40_character_core::plugin::CharacterCorePlugin;
 use dd40_character_core::targeted_block::TargetedBlock;
 use dd40_core::plugin::CorePlugin;
+use dd40_input_core::plugin::InputCorePlugin;
 use dd40_physics_core::plugin::PhysicsCorePlugin;
 
 use crate::state::PlayerMode;
@@ -23,8 +24,9 @@ use dd40_item_core::plugin::ItemCorePlugin;
 /// systems.  It does **not** spawn a player entity — the network layer
 /// is responsible for spawning the character.
 ///
-/// Auto-adds [`CorePlugin`], [`PhysicsCorePlugin`], and [`CharacterCorePlugin`]
-/// via [`ensure_plugins!`] if not already present.
+/// Auto-adds [`CorePlugin`], [`PhysicsCorePlugin`], [`CharacterCorePlugin`],
+/// [`InputCorePlugin`], and [`ItemCorePlugin`] via [`ensure_plugins!`] if
+/// not already present.
 #[derive(Default)]
 pub struct PlayerInputPlugin;
 
@@ -35,6 +37,7 @@ impl Plugin for PlayerInputPlugin {
             CorePlugin,
             PhysicsCorePlugin,
             CharacterCorePlugin,
+            InputCorePlugin,
             ItemCorePlugin
         );
 
