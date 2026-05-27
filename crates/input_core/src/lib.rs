@@ -34,6 +34,7 @@
 //! handles installation exactly once.
 
 pub mod actions;
+pub mod contexts;
 pub mod plugin;
 pub mod prelude;
 
