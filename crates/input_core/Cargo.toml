@@ -6,5 +6,5 @@ authors.workspace = true
 
 [dependencies]
 bevy = { workspace = true, default-features = false }
-bevy_enhanced_input = "0.22"
+bevy_enhanced_input = "0.25"
 dd40_core = { workspace = true }

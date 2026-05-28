@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
-use bevy_enhanced_input::prelude::{Action, ActionOf, ActionState, ContextActivity, Fire};
+use bevy_enhanced_input::prelude::{Action, ActionOf, ContextActivity, Fire, TriggerState};
 use dd40_character_core::components::Player;
 use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::face::{CameraRotation as FaceRotation, CharacterFace};
@@ -147,7 +147,7 @@ pub(crate) fn on_rmb_press(
             commands
                 .entity(action)
                 .insert(bevy_enhanced_input::prelude::ActionMock::once(
-                    ActionState::Fired,
+                    TriggerState::Fired,
                     true,
                 ));
         }
@@ -155,7 +155,7 @@ pub(crate) fn on_rmb_press(
         commands
             .entity(action)
             .insert(bevy_enhanced_input::prelude::ActionMock::once(
-                ActionState::Fired,
+                TriggerState::Fired,
                 true,
             ));
     }

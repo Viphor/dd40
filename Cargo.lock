@@ -767,7 +767,7 @@ dependencies = [
  "downcast-rs 2.0.2",
  "log",
  "thiserror 2.0.18",
- "variadics_please",
+ "variadics_please 1.1.0",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -1000,7 +1000,7 @@ dependencies = [
  "slotmap",
  "smallvec",
  "thiserror 2.0.18",
- "variadics_please",
+ "variadics_please 1.1.0",
 ]
 
 [[package]]
@@ -1076,12 +1076,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5e4981e85546349e7ccce7e68aaf9c36e6eed556f7f29087dee184ee7941fb9"
 dependencies = [
  "bevy",
- "bevy_enhanced_input_macros",
+ "bevy_enhanced_input_macros 0.22.0",
  "bitflags 2.11.0",
  "log",
  "serde",
  "smallvec",
- "variadics_please",
+ "variadics_please 1.1.0",
+]
+
+[[package]]
+name = "bevy_enhanced_input"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8d637e6cecb97d800bc53035643bbee59d2a2adf433a4617fbeb4d2734d3a41"
+dependencies = [
+ "bevy",
+ "bevy_enhanced_input_macros 0.25.0",
+ "bitflags 2.11.0",
+ "log",
+ "smallvec",
+ "variadics_please 2.0.0",
 ]
 
 [[package]]
@@ -1089,6 +1103,17 @@ name = "bevy_enhanced_input_macros"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4680cc23f335f1b768caf91a94b1aa1d786149788644043fe8d49e5708b5cbcc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "bevy_enhanced_input_macros"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6edfb436db5809c97042e5e7a0f2c1bf5ea397a256da1089f1a43258c61a9240"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1431,7 +1456,7 @@ dependencies = [
  "rand_distr",
  "serde",
  "thiserror 2.0.18",
- "variadics_please",
+ "variadics_please 1.1.0",
 ]
 
 [[package]]
@@ -1608,7 +1633,7 @@ dependencies = [
  "smol_str",
  "thiserror 2.0.18",
  "uuid",
- "variadics_please",
+ "variadics_please 1.1.0",
  "wgpu-types",
 ]
 
@@ -1670,7 +1695,7 @@ dependencies = [
  "smallvec",
  "thiserror 2.0.18",
  "tracing",
- "variadics_please",
+ "variadics_please 1.1.0",
  "wasm-bindgen",
  "web-sys",
  "wgpu",
@@ -1797,7 +1822,7 @@ dependencies = [
  "bevy_state_macros",
  "bevy_utils",
  "log",
- "variadics_please",
+ "variadics_please 1.1.0",
 ]
 
 [[package]]
@@ -2821,7 +2846,7 @@ name = "dd40_input_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_enhanced_input",
+ "bevy_enhanced_input 0.25.0",
  "dd40_core",
 ]
 
@@ -2966,7 +2991,7 @@ name = "dd40_player_input"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_enhanced_input",
+ "bevy_enhanced_input 0.25.0",
  "dd40_character_core",
  "dd40_core",
  "dd40_input_core",
@@ -4679,7 +4704,7 @@ checksum = "2266633e2eeebfe5fcd5d3cea8984bc26b24b13942fd9c1aa9123da4de6c1a02"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
- "bevy_enhanced_input",
+ "bevy_enhanced_input 0.22.2",
  "bevy_reflect",
  "bevy_utils",
  "lightyear_connection",
@@ -4943,7 +4968,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
  "tracing",
- "variadics_please",
+ "variadics_please 1.1.0",
 ]
 
 [[package]]
@@ -5295,6 +5320,12 @@ dependencies = [
  "num-traits",
  "pxfm",
 ]
+
+[[package]]
+name = "mutants"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 
 [[package]]
 name = "naga"
@@ -7697,6 +7728,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "unsynn"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "501a7adf1a4bd9951501e5c66621e972ef8874d787628b7f90e64f936ef7ec0a"
+dependencies = [
+ "mutants",
+ "proc-macro2",
+ "rustc-hash 2.1.1",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7759,6 +7801,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "variadics_please"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b53d0f7f2d0182759a549f1f313ce16b07d8f9ba93098157b5fa10ee3e61117f"
+dependencies = [
+ "quote",
+ "unsynn",
 ]
 
 [[package]]
