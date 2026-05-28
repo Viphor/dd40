@@ -6,7 +6,9 @@ use lightyear::prelude::{
     LinkOf, MessageReceiver, MessageSender, ReplicationSender, SendUpdatesMode,
 };
 
-use crate::protocol::{ChunkSnapshot, ChunkUpdate, PlayerSpawnLocation, RequestSpawn};
+use crate::protocol::{
+    ChunkSnapshot, ChunkUpdate, NetSlotInteraction, PlayerSpawnLocation, RequestSpawn,
+};
 
 /// Tracks which chunk positions have already been requested for a given client
 /// connection so that the chunk pipeline never issues duplicate loads.
@@ -41,6 +43,7 @@ pub(crate) fn add_message_handlers(trigger: On<Add, LinkOf>, mut commands: Comma
         MessageSender::<PlayerSpawnLocation>::default(),
         MessageReceiver::<RequestSpawn>::default(),
         MessageReceiver::<RequestChunk>::default(),
+        MessageReceiver::<NetSlotInteraction>::default(),
         ChunkRequests::default(),
         Name::new("Client"),
     ));

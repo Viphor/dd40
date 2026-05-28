@@ -113,6 +113,7 @@ pub fn on_server_connected(
     commands.entity(entity).insert((
         MessageSender::<RequestSpawn>::default(),
         MessageSender::<RequestChunk>::default(),
+        MessageSender::<NetSlotInteraction>::default(),
         MessageReceiver::<ChunkSnapshot>::default(),
         MessageReceiver::<ChunkUpdate>::default(),
         MessageReceiver::<PlayerSpawnLocation>::default(),

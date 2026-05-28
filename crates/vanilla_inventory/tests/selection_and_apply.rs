@@ -15,7 +15,7 @@ use dd40_inventory_core::prelude::{
 };
 use dd40_item_core::active_item::{ActiveItem, ItemStack};
 use dd40_item_core::registry::{ItemDefinition, ItemId, ItemRegistry};
-use dd40_vanilla_inventory::VanillaInventoryPlugin;
+use dd40_vanilla_inventory::{VanillaInventoryPlugin, VanillaInventoryRulesPlugin};
 
 fn make_app() -> App {
     let mut app = App::new();
@@ -23,7 +23,7 @@ fn make_app() -> App {
     // The selection systems read `MouseWheel`; ensure the message is
     // registered without pulling in the full `InputPlugin`.
     app.add_message::<MouseWheel>();
-    app.add_plugins(VanillaInventoryPlugin);
+    app.add_plugins((VanillaInventoryPlugin, VanillaInventoryRulesPlugin));
     app
 }
 

@@ -22,6 +22,7 @@ pub mod character;
 pub mod chunk_provider;
 pub mod chunk_requests;
 pub mod connection;
+pub mod inventory;
 pub mod loose_items;
 pub mod spawn;
 pub mod user;

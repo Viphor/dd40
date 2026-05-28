@@ -29,6 +29,11 @@ pub struct ChunkChannel;
 /// Reliable ordered channel for important game events
 pub struct EventChannel;
 
+/// Reliable ordered channel for inventory slot interactions (clicks must
+/// arrive in order; loss is unacceptable — a missed click silently
+/// breaks the cursor state).
+pub struct InventoryChannel;
+
 // ============================================================================
 // INPUTS
 // ============================================================================
@@ -451,6 +456,12 @@ impl Plugin for ProtocolPlugin {
             ..default()
         })
         .add_direction(NetworkDirection::Bidirectional);
+
+        app.add_channel::<InventoryChannel>(ChannelSettings {
+            mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
+            ..default()
+        })
+        .add_direction(NetworkDirection::ClientToServer);
     }
 }
 

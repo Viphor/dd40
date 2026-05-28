@@ -65,4 +65,4 @@ pub mod plugin;
 pub mod rules;
 pub mod selection;
 
-pub use plugin::VanillaInventoryPlugin;
+pub use plugin::{VanillaInventoryPlugin, VanillaInventoryRulesPlugin};

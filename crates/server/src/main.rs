@@ -9,11 +9,12 @@ use dd40_integration_loose_item_pickup::LooseItemPickupPlugin;
 use dd40_loose_items::LooseItemsPlugin;
 use dd40_loot::LootPlugin;
 use dd40_network::{
-    ServerNetworkPlugin,
+    ServerInventoryNetworkPlugin, ServerNetworkPlugin,
     server::connection::{DDServer, LinkConditionerConfig, RecvLinkConditioner},
     shared::connection::SHARED_SETTINGS,
 };
 use dd40_physics::PhysicsPlugin;
+use dd40_vanilla_inventory::{VanillaInventoryPlugin, VanillaInventoryRulesPlugin};
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
 use dd40_world::{
     WorldPlugin,
@@ -62,6 +63,18 @@ fn main() {
             // Server-only: grant LooseItems to characters in contact with
             // an empty inventory slot.
             LooseItemPickupPlugin,
+            // Authoritative inventory rules: drains SlotInteraction
+            // messages and mutates each Character's InventoryComponent
+            // + HeldStackComponent.  Clients send their slot clicks as
+            // NetSlotInteraction; ServerInventoryNetworkPlugin
+            // (below) translates them onto the local bus.
+            VanillaInventoryPlugin,
+            VanillaInventoryRulesPlugin,
+            // Server-only: drain NetSlotInteraction messages from
+            // lightyear, resolve the controlling Character via
+            // ControlledBy, and re-emit a local SlotInteraction so the
+            // VanillaInventoryRulesPlugin apply system runs unchanged.
+            ServerInventoryNetworkPlugin,
             ServerNetworkPlugin(DDServer {
                 conditioner: Some(RecvLinkConditioner::new(
                     LinkConditionerConfig::average_condition(),

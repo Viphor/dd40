@@ -3046,6 +3046,7 @@ dependencies = [
  "dd40_loot",
  "dd40_network",
  "dd40_physics",
+ "dd40_vanilla_inventory",
  "dd40_vanilla_palette",
  "dd40_world",
 ]
