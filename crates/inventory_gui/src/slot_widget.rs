@@ -22,8 +22,8 @@ use dd40_item_core::registry::{ItemId, ItemRegistry};
 use crate::icons::{ItemIcon, ItemIconCache};
 
 /// Standard slot edge length in logical pixels.
-pub const SLOT_SIZE: f32 = 40.0;
-/// Padding between adjacent slots.
+pub const SLOT_SIZE: f32 = 64.0;
+/// Pixel gap between adjacent slot widgets.
 pub const SLOT_GAP: f32 = 4.0;
 
 /// Border colour for an unselected slot.
@@ -104,7 +104,7 @@ pub fn spawn_slot_widget(parent: &mut ChildSpawnerCommands, key: SlotKey) -> Ent
                 SlotCountNode,
                 Text::new(""),
                 TextFont {
-                    font_size: 14.0,
+                    font_size: 18.0,
                     ..default()
                 },
                 TextColor(Color::WHITE),

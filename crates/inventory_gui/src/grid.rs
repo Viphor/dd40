@@ -85,50 +85,62 @@ pub fn toggle_grid(
 fn spawn_grid(commands: &mut Commands, player: Entity, capacity: usize) {
     commands
         .spawn((
-            Name::new("InventoryGridRoot"),
+            Name::new("InventoryGridOverlay"),
             InventoryGridRoot,
             GridFor(player),
+            // Full-screen overlay so the grid can be centred with
+            // flexbox alignment instead of brittle hardcoded margins.
             Node {
                 position_type: PositionType::Absolute,
-                left: Val::Percent(50.0),
-                top: Val::Percent(50.0),
-                margin: UiRect {
-                    left: Val::Px(-200.0),
-                    top: Val::Px(-100.0),
-                    ..default()
-                },
-                flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(8.0)),
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+            Pickable::IGNORE,
         ))
-        .with_children(|root| {
-            let start = dd40_inventory_core::prelude::HOTBAR_SIZE;
-            for row in 0..GRID_ROWS {
-                root.spawn((
-                    Name::new("GridRow"),
+        .with_children(|overlay| {
+            overlay
+                .spawn((
+                    Name::new("InventoryGridPanel"),
                     Node {
-                        flex_direction: FlexDirection::Row,
+                        flex_direction: FlexDirection::Column,
+                        padding: UiRect::all(Val::Px(12.0)),
                         ..default()
                     },
+                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.75)),
                 ))
-                .with_children(|row_node| {
-                    for col in 0..GRID_COLS {
-                        let slot = start + row * GRID_COLS + col;
-                        if (slot as usize) >= capacity {
-                            continue;
-                        }
-                        spawn_slot_widget(
-                            row_node,
-                            SlotKey {
-                                character: player,
-                                slot,
-                            },
-                        );
+                .with_children(|panel| {
+                    let start = dd40_inventory_core::prelude::HOTBAR_SIZE;
+                    for row in 0..GRID_ROWS {
+                        panel
+                            .spawn((
+                                Name::new("GridRow"),
+                                Node {
+                                    flex_direction: FlexDirection::Row,
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|row_node| {
+                                for col in 0..GRID_COLS {
+                                    let slot = start + row * GRID_COLS + col;
+                                    if (slot as usize) >= capacity {
+                                        continue;
+                                    }
+                                    spawn_slot_widget(
+                                        row_node,
+                                        SlotKey {
+                                            character: player,
+                                            slot,
+                                        },
+                                    );
+                                }
+                            });
                     }
                 });
-            }
         });
 }
 
