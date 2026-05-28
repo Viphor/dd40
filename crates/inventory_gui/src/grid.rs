@@ -73,7 +73,15 @@ pub fn toggle_grid(
             .get(player)
             .map(|i| i.inventory().capacity())
             .unwrap_or(0);
-        spawn_grid(&mut commands, player, capacity);
+        // Always render the full 3x9 grid so the UI is visible even
+        // before the InventoryComponent has been replicated.  Slots
+        // beyond `capacity` will render as empty and are harmless
+        // because `sync_slot_widgets` simply finds no stack for them.
+        let render_capacity = capacity.max(
+            dd40_inventory_core::prelude::HOTBAR_SIZE as usize
+                + GRID_ROWS as usize * GRID_COLS as usize,
+        );
+        spawn_grid(&mut commands, player, render_capacity);
     } else {
         windows.remove(id);
         for grid in &existing {
@@ -83,13 +91,13 @@ pub fn toggle_grid(
 }
 
 fn spawn_grid(commands: &mut Commands, player: Entity, capacity: usize) {
+    let mut spawned = 0_u32;
     info!(
-        "spawn_grid: player={:?} capacity={} (expecting {}+ for {}x{} grid)",
+        "spawn_grid: player={:?} capacity={} expected_grid_end={}",
         player,
         capacity,
-        dd40_inventory_core::prelude::HOTBAR_SIZE as usize + GRID_ROWS as usize * GRID_COLS as usize,
-        GRID_COLS,
-        GRID_ROWS,
+        dd40_inventory_core::prelude::HOTBAR_SIZE as usize
+            + GRID_ROWS as usize * GRID_COLS as usize,
     );
     commands
         .spawn((
@@ -164,11 +172,13 @@ fn spawn_grid(commands: &mut Commands, player: Entity, capacity: usize) {
                                         },
                                         GRID_SLOT_SIZE,
                                     );
+                                    spawned += 1;
                                 }
                             });
                     }
                 });
         });
+    info!("spawn_grid: spawned {spawned} slot widgets");
 }
 
 /// No-op placeholder kept so `plugin.rs` can schedule a deterministic
