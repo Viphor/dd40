@@ -343,12 +343,12 @@ fn apply_interpolated_rotation(
 /// Writes the local player's current camera orientation into [`PlayerRotation`]
 /// so the server can replicate it to other clients.
 ///
-/// Runs in `PostUpdate` — after `player_input` (Update) has already copied the
-/// latest `CameraRotation` into `CharacterInput`, and after lightyear's
-/// replication receive (PreUpdate) may have overwritten the component with a
-/// stale server-confirmed value.  Running here guarantees the render pass
-/// always sees the locally-driven, zero-lag rotation rather than a rolled-back
-/// one.
+/// Runs in `PostUpdate` — after `dd40_player_input::mouse_look` (Update) has
+/// integrated the latest look delta into `CharacterInput.{yaw, pitch}`, and
+/// after lightyear's replication receive (PreUpdate) may have overwritten
+/// the component with a stale server-confirmed value.  Running here
+/// guarantees the render pass always sees the locally-driven, zero-lag
+/// rotation rather than a rolled-back one.
 fn sync_local_rotation(mut query: Query<(&CharacterInput, &mut PlayerRotation), With<Predicted>>) {
     for (char_input, mut player_rot) in &mut query {
         player_rot.pitch = char_input.pitch;
@@ -376,10 +376,18 @@ impl Plugin for ClientCharacterPlugin {
         // already restores the historical ActionState for each replayed tick, and
         // running the bridge would overwrite it with stale CharacterInput values
         // (e.g. jump=false after apply_character_controller already consumed it).
+        // Order: translator writes CharacterInput from BEI actions inside
+        // FixedPreUpdate (after EnhancedInputSystems::Apply); the bridge
+        // must therefore run AFTER it so the ActionState shipped to the
+        // server reflects the current tick's input. Without this ordering
+        // the bridge ships the previous tick's CharacterInput and then
+        // `client_apply_inputs` writes that stale value back, wiping the
+        // translator's output.
         app.add_systems(
             FixedPreUpdate,
             bridge_input_to_action_state
                 .in_set(InputSystems::WriteClientInputs)
+                .after(dd40_input_core::system_sets::InputTranslationSet)
                 .run_if(not(is_in_rollback)),
         );
 

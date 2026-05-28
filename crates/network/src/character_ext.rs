@@ -120,6 +120,10 @@ pub trait CharacterClientNetworkExt: Sized {
     /// - [`PhysicsInterpolationData`] seeded so the first render frame shows
     ///   the entity at the spawn position.
     ///
+    /// Action entities + bindings are spawned by `dd40_player_input` when
+    /// it sees a new [`Player`](dd40_character_core::components::Player)
+    /// entity, so the network layer stays independent of the input crate.
+    ///
     /// # Parameters
     ///
     /// - `initial_pos` — the spawn position read from the replicated
