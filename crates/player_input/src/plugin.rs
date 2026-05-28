@@ -14,9 +14,9 @@ use crate::bindings::spawn_local_player_input_tree;
 use crate::contexts::{FreeCam, LocalUi};
 use crate::state::PlayerMode;
 use crate::systems::{
-    add_debug_info, free_cam_movement, load_nearby_chunks, mouse_look, on_pause, on_pause_action,
-    on_resume, on_rmb_press, on_toggle_free_cam_action, setup_camera, sync_camera_to_face,
-    sync_context_activity_to_mode,
+    add_debug_info, free_cam_look, free_cam_movement, load_nearby_chunks, mouse_look, on_pause,
+    on_pause_action, on_resume, on_rmb_press, on_toggle_free_cam_action, setup_camera,
+    sync_camera_to_face, sync_context_activity_to_mode,
 };
 use crate::translation::apply_actions_to_character_input;
 use dd40_character_core::system_sets::CharacterRenderSet;
@@ -133,7 +133,14 @@ impl Plugin for PlayerInputPlugin {
             )
             // ── Update — always while playing ─────────────────────────
             .add_systems(Update, add_debug_info)
-            .add_systems(Update, mouse_look.run_if(playing_and_running.clone()))
+            .add_systems(
+                Update,
+                mouse_look.run_if(
+                    playing_and_running
+                        .clone()
+                        .and(in_state(PlayerMode::Controller)),
+                ),
+            )
             // ── Mode transitions ──────────────────────────────────────
             .add_systems(OnEnter(PlayerMode::FreeCam), clear_interaction_state)
             .add_systems(OnEnter(PlayerMode::FreeCam), sync_context_activity_to_mode)
@@ -155,7 +162,9 @@ impl Plugin for PlayerInputPlugin {
             // ── Update — FreeCam mode only ────────────────────────────
             .add_systems(
                 Update,
-                free_cam_movement.run_if(playing_and_running.and(in_state(PlayerMode::FreeCam))),
+                (free_cam_look, free_cam_movement)
+                    .chain()
+                    .run_if(playing_and_running.and(in_state(PlayerMode::FreeCam))),
             );
     }
 }

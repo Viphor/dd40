@@ -233,6 +233,70 @@ pub(crate) fn mouse_look(
 
 const FREE_CAM_SPEED: f32 = 10.0;
 
+/// Rotates the camera entity directly from the [`Look`] action while in
+/// [`PlayerMode::FreeCam`]. The player's [`CharacterFace`] is left
+/// untouched — the head stays where the player was looking when freecam
+/// was entered, and [`CharacterInput::yaw`] / [`pitch`] are likewise not
+/// modified (so the server keeps the controller's last-known orientation).
+pub(crate) fn free_cam_look(
+    look_actions: Query<(&Action<Look>, &ActionOf<LocalUi>)>,
+    players: Query<Entity, With<Player>>,
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+    mut state: Local<FreeCamLookState>,
+    cursor_options: Query<&CursorOptions>,
+) {
+    let Ok(cursor_option) = cursor_options.single() else {
+        return;
+    };
+    if cursor_option.grab_mode != CursorGrabMode::Locked {
+        return;
+    }
+    let Ok(player) = players.single() else {
+        return;
+    };
+    let Ok(mut transform) = camera_query.single_mut() else {
+        return;
+    };
+
+    // Re-seed pitch/yaw from the camera transform if it changed externally
+    // (e.g. just transitioned into FreeCam and sync_camera_to_face placed
+    // it at the face orientation). Detect by comparing against the
+    // transform produced by our last write.
+    if state.last_applied.is_none()
+        || state
+            .last_applied
+            .map(|q| q.angle_between(transform.rotation) > 1e-4)
+            .unwrap_or(true)
+    {
+        let (y, p, _) = transform.rotation.to_euler(EulerRot::YXZ);
+        state.yaw = y;
+        state.pitch = p;
+    }
+
+    let delta = look_actions
+        .iter()
+        .find_map(|(action, of)| (**of == player).then(|| **action))
+        .unwrap_or(Vec2::ZERO);
+
+    state.yaw += delta.x;
+    state.pitch = (state.pitch + delta.y).clamp(
+        -std::f32::consts::FRAC_PI_2 + 0.01,
+        std::f32::consts::FRAC_PI_2 - 0.01,
+    );
+
+    let rot = Quat::from_euler(EulerRot::YXZ, state.yaw, state.pitch, 0.0);
+    transform.rotation = rot;
+    state.last_applied = Some(rot);
+}
+
+/// Per-system state for [`free_cam_look`].
+#[derive(Default)]
+pub(crate) struct FreeCamLookState {
+    yaw: f32,
+    pitch: f32,
+    last_applied: Option<Quat>,
+}
+
 /// Moves the camera entity directly, bypassing physics. Reads
 /// `Action<Move>` / `Action<FreeCamUp>` / `Action<FreeCamDown>` /
 /// `Action<Sprint>` from the [`FreeCam`] context.
