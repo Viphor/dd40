@@ -31,6 +31,7 @@
 //! them and the result replicates back as `InventoryComponent` +
 //! `HeldStackComponent`.
 
+pub mod block_icon;
 pub mod grid;
 pub mod held;
 pub mod hotbar;

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bevy = { workspace = true, default-features = false, features = ["bevy_ui", "bevy_picking", "ui_picking", "bevy_window", "bevy_asset", "bevy_image", "bevy_text", "default_font"] }
+wgpu-types = "27"
 bevy_enhanced_input = "0.25"
 dd40_core = { workspace = true }
 dd40_character_core = { workspace = true }

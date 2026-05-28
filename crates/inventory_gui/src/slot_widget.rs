@@ -57,8 +57,17 @@ pub struct SelectedMarker;
 /// Marker placed on the child node that renders the item icon, so the
 /// update system can find and rewrite it without rebuilding the whole
 /// widget hierarchy.
-#[derive(Component)]
-pub struct SlotIconNode;
+///
+/// Carries the currently-rendered [`ItemId`] (if any) so the sync
+/// system only re-inserts the [`ImageNode`] / [`BackgroundColor`] when
+/// the slot's contents change — never on every frame.
+#[derive(Component, Default)]
+pub struct SlotIconNode {
+    /// The item currently rendered into this icon child, if any.  Used
+    /// for change detection so the sync system doesn't re-insert
+    /// components on every frame.
+    pub rendered: Option<ItemId>,
+}
 
 /// Marker placed on the child text that shows the stack count.
 #[derive(Component)]
@@ -72,16 +81,13 @@ pub struct SlotCountNode;
 /// The widget is initially empty (no icon, no count).  The companion
 /// [`sync_slot_widgets`] system keeps it in sync with the underlying
 /// inventory each frame.
-pub fn spawn_slot_widget(
-    parent: &mut ChildSpawnerCommands,
-    key: SlotKey,
-    size: f32,
-) -> Entity {
+pub fn spawn_slot_widget(parent: &mut ChildSpawnerCommands, key: SlotKey, size: f32) -> Entity {
     let count_font_size = (size * 0.28).max(12.0);
     parent
         .spawn((
             Name::new("InventorySlot"),
             key,
+            Button,
             Node {
                 width: Val::Px(size),
                 height: Val::Px(size),
@@ -102,19 +108,20 @@ pub fn spawn_slot_widget(
             BackgroundColor(SLOT_BACKGROUND),
         ))
         .with_children(|slot| {
-            // Icon node: fills the slot, drawn behind the count text.
-            // Anchors must be explicit — an absolute child with only
-            // width/height (and no left/top/right/bottom) collapses to
-            // the parent's content-box origin in bevy_ui.
+            // Icon node: drawn inside the slot's border, behind the
+            // count text.  The `ImageNode` is added/removed by
+            // `sync_slot_widgets` only on slot-content changes —
+            // tracked via [`SlotIconNode::rendered`] — so the layout
+            // does not churn every frame.
             slot.spawn((
                 Name::new("SlotIcon"),
-                SlotIconNode,
+                SlotIconNode::default(),
                 Node {
                     position_type: PositionType::Absolute,
-                    left: Val::Px(2.0),
-                    top: Val::Px(2.0),
-                    right: Val::Px(2.0),
-                    bottom: Val::Px(2.0),
+                    left: Val::Px(4.0),
+                    top: Val::Px(4.0),
+                    right: Val::Px(4.0),
+                    bottom: Val::Px(4.0),
                     ..default()
                 },
                 BackgroundColor(Color::NONE),
@@ -155,7 +162,14 @@ pub fn update_slot_widget_children(
     cache: &mut ItemIconCache,
     asset_server: &AssetServer,
 ) {
-    let _ = (icon_node, icon_node_marker, blocks, items, cache, asset_server);
+    let _ = (
+        icon_node,
+        icon_node_marker,
+        blocks,
+        items,
+        cache,
+        asset_server,
+    );
     match stack {
         None => {
             *icon_bg = BackgroundColor(Color::NONE);
@@ -187,48 +201,61 @@ pub fn update_slot_widget_children(
 /// [`ItemIconCache`].  Selected-slot highlighting is handled by a
 /// separate observer in `hotbar.rs`.
 pub fn sync_slot_widgets(
-    mut slots: Query<(&SlotKey, &Children)>,
-    mut icons: Query<
-        (&mut BackgroundColor, Option<&mut ImageNode>),
-        (With<SlotIconNode>, Without<SlotCountNode>),
-    >,
+    slots: Query<(&SlotKey, &Children)>,
+    mut icons: Query<(&mut SlotIconNode, &mut BackgroundColor), Without<SlotCountNode>>,
     mut counts: Query<&mut Text, With<SlotCountNode>>,
     inventories: Query<&InventoryComponent>,
     items: Res<ItemRegistry>,
     blocks: Res<dd40_core::block::BlockRegistry>,
     asset_server: Res<AssetServer>,
+    block_icons: Res<crate::icons::BlockIconAssets>,
     mut cache: ResMut<ItemIconCache>,
     mut commands: Commands,
 ) {
-    for (key, children) in &mut slots {
+    for (key, children) in &slots {
         let stack = inventories
             .get(key.character)
             .ok()
             .and_then(|inv| inv.inventory().slot(key.slot as usize).copied());
         for child in children.iter() {
-            if let Ok((mut bg, image_node)) = icons.get_mut(child) {
-                match stack {
-                    None => {
-                        *bg = BackgroundColor(Color::NONE);
-                        if image_node.is_some() {
+            if let Ok((mut state, mut bg)) = icons.get_mut(child) {
+                let target = stack.map(|s| s.item);
+                if state.rendered != target {
+                    match stack {
+                        None => {
+                            *bg = BackgroundColor(Color::NONE);
                             commands.entity(child).remove::<ImageNode>();
                         }
-                    }
-                    Some(stack) => {
-                        let icon = cache.get_or_resolve(stack.item, &items, &blocks, &asset_server);
-                        match icon {
-                            ItemIcon::Image(handle) => {
-                                *bg = BackgroundColor(Color::WHITE);
-                                commands.entity(child).insert(ImageNode::new(handle));
-                            }
-                            ItemIcon::Color(color) => {
-                                *bg = BackgroundColor(color);
-                                if image_node.is_some() {
+                        Some(stack) => {
+                            let icon = cache.get_or_resolve(
+                                stack.item,
+                                &items,
+                                &blocks,
+                                &asset_server,
+                                &block_icons,
+                            );
+                            match icon {
+                                ItemIcon::Image(handle) => {
+                                    debug!(
+                                        "slot icon: item={:?} → Image (handle={:?})",
+                                        stack.item, handle
+                                    );
+                                    *bg = BackgroundColor(Color::NONE);
+                                    commands.entity(child).insert(ImageNode {
+                                        image: handle,
+                                        image_mode: NodeImageMode::Stretch,
+                                        ..default()
+                                    });
+                                }
+                                ItemIcon::Color(color) => {
+                                    debug!("slot icon: item={:?} → Color({:?})", stack.item, color);
+                                    *bg = BackgroundColor(color);
                                     commands.entity(child).remove::<ImageNode>();
                                 }
                             }
                         }
                     }
+                    state.rendered = target;
                 }
             }
             if let Ok(mut text) = counts.get_mut(child) {
@@ -245,7 +272,11 @@ pub fn sync_slot_widgets(
 /// presence of the [`SelectedMarker`] component.
 pub fn sync_selection_border(mut slots: Query<(&mut BorderColor, Has<SelectedMarker>)>) {
     for (mut border, selected) in &mut slots {
-        let target = if selected { BORDER_SELECTED } else { BORDER_IDLE };
+        let target = if selected {
+            BORDER_SELECTED
+        } else {
+            BORDER_IDLE
+        };
         *border = BorderColor::all(target);
     }
 }

@@ -5,6 +5,7 @@
 //! translator. Add it to the client `App` exactly once.
 
 use bevy::prelude::*;
+use dd40_core::block::registry::BlockRegistrySet;
 use dd40_core::ensure_plugins;
 use dd40_core::plugin::CorePlugin;
 use dd40_input_core::plugin::InputCorePlugin;
@@ -56,10 +57,16 @@ impl Plugin for InventoryGuiPlugin {
             InputCorePlugin
         );
         app.init_resource::<InventoryGuiOpen>()
-            .init_resource::<icons::ItemIconCache>();
+            .init_resource::<icons::ItemIconCache>()
+            .init_resource::<icons::BlockIconAssets>();
+        app.add_systems(
+            Startup,
+            icons::prerender_block_icons.after(BlockRegistrySet),
+        );
         app.add_systems(
             Update,
             (
+                icons::prerender_block_icons,
                 hotbar::ensure_hotbar_root,
                 hotbar::sync_hotbar_selection,
                 grid::toggle_grid,

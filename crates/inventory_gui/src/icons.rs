@@ -15,8 +15,55 @@
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
-use dd40_core::block::{BlockDefinition, BlockRegistry};
+use dd40_core::block::{BlockDefinition, BlockId, BlockRegistry};
 use dd40_item_core::registry::{ItemId, ItemRegistry};
+
+use crate::block_icon::build_block_icon;
+
+/// Pre-rendered isometric icons for every known [`BlockId`].
+///
+/// Populated by [`prerender_block_icons`] during `Startup` (after
+/// [`dd40_core::plugin::BlockRegistrySet`]) and on any subsequent change
+/// to the [`BlockRegistry`].  Avoids per-frame allocation in
+/// [`ItemIconCache::get_or_resolve`].
+#[derive(Resource, Default, Debug)]
+pub struct BlockIconAssets {
+    map: HashMap<BlockId, Handle<Image>>,
+}
+
+impl BlockIconAssets {
+    /// Returns the pre-rendered icon for `block`, if one has been built.
+    pub fn get(&self, block: BlockId) -> Option<Handle<Image>> {
+        self.map.get(&block).cloned()
+    }
+
+    /// Builds (or rebuilds) icons for every block in `blocks`.
+    pub fn rebuild(&mut self, blocks: &BlockRegistry, images: &mut Assets<Image>) {
+        self.map.clear();
+        for def in blocks.iter() {
+            let handle = images.add(build_block_icon(def.color));
+            self.map.insert(def.id, handle);
+        }
+    }
+}
+
+/// Startup / change-driven system that fills [`BlockIconAssets`].
+pub fn prerender_block_icons(
+    blocks: Res<BlockRegistry>,
+    mut assets: ResMut<BlockIconAssets>,
+    mut images: ResMut<Assets<Image>>,
+    mut cache: ResMut<ItemIconCache>,
+) {
+    if !blocks.is_changed() && !assets.map.is_empty() {
+        return;
+    }
+    assets.rebuild(&blocks, &mut images);
+    debug!(
+        "prerender_block_icons: built {} block icons",
+        assets.map.len()
+    );
+    cache.clear();
+}
 
 /// Resolved per-item icon — either a loaded image handle or a flat colour.
 #[derive(Debug, Clone)]
@@ -51,11 +98,12 @@ impl ItemIconCache {
         items: &ItemRegistry,
         blocks: &BlockRegistry,
         asset_server: &AssetServer,
+        block_icons: &BlockIconAssets,
     ) -> ItemIcon {
         if let Some(existing) = self.map.get(&item) {
             return existing.clone();
         }
-        let resolved = resolve_icon(item, items, blocks, asset_server);
+        let resolved = resolve_icon(item, items, blocks, asset_server, block_icons);
         self.map.insert(item, resolved.clone());
         resolved
     }
@@ -72,22 +120,48 @@ impl ItemIconCache {
 /// Public so tests can exercise the fallback chain without spinning up
 /// an `App`.  Production code should prefer
 /// [`ItemIconCache::get_or_resolve`].
+/// Pure resolution of [`ItemIcon`] for a single item id.
+///
+/// Resolution order:
+///
+/// 1. If the item is **placeable** and a procedural block icon has been
+///    pre-rendered, use that.  Placeable items always render as their
+///    block's three-face isometric cube — the same visual the player
+///    will see in-world.
+/// 2. Otherwise, if the item declares an `icon_path`, load that PNG.
+/// 3. Otherwise, fall back to the magenta missing-icon swatch.
+///
+/// Public so tests can exercise the fallback chain without spinning up
+/// an `App`.  Production code should prefer
+/// [`ItemIconCache::get_or_resolve`].
 pub fn resolve_icon(
     item: ItemId,
     items: &ItemRegistry,
     blocks: &BlockRegistry,
     asset_server: &AssetServer,
+    block_icons: &BlockIconAssets,
 ) -> ItemIcon {
     let def = items.get(item);
+    if let Some(handle) = def
+        .and_then(|d| d.placeable)
+        .and_then(|b| block_icons.get(b))
+    {
+        return ItemIcon::Image(handle);
+    }
     if let Some(path) = def.and_then(|d| d.icon_path.as_ref()) {
         return ItemIcon::Image(asset_server.load(path.clone()));
     }
-    if let Some(block) = def
+    if def
         .and_then(|d| d.placeable)
         .and_then(|b| blocks.get(b))
         .map(BlockDefinition::clone_color)
+        .is_some()
     {
-        return ItemIcon::Color(block);
+        // Placeable block exists but its icon hasn't been pre-rendered
+        // yet — fall back to magenta temporarily.  The next frame after
+        // `prerender_block_icons` runs the cache is cleared and the
+        // proper cube is picked up.
+        return ItemIcon::Color(MISSING_ICON_COLOR);
     }
     ItemIcon::Color(MISSING_ICON_COLOR)
 }

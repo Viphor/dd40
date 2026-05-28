@@ -2897,6 +2897,7 @@ dependencies = [
  "dd40_input_core",
  "dd40_inventory_core",
  "dd40_item_core",
+ "wgpu-types",
 ]
 
 [[package]]

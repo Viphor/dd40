@@ -31,6 +31,7 @@ pub fn sync_held_cursor(
     items: Res<ItemRegistry>,
     blocks: Res<BlockRegistry>,
     asset_server: Res<AssetServer>,
+    block_icons: Res<crate::icons::BlockIconAssets>,
     mut cache: ResMut<ItemIconCache>,
     mut node: Query<(Entity, &mut Node, &mut BackgroundColor), With<HeldCursorNode>>,
 ) {
@@ -38,7 +39,6 @@ pub fn sync_held_cursor(
         return;
     };
     let Some(cursor) = window.cursor_position() else {
-        // Cursor outside the window — hide the node.
         for (entity, _, _) in &mut node {
             commands.entity(entity).insert(Visibility::Hidden);
         }
@@ -55,7 +55,7 @@ pub fn sync_held_cursor(
         }
     };
 
-    let icon = cache.get_or_resolve(stack.item, &items, &blocks, &asset_server);
+    let icon = cache.get_or_resolve(stack.item, &items, &blocks, &asset_server, &block_icons);
 
     if node.is_empty() {
         commands.spawn((
@@ -82,8 +82,12 @@ pub fn sync_held_cursor(
         commands.entity(entity).insert(Visibility::Visible);
         match icon.clone() {
             ItemIcon::Image(handle) => {
-                *bg = BackgroundColor(Color::WHITE);
-                commands.entity(entity).insert(ImageNode::new(handle));
+                *bg = BackgroundColor(Color::NONE);
+                commands.entity(entity).insert(ImageNode {
+                    image: handle,
+                    image_mode: NodeImageMode::Stretch,
+                    ..default()
+                });
             }
             ItemIcon::Color(color) => {
                 *bg = BackgroundColor(color);

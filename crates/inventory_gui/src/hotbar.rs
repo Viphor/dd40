@@ -71,10 +71,7 @@ pub fn ensure_hotbar_root(
 /// the local player's [`SelectedHotbarSlot`].
 pub fn sync_hotbar_selection(
     mut commands: Commands,
-    selected: Query<
-        (Entity, &SelectedHotbarSlot),
-        (With<Player>, Changed<SelectedHotbarSlot>),
-    >,
+    selected: Query<(Entity, &SelectedHotbarSlot), (With<Player>, Changed<SelectedHotbarSlot>)>,
     slots: Query<(Entity, &SlotKey, Has<SelectedMarker>), With<SlotKey>>,
 ) {
     for (player, sel) in &selected {

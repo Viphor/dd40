@@ -37,10 +37,7 @@ pub fn sync_tooltip(
     inventories: Query<&InventoryComponent>,
     items: Res<ItemRegistry>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    mut tooltip: Query<
-        (Entity, &mut Node, &mut Visibility, &Children),
-        With<TooltipNode>,
-    >,
+    mut tooltip: Query<(Entity, &mut Node, &mut Visibility, &Children), With<TooltipNode>>,
     mut texts: Query<&mut Text>,
 ) {
     let Ok(window) = windows.single() else {
@@ -68,7 +65,7 @@ pub fn sync_tooltip(
             .map(|d| d.name.clone())
             .unwrap_or_else(|| format!("item#{}", stack.item.0));
         Some(if stack.count.get() > 1 {
-            format!("{name} ×{}", stack.count.get())
+            format!("{name} x{}", stack.count.get())
         } else {
             name
         })
