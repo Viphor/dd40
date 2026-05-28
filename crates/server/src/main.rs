@@ -14,7 +14,7 @@ use dd40_network::{
     shared::connection::SHARED_SETTINGS,
 };
 use dd40_physics::PhysicsPlugin;
-use dd40_vanilla_inventory::{VanillaInventoryPlugin, VanillaInventoryRulesPlugin};
+use dd40_vanilla_inventory::VanillaInventoryRulesPlugin;
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
 use dd40_world::{
     WorldPlugin,
@@ -68,7 +68,13 @@ fn main() {
             // + HeldStackComponent.  Clients send their slot clicks as
             // NetSlotInteraction; ServerInventoryNetworkPlugin
             // (below) translates them onto the local bus.
-            VanillaInventoryPlugin,
+            //
+            // The selection half of dd40_vanilla_inventory
+            // (VanillaInventoryPlugin) is client-only: it gates on
+            // `With<Player>`, which is only ever attached on the
+            // locally-predicted character, and it reads
+            // bevy_input::MouseWheel which the headless server does
+            // not register.
             VanillaInventoryRulesPlugin,
             // Server-only: drain NetSlotInteraction messages from
             // lightyear, resolve the controlling Character via
