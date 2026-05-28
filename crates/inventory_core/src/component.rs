@@ -61,7 +61,7 @@ pub struct InventoryChanged {
 /// Entity-attached [`Inventory`] wrapper.
 ///
 /// See the [module-level docs](self) for the event semantics.
-#[derive(Component, Debug, Clone, Default, Reflect, Serialize, Deserialize)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq, Reflect, Serialize, Deserialize)]
 #[reflect(Component)]
 pub struct InventoryComponent {
     inventory: Inventory,

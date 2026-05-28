@@ -11,8 +11,9 @@
 //! time.  Multi-character / split-screen variants will need to
 //! revisit this.
 
-use bevy::prelude::Resource;
+use bevy::prelude::{Component, ReflectComponent, Reflect, Resource};
 use dd40_item_core::active_item::ItemStack;
+use serde::{Deserialize, Serialize};
 
 /// The stack the player is currently dragging with the cursor, if any.
 ///
@@ -28,6 +29,47 @@ use dd40_item_core::active_item::ItemStack;
 pub struct HeldStack(pub Option<ItemStack>);
 
 impl HeldStack {
+    /// Returns `true` when a stack is currently held.
+    pub fn is_some(&self) -> bool {
+        self.0.is_some()
+    }
+
+    /// Returns `true` when no stack is held.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// Borrows the held stack, if any.
+    pub fn get(&self) -> Option<&ItemStack> {
+        self.0.as_ref()
+    }
+
+    /// Takes the held stack out, leaving the cursor empty.
+    pub fn take(&mut self) -> Option<ItemStack> {
+        self.0.take()
+    }
+}
+
+/// Per-character held stack — the cursor stack belonging to the
+/// player who controls this `Character`.
+///
+/// This is the server-authoritative counterpart of the legacy
+/// [`HeldStack`] resource.  The server attaches one to every
+/// character and mutates it as inventory rules execute; lightyear
+/// replicates the component to all clients so they can render *any*
+/// player's cursor stack (the local player's own UI cursor, plus any
+/// future feature like showing a remote player's held stack above
+/// their head).
+///
+/// `SelectedHotbarSlot` deliberately stays a client-local resource —
+/// it's pure UI state and does not need to be replicated.
+#[derive(
+    Component, Default, Debug, Clone, PartialEq, Reflect, Serialize, Deserialize,
+)]
+#[reflect(Component)]
+pub struct HeldStackComponent(pub Option<ItemStack>);
+
+impl HeldStackComponent {
     /// Returns `true` when a stack is currently held.
     pub fn is_some(&self) -> bool {
         self.0.is_some()

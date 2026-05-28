@@ -129,6 +129,23 @@ pub struct PlayerLeftMessage {
     pub player_name: String,
 }
 
+/// Wire form of a player slot interaction, sent from client to server
+/// on the reliable [`EventChannel`].
+///
+/// The local `SlotInteraction` Bevy message carries an `Entity` for the
+/// target character, but that entity id is client-local and has no
+/// meaning on the server.  Instead, the server resolves the controlling
+/// character via lightyear's connection → `ControlledBy` mapping and
+/// re-emits a local [`SlotInteraction`] on the Bevy bus that the
+/// existing `dd40_vanilla_inventory` apply system consumes unchanged.
+///
+/// [`SlotInteraction`]: dd40_inventory_core::slot_interaction::SlotInteraction
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct NetSlotInteraction {
+    /// What the player tried to do.
+    pub kind: dd40_inventory_core::slot_interaction::SlotInteractionKind,
+}
+
 /// Server-broadcast delta of authoritatively-committed changes to a chunk.
 ///
 /// Sent from the server to every client that already has the chunk loaded,
@@ -375,12 +392,23 @@ impl Plugin for ProtocolPlugin {
         app.register_component::<LooseItemPosition>()
             .add_linear_interpolation();
 
+        // ── Inventory (server-authoritative) ────────────────────────────
+        // Full-component sync: every mutation re-sends the whole
+        // `InventoryComponent`.  Fine at 36 slots; revisit if profiling
+        // shows network volume mattering.  No prediction — clients
+        // accept the 1-RTT delay on slot clicks.
+        app.register_component::<dd40_inventory_core::component::InventoryComponent>();
+        app.register_component::<dd40_inventory_core::held_stack::HeldStackComponent>();
+
         // Register messages with directions
         // Client -> Server
         app.register_message::<RequestChunk>()
             .add_direction(NetworkDirection::ClientToServer);
 
         app.register_message::<RequestSpawn>()
+            .add_direction(NetworkDirection::ClientToServer);
+
+        app.register_message::<NetSlotInteraction>()
             .add_direction(NetworkDirection::ClientToServer);
 
         // Server -> Client

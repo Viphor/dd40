@@ -80,6 +80,7 @@ impl<T: AddExtra> CharacterServerNetworkExt for T {
         owner: Entity,
     ) -> Self {
         use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
+        use dd40_inventory_core::held_stack::HeldStackComponent;
         use lightyear::prelude::{
             ControlledBy, InterpolationTarget, NetworkTarget, PredictionTarget, Replicate,
             input::native::ActionState,
@@ -91,6 +92,7 @@ impl<T: AddExtra> CharacterServerNetworkExt for T {
                 ActionState::<PlayerInput>::default(),
                 PlayerPosition::from_vec3(spawn_pos),
                 PlayerRotation::new(0.0, 0.0),
+                HeldStackComponent::default(),
                 Replicate::to_clients(NetworkTarget::All),
                 PredictionTarget::to_clients(NetworkTarget::Single(client_id)),
                 InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(client_id)),

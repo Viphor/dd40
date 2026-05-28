@@ -18,6 +18,7 @@
 //! protocol error and consumers will log + drop them.
 
 use bevy::prelude::{Entity, Message};
+use serde::{Deserialize, Serialize};
 
 /// A player-initiated slot mutation request.
 #[derive(Message, Clone, Debug)]
@@ -33,7 +34,12 @@ pub struct SlotInteraction {
 /// Mirrors the Minecraft conventions the GUI v1 spec calls for:
 /// left-click swap/pickup/drop, right-click split/place-one,
 /// shift-click move-to-other-half, drag-out-of-window drop.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// Derives `Serialize` + `Deserialize` so it can travel as the payload
+/// of a network message (the `Entity` in [`SlotInteraction`] is
+/// resolved server-side from lightyear's `ControlledBy`, so it does
+/// not need to be serialized).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SlotInteractionKind {
     /// Primary click on a slot: pick up the stack, drop the held
     /// stack, or swap.
