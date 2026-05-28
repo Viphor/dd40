@@ -5,9 +5,9 @@ use dd40_core::block::BlockDataTypeRegistry;
 use dd40_core::plugin::CorePlugin;
 
 use crate::{
-    ChunkResponse, ChunkResponseReceiver, ChunkResponseSender, collect_chunk_responses,
+    ChunkResponse, ChunkResponseReceiver, ChunkResponseSender,
     chunk_save_on_exit::save_chunks_on_exit,
-    dispatch_chunk_requests,
+    collect_chunk_responses, dispatch_chunk_requests,
     entity_persistence::{
         EntityPersistenceConfig, SAVE_ENTITIES_ENV, load_entities_for_ready_chunks,
         read_save_entities_env, save_entities_on_exit,

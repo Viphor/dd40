@@ -76,12 +76,7 @@ pub struct VanillaInventoryRulesPlugin;
 
 impl Plugin for VanillaInventoryRulesPlugin {
     fn build(&self, app: &mut App) {
-        ensure_plugins!(
-            app,
-            CorePlugin,
-            InventoryCorePlugin,
-            ItemCorePlugin
-        );
+        ensure_plugins!(app, CorePlugin, InventoryCorePlugin, ItemCorePlugin);
         app.add_systems(Update, crate::apply::apply_slot_interactions);
     }
 }

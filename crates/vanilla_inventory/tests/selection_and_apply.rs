@@ -124,7 +124,10 @@ fn active_item_updates_when_selected_slot_changes() {
     inv.inventory_mut().set_slot(2, Some(stack));
     let player = app.world_mut().spawn((Player, inv)).id();
     app.update(); // attach SelectedHotbarSlot=0 + ActiveItem=None.
-    assert_eq!(app.world().get::<ActiveItem>(player).copied(), Some(ActiveItem(None)));
+    assert_eq!(
+        app.world().get::<ActiveItem>(player).copied(),
+        Some(ActiveItem(None))
+    );
 
     app.world_mut()
         .get_mut::<SelectedHotbarSlot>(player)

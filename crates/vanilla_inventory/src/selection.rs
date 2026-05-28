@@ -19,10 +19,10 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::{Action, ActionEvents};
 use dd40_character_core::components::Player;
+use dd40_input_core::actions::HotbarSelect;
 use dd40_inventory_core::prelude::{
     HOTBAR_SIZE, InventoryChanged, InventoryComponent, SelectedHotbarSlot,
 };
-use dd40_input_core::actions::HotbarSelect;
 use dd40_item_core::active_item::ActiveItem;
 use dd40_item_core::messages::{ItemSelector, RequestActiveItem};
 use dd40_item_core::registry::ItemRegistry;
@@ -112,11 +112,9 @@ fn find_slot_for(
 ) -> Option<u8> {
     let limit = HOTBAR_SIZE as usize;
     match selector {
-        ItemSelector::Exact(target) => (0..limit).find_map(|i| {
-            inv.slot(i)
-                .filter(|s| s.item == target)
-                .map(|_| i as u8)
-        }),
+        ItemSelector::Exact(target) => {
+            (0..limit).find_map(|i| inv.slot(i).filter(|s| s.item == target).map(|_| i as u8))
+        }
         ItemSelector::Placeable(block) => (0..limit).find_map(|i| {
             let stack = inv.slot(i)?;
             let def = registry.get(stack.item)?;
@@ -170,11 +168,7 @@ pub fn sync_active_item_on_inventory_change(
         return;
     };
     let selected = slot.0 as usize;
-    if !trigger
-        .changes
-        .iter()
-        .any(|change| change.slot == selected)
-    {
+    if !trigger.changes.iter().any(|change| change.slot == selected) {
         return;
     }
     let new = inv_comp.inventory().slot(selected).copied();

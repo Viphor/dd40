@@ -50,9 +50,7 @@ pub fn save_chunks_on_exit(
             }
         }
     }
-    info!(
-        "save_chunks_on_exit: persisted {saved} chunk(s) on AppExit ({errors} error(s))"
-    );
+    info!("save_chunks_on_exit: persisted {saved} chunk(s) on AppExit ({errors} error(s))");
 }
 
 #[cfg(test)]

@@ -45,9 +45,12 @@ pub(crate) fn spawn_local_player_input_tree(
     players: Query<Entity, Added<Player>>,
 ) {
     for player in &players {
-        commands
-            .entity(player)
-            .insert((OnFoot, FreeCam, ContextActivity::<FreeCam>::INACTIVE, LocalUi));
+        commands.entity(player).insert((
+            OnFoot,
+            FreeCam,
+            ContextActivity::<FreeCam>::INACTIVE,
+            LocalUi,
+        ));
 
         spawn_on_foot_actions(&mut commands, player);
         spawn_free_cam_actions(&mut commands, player);

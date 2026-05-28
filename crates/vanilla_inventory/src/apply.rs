@@ -28,11 +28,7 @@ use crate::rules::{SlotClickKind, SlotResolution, resolve_slot};
 pub fn apply_slot_interactions(
     mut reader: MessageReader<SlotInteraction>,
     mut commands: Commands,
-    mut inventories: Query<(
-        &mut InventoryComponent,
-        &mut HeldStackComponent,
-        &Transform,
-    )>,
+    mut inventories: Query<(&mut InventoryComponent, &mut HeldStackComponent, &Transform)>,
     registry: Res<ItemRegistry>,
     mut drops: MessageWriter<DropItems>,
 ) {

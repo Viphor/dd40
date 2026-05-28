@@ -79,10 +79,7 @@ pub enum EntitySidecarError {
     UnsupportedVersion(u16),
     /// Coordinates in the header do not match the chunk the file
     /// claims to belong to (filename mismatch).
-    CoordinateMismatch {
-        expected: ChunkPos,
-        found: ChunkPos,
-    },
+    CoordinateMismatch { expected: ChunkPos, found: ChunkPos },
     /// Underlying I/O error.
     Io(io::Error),
     /// Bincode decode/encode failure on the body.

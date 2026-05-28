@@ -112,7 +112,11 @@ mod tests {
         for _ in 0..3 {
             app.update();
         }
-        assert_eq!(app.world().resource::<ExitCount>().0, 0, "no signal, no exit");
+        assert_eq!(
+            app.world().resource::<ExitCount>().0,
+            0,
+            "no signal, no exit"
+        );
 
         // Phase 2: flip the flag → exactly one AppExit across the rest of the run.
         SHUTDOWN_REQUESTED.store(true, Ordering::SeqCst);

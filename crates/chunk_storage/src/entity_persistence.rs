@@ -188,13 +188,10 @@ pub fn save_all_entities(world: &mut World) {
     let mut by_chunk: HashMap<ChunkPos, Vec<PersistedEntity>> = HashMap::new();
     for persister in registry.iter() {
         for (chunk, payload) in persister.collect(world) {
-            by_chunk
-                .entry(chunk)
-                .or_default()
-                .push(PersistedEntity {
-                    kind: persister.kind().to_string(),
-                    payload,
-                });
+            by_chunk.entry(chunk).or_default().push(PersistedEntity {
+                kind: persister.kind().to_string(),
+                payload,
+            });
         }
     }
 
@@ -229,10 +226,7 @@ pub fn save_all_entities(world: &mut World) {
         if let Err(err) = write_sidecar(&path, chunk, &entities) {
             warn!("failed to write entity sidecar {path:?}: {err}");
         } else {
-            debug!(
-                "wrote {} entity payload(s) to {path:?}",
-                entities.len()
-            );
+            debug!("wrote {} entity payload(s) to {path:?}", entities.len());
         }
     }
 
@@ -262,8 +256,7 @@ fn read_sidecar(
         }
         Err(e) => return Err(SidecarReadOutcome::Error(EntitySidecarError::Io(e))),
     };
-    deserialize_entities(std::io::BufReader::new(file), expected)
-        .map_err(SidecarReadOutcome::Error)
+    deserialize_entities(std::io::BufReader::new(file), expected).map_err(SidecarReadOutcome::Error)
 }
 
 fn write_sidecar(
@@ -364,7 +357,9 @@ mod tests {
 
         app.world_mut()
             .resource_mut::<Messages<ChunkReady>>()
-            .write(ChunkReady { chunk: make_chunk(pos) });
+            .write(ChunkReady {
+                chunk: make_chunk(pos),
+            });
         load_entities_for_ready_chunks(app.world_mut());
 
         let got = spawned.lock().unwrap().clone();
@@ -387,7 +382,9 @@ mod tests {
             });
         app.world_mut()
             .resource_mut::<Messages<ChunkReady>>()
-            .write(ChunkReady { chunk: make_chunk(pos) });
+            .write(ChunkReady {
+                chunk: make_chunk(pos),
+            });
         load_entities_for_ready_chunks(app.world_mut());
 
         assert!(spawned.lock().unwrap().is_empty());
@@ -405,7 +402,9 @@ mod tests {
         serialize_entities(std::io::BufWriter::new(file), pos, &entities).unwrap();
 
         let mut app = make_app(dir);
-        app.world_mut().resource_mut::<EntityPersistenceConfig>().enabled = false;
+        app.world_mut()
+            .resource_mut::<EntityPersistenceConfig>()
+            .enabled = false;
         let spawned = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
         app.world_mut()
             .resource_mut::<EntityPersisterRegistry>()
@@ -416,7 +415,9 @@ mod tests {
             });
         app.world_mut()
             .resource_mut::<Messages<ChunkReady>>()
-            .write(ChunkReady { chunk: make_chunk(pos) });
+            .write(ChunkReady {
+                chunk: make_chunk(pos),
+            });
         load_entities_for_ready_chunks(app.world_mut());
 
         assert!(spawned.lock().unwrap().is_empty());
@@ -592,7 +593,9 @@ mod tests {
         load_app
             .world_mut()
             .resource_mut::<Messages<ChunkReady>>()
-            .write(ChunkReady { chunk: make_chunk(pos) });
+            .write(ChunkReady {
+                chunk: make_chunk(pos),
+            });
         load_entities_for_ready_chunks(load_app.world_mut());
 
         assert_eq!(spawned.lock().unwrap().clone(), vec![vec![11, 22, 33]]);

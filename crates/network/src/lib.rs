@@ -82,7 +82,9 @@ pub use protocol::{
 pub use shared::connection::{CLIENT_PORT, SERVER_ADDR, SERVER_PORT};
 
 #[cfg(feature = "client")]
-pub use client::{connection::DDClient, inventory::ClientInventoryNetworkPlugin, plugin::ClientNetworkPlugin};
+pub use client::{
+    connection::DDClient, inventory::ClientInventoryNetworkPlugin, plugin::ClientNetworkPlugin,
+};
 
 #[cfg(feature = "server")]
 pub use server::{
