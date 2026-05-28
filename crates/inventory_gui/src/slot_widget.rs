@@ -29,12 +29,12 @@ pub const GRID_SLOT_SIZE: f32 = 96.0;
 pub const SLOT_GAP: f32 = 4.0;
 
 /// Border colour for an unselected slot.
-const BORDER_IDLE: Color = Color::srgba(0.0, 0.0, 0.0, 0.6);
+const BORDER_IDLE: Color = Color::srgba(0.55, 0.55, 0.6, 0.9);
 /// Border colour for the currently-selected hotbar slot.
 const BORDER_SELECTED: Color = Color::srgba(1.0, 1.0, 1.0, 0.9);
 /// Background of the slot itself (visible when the item has no icon and
 /// the item-icon swatch is rendered behind a partly-transparent area).
-const SLOT_BACKGROUND: Color = Color::srgba(0.1, 0.1, 0.1, 0.6);
+const SLOT_BACKGROUND: Color = Color::srgba(0.25, 0.25, 0.28, 0.95);
 
 /// Identifies which inventory slot a widget presents.
 ///

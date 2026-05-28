@@ -83,6 +83,14 @@ pub fn toggle_grid(
 }
 
 fn spawn_grid(commands: &mut Commands, player: Entity, capacity: usize) {
+    info!(
+        "spawn_grid: player={:?} capacity={} (expecting {}+ for {}x{} grid)",
+        player,
+        capacity,
+        dd40_inventory_core::prelude::HOTBAR_SIZE as usize + GRID_ROWS as usize * GRID_COLS as usize,
+        GRID_COLS,
+        GRID_ROWS,
+    );
     commands
         .spawn((
             Name::new("InventoryGridOverlay"),
