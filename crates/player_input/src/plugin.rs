@@ -37,8 +37,8 @@ use dd40_item_core::plugin::ItemCorePlugin;
 /// - Auto-adds [`CorePlugin`], [`InputCorePlugin`], and
 ///   [`CharacterCorePlugin`] via [`ensure_plugins!`].
 /// - Registers [`OnFoot`] as a `bevy_enhanced_input` context evaluated in
-///   [`FixedPreUpdate`] (idempotent — if already added by lightyear's
-///   `InputPlugin::<OnFoot>` we skip this step).
+///   [`FixedPreUpdate`] (idempotent — guarded by a marker resource so
+///   adding the plugin twice does not panic).
 /// - Adds [`apply_actions_to_character_input`] in [`FixedPreUpdate`] after
 ///   [`EnhancedInputSystems::Apply`].
 ///
@@ -47,27 +47,25 @@ use dd40_item_core::plugin::ItemCorePlugin;
 #[derive(Default)]
 pub struct PlayerInputTranslationPlugin;
 
+/// Marker resource ensuring the [`OnFoot`] context is only registered once
+/// even if [`PlayerInputTranslationPlugin`] is added by multiple plugins.
+#[derive(Resource)]
+struct OnFootContextRegistered;
+
 impl Plugin for PlayerInputTranslationPlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin, InputCorePlugin, CharacterCorePlugin);
 
-        // NOTE: We intentionally do **not** call
-        // `app.add_input_context_to::<FixedPreUpdate, OnFoot>()` here.
-        //
-        // `bevy_enhanced_input` panics on duplicate context registration,
-        // and lightyear's `InputPlugin::<OnFoot>` (added by
-        // `dd40_network::ProtocolPlugin`) registers the context
-        // unconditionally — there is no `is_plugin_added`-style guard
-        // available to us. The network plugin is the canonical registrar
-        // for the networked `OnFoot` context.
-        //
-        // Tests / single-player consumers that use this plugin without
-        // the network layer must register the context themselves with
-        // `app.add_input_context_to::<FixedPreUpdate, OnFoot>()` before
-        // adding this plugin.
+        if !app.world().contains_resource::<OnFootContextRegistered>() {
+            app.add_input_context_to::<FixedPreUpdate, OnFoot>();
+            app.insert_resource(OnFootContextRegistered);
+        }
+
         app.register_type::<OnFoot>().add_systems(
             FixedPreUpdate,
-            apply_actions_to_character_input.after(EnhancedInputSystems::Apply),
+            apply_actions_to_character_input
+                .in_set(dd40_input_core::system_sets::InputTranslationSet)
+                .after(EnhancedInputSystems::Apply),
         );
     }
 }

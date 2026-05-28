@@ -2959,6 +2959,7 @@ dependencies = [
  "crossbeam-channel",
  "dd40_character_core",
  "dd40_core",
+ "dd40_input_core",
  "dd40_inventory_core",
  "dd40_loose_item_core",
  "dd40_physics_core",

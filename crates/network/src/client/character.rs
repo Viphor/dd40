@@ -376,10 +376,18 @@ impl Plugin for ClientCharacterPlugin {
         // already restores the historical ActionState for each replayed tick, and
         // running the bridge would overwrite it with stale CharacterInput values
         // (e.g. jump=false after apply_character_controller already consumed it).
+        // Order: translator writes CharacterInput from BEI actions inside
+        // FixedPreUpdate (after EnhancedInputSystems::Apply); the bridge
+        // must therefore run AFTER it so the ActionState shipped to the
+        // server reflects the current tick's input. Without this ordering
+        // the bridge ships the previous tick's CharacterInput and then
+        // `client_apply_inputs` writes that stale value back, wiping the
+        // translator's output.
         app.add_systems(
             FixedPreUpdate,
             bridge_input_to_action_state
                 .in_set(InputSystems::WriteClientInputs)
+                .after(dd40_input_core::system_sets::InputTranslationSet)
                 .run_if(not(is_in_rollback)),
         );
 

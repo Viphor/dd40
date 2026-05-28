@@ -178,8 +178,8 @@ fn has_placeable(active: Option<&ActiveItem>, items: &ItemRegistry) -> bool {
 /// Integrates the [`Look`] action delta into the local player's
 /// [`FaceRotation`] (clamping pitch), then writes the resulting quaternion
 /// onto the face's local [`Transform`] and copies pitch/yaw into the
-/// player's [`CharacterInput`] so the
-/// `bridge_camera_rotation_to_action` system can replicate it.
+/// player's [`CharacterInput`] so the network layer ships them inside
+/// [`PlayerInput`](dd40_network) each tick.
 ///
 /// Sensitivity is applied at the binding layer (see
 /// [`crate::bindings::DEFAULT_MOUSE_SENSITIVITY`]); this system consumes

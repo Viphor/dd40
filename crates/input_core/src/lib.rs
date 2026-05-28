@@ -37,5 +37,6 @@ pub mod actions;
 pub mod contexts;
 pub mod plugin;
 pub mod prelude;
+pub mod system_sets;
 
 pub use plugin::InputCorePlugin;

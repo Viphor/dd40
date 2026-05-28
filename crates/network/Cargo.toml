@@ -16,6 +16,7 @@ dd40_core = { path = "../core" }
 dd40_physics_core = { workspace = true }
 dd40_character_core = { workspace = true }
 dd40_inventory_core = { workspace = true }
+dd40_input_core = { workspace = true }
 dd40_loose_item_core = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 lightyear = { version = "0.26", features = ["udp", "netcode", "std", "input_native", "client", "server", "replication", "prediction", "interpolation"] }

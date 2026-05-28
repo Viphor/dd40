@@ -9,8 +9,8 @@
 //! - The [`LocalUi`] context and its bindings (mouse look, pause toggle,
 //!   mode toggle, RMB dispatch).
 //!
-//! The network layer only inserts `Player`, `OnFoot`, and
-//! `InputMarker<OnFoot>`. Keeping the binding setup here means swapping
+//! The network layer only inserts `Player`. Keeping the binding setup
+//! (including inserting the `OnFoot` context itself) here means swapping
 //! the input crate touches `dd40_player_input` only.
 
 use bevy::prelude::*;
@@ -47,7 +47,7 @@ pub(crate) fn spawn_local_player_input_tree(
     for player in &players {
         commands
             .entity(player)
-            .insert((FreeCam, ContextActivity::<FreeCam>::INACTIVE, LocalUi));
+            .insert((OnFoot, FreeCam, ContextActivity::<FreeCam>::INACTIVE, LocalUi));
 
         spawn_on_foot_actions(&mut commands, player);
         spawn_free_cam_actions(&mut commands, player);
@@ -81,13 +81,6 @@ fn spawn_on_foot_actions(commands: &mut Commands, ctx: Entity) {
     // on the active item.
     commands.spawn((Action::<Place>::new(), ActionOf::<OnFoot>::new(ctx)));
     commands.spawn((Action::<Interact>::new(), ActionOf::<OnFoot>::new(ctx)));
-    // CameraRotation has no direct binding — the client bridges
-    // CharacterInput::{yaw,pitch} into it each tick (see
-    // `dd40_network::client::character::bridge_camera_rotation_to_action`).
-    commands.spawn((
-        Action::<dd40_input_core::actions::CameraRotation>::new(),
-        ActionOf::<OnFoot>::new(ctx),
-    ));
 }
 
 fn spawn_free_cam_actions(commands: &mut Commands, ctx: Entity) {
