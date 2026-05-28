@@ -1,4 +1,4 @@
-//! Entity persistence systems for [`DiskStoragePlugin`].
+//! Entity persistence systems for `DiskStoragePlugin`.
 //!
 //! Two systems drive the per-chunk entity sidecar file:
 //!
@@ -135,7 +135,7 @@ pub fn load_entities_for_ready_chunks(world: &mut World) {
 ///
 /// Only the latest frame's `AppExit` triggers a write; subsequent
 /// frames (which can happen if the runner takes more than one tick to
-/// actually shut down) are skipped via [`AlreadySavedEntities`].
+/// actually shut down) are skipped via `AlreadySavedEntities`.
 pub fn save_entities_on_exit(world: &mut World) {
     if world.contains_resource::<AlreadySavedEntities>() {
         return;

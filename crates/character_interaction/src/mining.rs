@@ -1,10 +1,10 @@
 //! Per-character mining state machine, driven by [`CharacterInput::attack`].
 //!
-//! The state-machine logic itself is the pure function [`step_mining`], which
+//! The state-machine logic itself is the pure function `step_mining`, which
 //! takes the current state, the character's targeted block, the current
 //! `attack` flag, the elapsed delta, and a closure that resolves a block to
 //! the mining duration the character would need to break it. The Bevy system
-//! [`update_mining`] is a thin wrapper that wires queries and registries to
+//! `update_mining` is a thin wrapper that wires queries and registries to
 //! `step_mining` and pushes a predicted [`ChunkChange::Remove`] on
 //! completion or instant-break.
 //!

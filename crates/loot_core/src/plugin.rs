@@ -1,9 +1,9 @@
 //! Root plugin for the `dd40_loot_core` crate.
 //!
 //! [`LootCorePlugin`] is the single entry point.  Add it once to
-//! register [`LootTable`][crate::table::LootTable] with the chunk's
+//! register [`LootTable`] with the chunk's
 //! block-data type registry so it can flow through cell-data
-//! serialisation just like any other [`BlockData`].
+//! serialisation just like any other `BlockData`.
 
 use bevy::prelude::*;
 use dd40_core::block::BlockDataAppExt;

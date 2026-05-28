@@ -15,15 +15,15 @@
 //! ## What this module is **not** responsible for
 //!
 //! - Persistent camera orientation (pitch / yaw). The local client's
-//!   `mouse_look` system integrates raw [`Look`] deltas into
+//!   `mouse_look` system integrates raw `Look` deltas into
 //!   [`CharacterInput::yaw`] and [`CharacterInput::pitch`] directly each
 //!   render frame; those values are then shipped to the server via the
-//!   [`PlayerInput`](dd40_network) wire struct.
-//! - Raw mouse-look deltas ([`Look`]). See `mouse_look`.
+//!   `PlayerInput` wire struct.
+//! - Raw mouse-look deltas (`Look`). See `mouse_look`.
 //! - Bindings. The keyboard / mouse → action mapping lives in
-//!   [`crate::bindings`]; this translator is binding-agnostic.
+//!   `crate::bindings`; this translator is binding-agnostic.
 //! - Inserting [`OnFoot`] on the player entity. That happens in
-//!   [`crate::bindings::spawn_local_player_input_tree`].
+//!   `crate::bindings::spawn_local_player_input_tree`.
 
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::{Action, ActionOf};

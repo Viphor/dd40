@@ -2,17 +2,17 @@
 //!
 //! This module owns [`PhysicsSet::BodyCollision`]: the third stage of
 //! each physics tick.  It pushes apart any two [`PhysicsCollider`] entities
-//! whose [`Aabb`]s overlap in their [`TentativePosition`]s.
+//! whose `Aabb`s overlap in their `TentativePosition`s.
 //!
 //! # Algorithm
 //!
 //! Each tick, two systems run in sequence inside [`PhysicsSet::BodyCollision`]:
 //!
-//! 1. **[`crate::spatial_cache::update_physics_spatial_cache`]** — rebuilds the
-//!    [`PhysicsSpatialCache`] from the current [`TentativePosition`]s.
+//! 1. **`crate::spatial_cache::update_physics_spatial_cache`** — rebuilds the
+//!    `PhysicsSpatialCache` from the current `TentativePosition`s.
 //!    This is O(n) in the number of characters.
 //!
-//! 2. **[`resolve_body_collisions`]** — iterates only the *candidate
+//! 2. **`resolve_body_collisions`** — iterates only the *candidate
 //!    pairs* emitted by [`PhysicsSpatialCache::candidate_pairs`]: pairs that
 //!    share at least one chunk.  Characters in different chunks are culled
 //!    entirely.  For each candidate pair it calls [`Aabb::penetration`] and,

@@ -10,7 +10,7 @@
 //! [`apply_mesh_tasks`]           | `Update`    | Polls completed tasks, uploads meshes, spawns entities |
 //!
 //! [`update_lod_levels`] runs before [`spawn_mesh_tasks`], which runs before
-//! [`apply_mesh_tasks`], all within [`RebuildChunksSet`].  This guarantees
+//! `apply_mesh_tasks`, all within `RebuildChunksSet`.  This guarantees
 //! LOD changes are flushed before tasks are spawned, and tasks are spawned
 //! before results are consumed.
 //!
@@ -127,7 +127,7 @@ pub fn mark_dirty_on_chunk_changed(
 }
 
 /// Iterates over every chunk tracked by [`ChunkRenderState`] and updates its
-/// [`LodLevel`] based on the nearest physics body's current chunk position.
+/// `LodLevel` based on the nearest physics body's current chunk position.
 ///
 /// When a chunk's LOD level changes the entry is automatically marked dirty by
 /// [`ChunkRenderState::update_lod`], so the mesh will be rebuilt this frame.

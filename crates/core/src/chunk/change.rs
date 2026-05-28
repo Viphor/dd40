@@ -9,7 +9,7 @@
 //!
 //! Mutations to the **per-cell typed data** store (chest contents, sign
 //! text, bed bindings — anything attached via
-//! [`BlockData`](crate::block::BlockData)) flow through a parallel type:
+//! [`BlockData`]) flow through a parallel type:
 //! [`CellDataChange`]. They run through the same authority pipeline as
 //! [`ChunkChange`] and share the chunk's version counter, but the two
 //! queues stay separate because [`CellDataChange`] carries `Box<dyn
@@ -164,7 +164,7 @@ impl ChunkChange {
 pub enum CellDataChange {
     /// Insert or replace the `T`-typed value at `local` with `value`.
     /// `value.as_any().type_id()` must match `value.type_key()` and must
-    /// be a registered type in [`BlockDataTypeRegistry`].
+    /// be a registered type in `BlockDataTypeRegistry`.
     Set {
         /// Cell to write to.
         local: BlockLocal,
@@ -180,7 +180,7 @@ pub enum CellDataChange {
         /// [`TypeId`] for the in-memory lookup; `type_key` is the
         /// stable `type_name`-style identifier used by the wire/disk
         /// formats to round-trip the same change through
-        /// [`BlockDataTypeRegistry`].
+        /// `BlockDataTypeRegistry`.
         type_id: TypeId,
         /// Stable string identifier for the type — typically the value
         /// returned by [`BlockData::type_key`] of the concrete type.
@@ -212,7 +212,7 @@ impl CellDataChange {
     /// Used by the authority commit pass when synthesising cleanup
     /// changes for blocks that no longer exist — the caller doesn't have
     /// the concrete type in scope, only the runtime identifiers it
-    /// drained out of [`Chunk::drain_cell_data_at`].
+    /// drained out of `Chunk::drain_cell_data_at`.
     pub fn clear_raw(local: BlockLocal, type_id: TypeId, type_key: &'static str) -> Self {
         Self::Clear {
             local,

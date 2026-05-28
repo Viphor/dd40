@@ -23,8 +23,8 @@ pub struct Character;
 /// Walking speed of the character in world units per second.
 ///
 /// The character controller multiplies this by
-/// [`CharacterController::sprint_multiplier`] when
-/// [`CharacterInput::sprint`] is `true`.
+/// `CharacterController::sprint_multiplier` when
+/// `CharacterInput::sprint` is `true`.
 #[derive(Debug, Component, Reflect)]
 #[reflect(Component)]
 pub struct MovementSpeed(pub f32);
@@ -37,7 +37,7 @@ impl Default for MovementSpeed {
 
 /// Upward velocity (world units per second) applied on a successful jump.
 ///
-/// Entities **without** this component cannot jump — [`CharacterInput::jump`]
+/// Entities **without** this component cannot jump — `CharacterInput::jump`
 /// is silently ignored when `JumpImpulse` is absent.  This makes jump
 /// capability opt-in so non-player physics bodies don't accidentally gain it.
 #[derive(Debug, Clone, Copy, Component, Reflect)]

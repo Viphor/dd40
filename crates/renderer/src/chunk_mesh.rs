@@ -11,8 +11,8 @@
 //!    faces of the same [`BlockId`] are merged into maximal rectangles
 //!    ([`MergedQuad`]s).
 //!
-//! The resulting `Vec<MergedQuad>` is passed to [`MeshBuilder`] by the caller
-//! ([`systems`]) to produce the final Bevy [`Mesh`].
+//! The resulting `Vec<MergedQuad>` is passed to `MeshBuilder` by the caller
+//! (`systems`) to produce the final Bevy `Mesh`.
 
 use dd40_core::{
     block::{BlockId, BlockRegistry},
@@ -32,7 +32,7 @@ use crate::{
 ///
 /// The returned quads are in chunk-local coordinates (not world coordinates).
 /// The caller is responsible for translating them to world space using
-/// [`MeshBuilder`].
+/// `MeshBuilder`.
 ///
 /// # Arguments
 ///

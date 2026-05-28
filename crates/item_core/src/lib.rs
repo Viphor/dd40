@@ -11,13 +11,13 @@
 //! # The moddable seam
 //!
 //! Gameplay systems (mining, placement, "use item") read a single component:
-//! [`ActiveItem`][plugin::ActiveItem]. Inventory crates write that component
+//! `ActiveItem`. Inventory crates write that component
 //! from whatever internal storage they prefer, and may handle
-//! [`RequestActiveItem`][plugin::RequestActiveItem] to switch what is active.
+//! `RequestActiveItem` to switch what is active.
 //! Replacing the inventory crate therefore requires no changes elsewhere.
 //!
 //! [`ActiveItem`]: crate::active_item::ActiveItem
-//! [`RequestActiveItem`]: crate::plugin::RequestActiveItem
+//! `RequestActiveItem`: crate::plugin::RequestActiveItem
 
 pub mod active_item;
 pub mod messages;

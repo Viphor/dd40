@@ -5,7 +5,7 @@
 //! Because every block occupies exactly one 1×1×1 unit cell we can resolve
 //! collisions in **O(1) per axis** rather than building a broad-phase pipeline:
 //!
-//! 1. From the entity's [`Aabb`] and [`TentativePosition`] compute the set of
+//! 1. From the entity's `Aabb` and `TentativePosition` compute the set of
 //!    integer block coordinates the AABB *could* overlap (a small bounding
 //!    box in block-integer space, typically 2–4 cells per axis).
 //! 2. For **each axis independently** (Y first so the grounded flag is correct,
@@ -13,7 +13,7 @@
 //!    tentative position, find the nearest blocking cell along that axis, and
 //!    stop there.
 //! 3. Look up each candidate block in [`ChunkCache`] in O(1) (hash-map
-//!    lookup by [`ChunkPos`] then array-indexed local lookup).
+//!    lookup by `ChunkPos` then array-indexed local lookup).
 //! 4. Check the registered [`CollisionShape`] for that block (falling back to
 //!    [`CollisionShape::FullCube`] for solid blocks and [`CollisionShape::None`]
 //!    for non-solid blocks).

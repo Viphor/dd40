@@ -1,15 +1,15 @@
 //! Server-side spawn logic — resolves a player's starting position and
 //! pre-streams the surrounding chunks when they connect.
 //!
-//! When lightyear adds a [`LinkOf`] component to a connection entity (i.e. a
-//! client has completed its handshake) the [`send_spawn_location`] system
+//! When lightyear adds a `LinkOf` component to a connection entity (i.e. a
+//! client has completed its handshake) the `send_spawn_location` system
 //! fires. It:
 //!
 //! 1. Resolves the player's spawn position from [`PlayerLocations`], falling
 //!    back to [`WorldSpawnConfig::default_spawn`] for first-time players.
-//! 2. Sends a [`PlayerSpawnLocation`] message to that client so it knows
+//! 2. Sends a `PlayerSpawnLocation` message to that client so it knows
 //!    where to place the player entity and which chunks to expect.
-//! 3. Queues 9 [`RequestChunk`] messages (3×3 grid centred on the spawn
+//! 3. Queues 9 `RequestChunk` messages (3×3 grid centred on the spawn
 //!    position) through the existing chunk pipeline so the server begins
 //!    loading/generating them immediately.
 

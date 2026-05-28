@@ -31,8 +31,8 @@ use crate::controller;
 /// - Ensures [`CorePlugin`], [`CharacterCorePlugin`], and
 ///   [`PhysicsCorePlugin`] are added.
 /// - Registers [`controller::apply_character_controller`] in
-///   [`FixedUpdate`] between [`dd40_physics_core::PhysicsSet::InputSync`]
-///   and [`dd40_physics_core::PhysicsSet::Integrate`].
+///   `FixedUpdate` between `dd40_physics_core::PhysicsSet::InputSync`
+///   and `dd40_physics_core::PhysicsSet::Integrate`.
 #[derive(Default)]
 pub struct IntegrationCharacterPhysicsPlugin;
 

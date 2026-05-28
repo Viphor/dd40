@@ -4,7 +4,7 @@
 //! future block-interaction behaviours (levers, buttons, opening containers)
 //! will plug in. For now the system is a stub that simply consumes the
 //! `interact` flag every tick where it was `true`, mirroring how `place` is
-//! consumed by [`crate::placement::try_place_block`].
+//! consumed by `crate::placement::try_place_block`.
 //!
 //! The point of landing the system now — even as a stub — is that the
 //! protocol/replication shape and the input layer's translation policy are

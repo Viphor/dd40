@@ -1,7 +1,7 @@
 //! Builder extension trait for adding a physics body to any builder.
 //!
 //! [`CharacterPhysicsExt`] is a blanket-implemented extension trait on
-//! [`AddExtra`][dd40_core::builder_extra::AddExtra]: any builder type that
+//! [`AddExtra`]: any builder type that
 //! supports the extras protocol gains [`CharacterPhysicsExt::with_physics`]
 //! and [`CharacterPhysicsExt::with_physics_config`] for free, without that
 //! builder's crate having to know about `dd40_physics_core`.
@@ -56,7 +56,7 @@ impl Default for CharacterPhysicsConfig {
 }
 
 /// Adds a physics body bundle to any builder that implements
-/// [`AddExtra`][dd40_core::builder_extra::AddExtra].
+/// [`AddExtra`].
 ///
 /// Inserts:
 ///
@@ -65,7 +65,7 @@ impl Default for CharacterPhysicsConfig {
 ///   `PhysicsPosition`. The `PhysicsPosition::on_add` hook reads the
 ///   entity's `Transform` at insert time, which is why builders should
 ///   guarantee `Transform` is present **before** running extras (see the
-///   [`AddExtra`][dd40_core::builder_extra::AddExtra] contract).
+///   [`AddExtra`] contract).
 /// - [`PhysicsCollider`] — marker enabling per-frame block collision.
 /// - [`Aabb`] — the collision shape (player-sized by default; configurable
 ///   via [`Self::with_physics_config`]).

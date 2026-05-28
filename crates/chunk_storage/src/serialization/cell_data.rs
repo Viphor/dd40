@@ -1,6 +1,6 @@
 //! Shared on-disk codec for cell-data live state and history.
 //!
-//! Used by [`v2`](super::v2) and [`v2_versioned`](super::v2_versioned).
+//! Used by `v2` and `v2_versioned`.
 //!
 //! The encoded form leans on bincode for length-prefixing and string
 //! handling, so the on-wire and on-disk representations stay in sync —
@@ -10,7 +10,7 @@
 //! # Live state record
 //!
 //! Each cell that has typed data writes one or more
-//! [`LiveCellRecord`]s.  Multiple records share a `local` when a single
+//! `LiveCellRecord`s.  Multiple records share a `local` when a single
 //! cell carries more than one `BlockData` type — there is no per-cell
 //! grouping in the file format, which keeps encoding stateless.
 //!

@@ -35,7 +35,7 @@ use dd40_item_core::active_item::ItemStack;
 /// - `velocity` — initial velocity applied to the spawned entity.
 ///   Emitters that want a scatter effect (e.g. fanning out a block's
 ///   loot table across several stacks) should bake the scatter in
-///   here, using [`GameRng`][dd40_rng::GameRng] for determinism.
+///   here, using `GameRng` for determinism.
 ///   Consumers (the spawner) apply this velocity verbatim.
 /// - `stacks` — the stacks to spawn.  Empty `stacks` is a no-op and
 ///   consumers must tolerate it.  How many entities the consumer

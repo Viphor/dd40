@@ -55,11 +55,11 @@
 //! # Async meshing pipeline
 //!
 //! Mesh building is performed off the main thread via Bevy's
-//! [`AsyncComputeTaskPool`].  Two systems collaborate:
+//! `AsyncComputeTaskPool`.  Two systems collaborate:
 //!
 //! - [`spawn_mesh_tasks`] — runs in [`RebuildChunksSet`], iterates dirty
 //!   chunks, clones chunk data and pre-collected block colors, and spawns a
-//!   [`Task<MeshData>`] for each.
+//!   `Task<MeshData>` for each.
 //! - [`apply_mesh_tasks`] — also in [`RebuildChunksSet`] (after
 //!   [`spawn_mesh_tasks`]), polls the [`PendingMeshTasks`] queue and uploads
 //!   any finished meshes to [`Assets<Mesh>`].
@@ -70,8 +70,8 @@
 //! [`LodConfig`]: crate::lod::LodConfig
 //! [`MeshData`]: crate::mesh_task::MeshData
 //! [`PendingMeshTasks`]: crate::mesh_task::PendingMeshTasks
-//! [`Mesh`]: bevy::render::mesh::Mesh
-//! [`AsyncComputeTaskPool`]: bevy::tasks::AsyncComputeTaskPool
+//! `Mesh`: bevy::render::mesh::Mesh
+//! `AsyncComputeTaskPool`: bevy::tasks::AsyncComputeTaskPool
 //! [`spawn_mesh_tasks`]: crate::systems::spawn_mesh_tasks
 //! [`apply_mesh_tasks`]: crate::systems::apply_mesh_tasks
 
@@ -137,7 +137,7 @@ pub struct RebuildChunksSet;
 ///   [`spawn_mesh_tasks`]).
 ///
 /// All `Update` systems run only while in [`AppState::Playing`] and
-/// [`GameState::Running`].
+/// `GameState::Running`.
 ///
 /// [`CorePlugin`]: dd40_core::plugin::CorePlugin
 /// [`BlockRegistry`]: dd40_core::block::BlockRegistry

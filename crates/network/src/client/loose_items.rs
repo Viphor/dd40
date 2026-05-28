@@ -4,7 +4,7 @@
 //! smoothed [`LooseItemPosition`].  Renderers (e.g.
 //! `dd40_loose_item_render`) attach their visual to the `Interpolated`
 //! entity using the regular [`LooseItem`] component, so we copy the
-//! interpolated position into [`Transform.translation`] every frame.
+//! interpolated position into `Transform.translation` every frame.
 
 use bevy::prelude::*;
 use dd40_loose_item_core::LooseItem;

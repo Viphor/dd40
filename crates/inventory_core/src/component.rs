@@ -21,8 +21,8 @@
 //!
 //! # Direct data access
 //!
-//! [`InventoryComponent::inventory`] / [`inventory_mut`] expose the
-//! underlying [`Inventory`].  Mutating via [`inventory_mut`] skips event
+//! `InventoryComponent::inventory` / `inventory_mut` expose the
+//! underlying `Inventory`.  Mutating via `inventory_mut` skips event
 //! emission — useful for pre-spawn population and batch operations
 //! where the caller wants to emit one summary event of its own.
 

@@ -1,6 +1,6 @@
 //! Server-side character replication systems.
 //!
-//! [`ServerCharacterPlugin`] is added automatically by [`NetworkCharacterPlugin`]
+//! `ServerCharacterPlugin` is added automatically by `NetworkCharacterPlugin`
 //! when the `server` feature is active.
 
 use bevy::prelude::*;
@@ -130,7 +130,7 @@ fn server_sync_state(
 
 /// Server-side character replication plugin.
 ///
-/// Registered automatically by [`NetworkCharacterPlugin`] when the `server`
+/// Registered automatically by `NetworkCharacterPlugin` when the `server`
 /// feature is active.
 pub struct ServerCharacterPlugin;
 

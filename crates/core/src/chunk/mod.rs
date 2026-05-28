@@ -66,7 +66,7 @@ impl ChunkPos {
     /// Convert a chunk-local coordinate to a world-space [`BlockPos`].
     ///
     /// This is the inverse of [`BlockPos::chunk_pos`] +
-    /// [`BlockPos::chunk_local`]: feeding the local coord of any block
+    /// `BlockPos::chunk_local`: feeding the local coord of any block
     /// inside this chunk back through `block_pos` reconstructs its
     /// world-space position.
     ///
@@ -472,10 +472,10 @@ impl Chunk {
     /// `version` is **not** bumped — both happen only when the server's
     /// authoritative commit pass acknowledges the change (or rejects it).
     ///
-    /// # Prefer [`ChunkCache::push_predicted`]
+    /// # Prefer `ChunkCache::push_predicted`
     ///
     /// This is a low-level entry point that does **not** mark the chunk
-    /// dirty in the [`ChunkCache`]'s dirty index. The chunk-authority
+    /// dirty in the `ChunkCache`'s dirty index. The chunk-authority
     /// commit pass relies on that index to know which chunks to walk —
     /// any prediction queued via this path will be invisible to it.
     ///

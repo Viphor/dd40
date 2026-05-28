@@ -11,7 +11,7 @@ pub enum PhysicsSet {
     /// External input injection phase.
     ///
     /// Network systems (and any other non-local input source) that write to
-    /// [`CharacterInput`] must run here so the character controller always
+    /// `CharacterInput` must run here so the character controller always
     /// sees up-to-date intent before translating it into physics impulses.
     InputSync,
     /// Apply external forces (gravity, impulses) and integrate velocity into

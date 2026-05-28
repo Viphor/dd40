@@ -34,7 +34,7 @@ pub struct RequestChunk {
     pub current_version: u64,
 }
 
-/// Sent when a chunk is ready to be inserted into [`ChunkCache`].
+/// Sent when a chunk is ready to be inserted into `ChunkCache`.
 #[derive(Message, Clone, Serialize, Deserialize)]
 pub struct ChunkReady {
     pub chunk: Chunk,

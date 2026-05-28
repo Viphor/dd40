@@ -2,13 +2,13 @@
 //!
 //! # Overview
 //!
-//! Defines [`LootTable`][table::LootTable] — a runtime-rollable list of
-//! [`LootEntry`][table::LootEntry] values that produces a `Vec` of
-//! [`ItemStack`][dd40_item_core::ItemStack] when rolled against an
-//! [`RngCore`][rand::RngCore].  The table itself implements
-//! [`BlockData`][dd40_core::block::BlockData] so it can be attached as
+//! Defines [`LootTable`] — a runtime-rollable list of
+//! [`LootEntry`] values that produces a `Vec` of
+//! `ItemStack` when rolled against an
+//! `RngCore`.  The table itself implements
+//! `BlockData` so it can be attached as
 //! default block data on a
-//! [`BlockDefinition`][dd40_core::block::BlockDefinition] and looked up
+//! `BlockDefinition` and looked up
 //! at break time by a higher-tier loot system (see `dd40_loot`).
 //!
 //! # Scope

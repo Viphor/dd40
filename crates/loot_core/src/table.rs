@@ -3,13 +3,13 @@
 //! A loot table is a sequence of [`LootEntry`] values plus a
 //! [`LootMode`] that decides how they combine when rolled.  The result
 //! of a roll is a `Vec<ItemStack>` — the same shape consumed by
-//! [`DropItems`][dd40_inventory_core::DropItems] (in
+//! `DropItems` (in
 //! `dd40_inventory_core`).
 //!
 //! # Determinism
 //!
 //! `roll` takes `&mut dyn RngCore`.  Pair it with
-//! [`GameRng`][dd40_rng::GameRng] for server-side, seedable
+//! `GameRng` for server-side, seedable
 //! determinism.  All numeric ranges are inclusive on both ends so a
 //! `Range { min: 1, max: 1 }` is identical to a `Fixed { count: 1 }`.
 
@@ -112,8 +112,8 @@ pub enum LootMode {
 ///
 /// Construct via [`LootTable::new`] or [`LootTable::with_entries`],
 /// then roll via [`LootTable::roll`] passing any
-/// [`rand::RngCore`][rand::RngCore].  In server-side game code that
-/// RNG is normally [`GameRng`][dd40_rng::GameRng]; in tests use a
+/// [`rand::RngCore`].  In server-side game code that
+/// RNG is normally `GameRng`; in tests use a
 /// seeded `StdRng` for reproducibility.
 ///
 /// `LootTable` implements [`BlockData`] so it can be stored as default

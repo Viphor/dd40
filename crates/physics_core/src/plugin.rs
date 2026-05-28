@@ -14,7 +14,7 @@ use crate::{
 /// [`PhysicsConfig`] resource.
 ///
 /// This is a **foundation** plugin: it contains no game systems.  Use
-/// [`dd40_physics::PhysicsPlugin`] (or a custom alternative) to add the actual
+/// `dd40_physics::PhysicsPlugin` (or a custom alternative) to add the actual
 /// simulation systems on top of this vocabulary.
 ///
 /// Added automatically by `dd40_physics::PhysicsPlugin`.

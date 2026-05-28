@@ -6,7 +6,7 @@
 //! that [`crate::spawn::spawn_loose_items`] uses.
 //!
 //! Bucketed by the chunk whose volume contains the entity's centre
-//! point ([`ChunkPos::from(&Vec3)`]) so that unloading or reloading a
+//! point (`ChunkPos::from(&Vec3)`) so that unloading or reloading a
 //! single chunk only touches its own items.
 
 use bevy::prelude::*;

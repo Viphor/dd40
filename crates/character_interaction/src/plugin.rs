@@ -28,7 +28,7 @@ use dd40_core::chunk::ChunkAuthorityAppExt;
 /// Registers the following resources:
 /// - [`BlockInteractionConfig`] — raycast reach (gameplay-only). The
 ///   targeted-block highlight gizmo lives in
-///   [`dd40_character_gui::plugin::CharacterGuiPlugin`][^gui] and owns its
+///   `dd40_character_gui::plugin::CharacterGuiPlugin` and owns its
 ///   own render-only config.
 ///
 /// [^gui]: crate documented in the `dd40_character_gui` crate.
@@ -40,13 +40,13 @@ use dd40_core::chunk::ChunkAuthorityAppExt;
 /// Mining and placement read each character's
 /// [`ActiveItem`][dd40_item_core::active_item::ActiveItem] to determine the
 /// effective tool kind/tier and the placeable block. A character with no
-/// [`ActiveItem`] is treated as bare hands holding nothing.
+/// `ActiveItem` is treated as bare hands holding nothing.
 ///
 /// Block **placement** and **mining** do not go through request messages:
 /// the `try_place_block` and `update_mining` systems push predicted
 /// [`ChunkChange`]s onto the local [`ChunkCache`] directly. The server runs
 /// the same systems against the replicated
-/// [`CharacterInput`][dd40_character_core::components::CharacterInput] and
+/// `CharacterInput` and
 /// commits authoritatively via the chunk-authority pipeline. Other clients
 /// observe the change once the resulting `ChunkUpdate` is broadcast.
 ///

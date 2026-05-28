@@ -324,7 +324,7 @@ pub fn emit_predicted_events(
 
 /// Drains buffered cell-data predictions queued by
 /// [`ChunkCache::push_predicted_cell_data`] and publishes them as
-/// [`CellDataPredicted`] messages.
+/// `CellDataPredicted` messages.
 pub fn emit_predicted_cell_data_events(
     mut cache: ResMut<ChunkCache>,
     mut writer: MessageWriter<super::events::CellDataPredicted>,

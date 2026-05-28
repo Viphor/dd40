@@ -1,7 +1,7 @@
 /// Checks each listed plugin and adds it with [`Default::default()`] if not
 /// already present in the app.
 ///
-/// Call this at the top of every [`Plugin::build`] implementation, listing
+/// Call this at the top of every `Plugin::build` implementation, listing
 /// every direct runtime dependency.  This is the only approved way to write
 /// the auto-plugin dependency check — never write the
 /// `if !app.is_plugin_added` block by hand.

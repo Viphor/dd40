@@ -9,7 +9,7 @@ use crate::{
 /// Convenience bundle that groups the components every character entity needs
 /// at spawn time.
 ///
-/// Does **not** include [`dd40_physics_core::PhysicsBody`] — add that
+/// Does **not** include `dd40_physics_core::PhysicsBody` — add that
 /// separately when the entity should participate in the physics simulation.
 #[derive(Bundle)]
 pub struct CharacterBundle {

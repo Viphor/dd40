@@ -5,7 +5,7 @@
 //! intent to physics forces lives in
 //! `dd40_integration_character_physics::controller::apply_character_controller`,
 //! which keeps this foundation crate free of any direct dependency on
-//! [`dd40_physics_core`].
+//! `dd40_physics_core`.
 
 use bevy::prelude::*;
 

@@ -1,8 +1,8 @@
 //! Builder extension trait that adds an [`InventoryComponent`] to any
-//! [`AddExtra`][dd40_core::builder_extra::AddExtra] builder.
+//! [`AddExtra`] builder.
 //!
 //! [`CharacterInventoryExt`] is blanket-implemented on every type that
-//! implements [`AddExtra`][dd40_core::builder_extra::AddExtra], so
+//! implements [`AddExtra`], so
 //! [`CharacterBuilder`][] (in `dd40_character_core`) — and any other future
 //! builder that opts into the extras protocol — gains
 //! [`with_inventory`][CharacterInventoryExt::with_inventory] and
@@ -17,7 +17,7 @@ use crate::component::InventoryComponent;
 use crate::inventory::Inventory;
 
 /// Adds an [`InventoryComponent`] to any builder that implements
-/// [`AddExtra`][dd40_core::builder_extra::AddExtra].
+/// [`AddExtra`].
 pub trait CharacterInventoryExt {
     /// Attaches an empty [`InventoryComponent`] of the given capacity.
     fn with_inventory(self, capacity: usize) -> Self;

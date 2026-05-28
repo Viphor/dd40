@@ -4,7 +4,7 @@
 //! produce input define the keyboard / mouse / gamepad bindings that fire
 //! these actions; crates that consume input read
 //! [`ActionState<T>`](bevy_enhanced_input::prelude::ActionState) instead of
-//! polling raw [`ButtonInput`](bevy::prelude::ButtonInput).
+//! polling raw [`ButtonInput`].
 //!
 //! All actions in this module are **client-side only**: BEI evaluates them
 //! on the player's machine, `dd40_player_input` folds them into the
@@ -104,8 +104,8 @@ pub struct FreeCamDown;
 /// Internal client-only action that fires on a right-mouse-button press.
 ///
 /// Observed by `dd40_player_input` to dispatch to either
-/// [`Place`](crate::actions::Place) or
-/// [`Interact`](crate::actions::Interact) depending on whether the
+/// [`Place`] or
+/// [`Interact`] depending on whether the
 /// active item is placeable. Never bound directly to either action so the
 /// dispatch policy stays in one place.
 #[derive(Debug, InputAction)]

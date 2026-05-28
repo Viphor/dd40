@@ -54,7 +54,7 @@ use dd40_core::chunk::{CHUNK_SIZE_X, CHUNK_SIZE_Z, ChunkPos};
 /// Chunk-keyed index of all [`PhysicsCollider`] entities.
 ///
 /// Updated every [`PhysicsSet::BodyCollision`] tick from the current
-/// [`TentativePosition`]s before the pair-scan runs.
+/// `TentativePosition`s before the pair-scan runs.
 ///
 /// # Multi-chunk membership
 ///
@@ -71,7 +71,7 @@ impl PhysicsSpatialCache {
     /// Clears all entries and rebuilds the cache from the provided iterator of
     /// `(entity, world-space foot-origin, aabb)` tuples.
     ///
-    /// This is called once per fixed tick by [`update_physics_spatial_cache`].
+    /// This is called once per fixed tick by `update_physics_spatial_cache`.
     pub fn rebuild<'a>(&mut self, entries: impl Iterator<Item = (Entity, Vec3, &'a Aabb)>) {
         self.chunks.clear();
 

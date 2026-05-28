@@ -31,7 +31,7 @@ use crate::{
 ///
 /// # Loading integration
 ///
-/// During [`AppState::Loading`] this plugin holds two keys in [`LoadingTracker`]:
+/// During `AppState::Loading` this plugin holds two keys in `LoadingTracker`:
 ///
 /// 1. `"network:server_connection"` — cleared once the lightyear handshake
 ///    completes and the server sends a [`PlayerSpawnLocation`] message.

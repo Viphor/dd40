@@ -63,7 +63,7 @@ impl ItemStack {
 
 /// The item a character is currently holding.
 ///
-/// Attach to any [`Character`][dd40_character_core::components::Character]
+/// Attach to any `Character`
 /// entity.  Gameplay systems read this component to determine behaviour:
 ///
 /// - **Mining** looks up the contained item's

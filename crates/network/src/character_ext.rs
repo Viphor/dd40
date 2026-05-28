@@ -1,7 +1,7 @@
 //! Extension traits adding networking capabilities to a character builder.
 //!
 //! These traits are implemented as blanket impls on any
-//! [`AddExtra`](dd40_core::builder_extra::AddExtra) type, so they apply to
+//! [`AddExtra`] type, so they apply to
 //! [`CharacterBuilder`](dd40_character_core::builder::CharacterBuilder) without
 //! requiring `dd40_network` to depend on `dd40_character_core` directly via the
 //! builder type — the dependency is on the protocol abstraction.
@@ -44,7 +44,7 @@ pub trait CharacterServerNetworkExt: Sized {
     ///
     /// Inserts:
     /// - [`NetworkCharacter`](crate::protocol::NetworkCharacter) marker.
-    /// - [`ActionState<PlayerInput>`] so lightyear can buffer the controlling
+    /// - `ActionState<PlayerInput>` so lightyear can buffer the controlling
     ///   client's inputs into it each tick.
     /// - [`PlayerPosition`](crate::protocol::PlayerPosition) and
     ///   [`PlayerRotation`](crate::protocol::PlayerRotation), seeded from
@@ -117,7 +117,7 @@ pub trait CharacterClientNetworkExt: Sized {
     /// - [`InputMarker<PlayerInput>`](lightyear::prelude::input::native::InputMarker)
     ///   so lightyear knows this client controls the entity.
     /// - [`Player`](dd40_character_core::components::Player) marker.
-    /// - [`PhysicsInterpolationData`] seeded so the first render frame shows
+    /// - `PhysicsInterpolationData` seeded so the first render frame shows
     ///   the entity at the spawn position.
     ///
     /// Action entities + bindings are spawned by `dd40_player_input` when

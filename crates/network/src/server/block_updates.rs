@@ -9,7 +9,7 @@
 //! Clients outside that radius do not need to keep their cached chunk in
 //! sync until they re-enter the radius — at which point their handshake
 //! re-issues a `RequestChunk { current_version }` and the server replies
-//! with either a catch-up [`ChunkUpdate`] or a [`ChunkSnapshot`].
+//! with either a catch-up `ChunkUpdate` or a `ChunkSnapshot`.
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;

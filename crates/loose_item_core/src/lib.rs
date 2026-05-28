@@ -17,7 +17,7 @@
 //!
 //! # Usage
 //!
-//! Add [`plugin::LooseItemCorePlugin`] to your [`App`] to register the
+//! Add `plugin::LooseItemCorePlugin` to your `App` to register the
 //! types and resource defaults:
 //!
 //! ```no_run

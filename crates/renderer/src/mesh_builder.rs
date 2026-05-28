@@ -10,7 +10,7 @@
 //! |------------------------|---------------|------------------------------------|
 //! | `ATTRIBUTE_POSITION`   | `[f32; 3]`    | world-space corner positions       |
 //! | `ATTRIBUTE_NORMAL`     | `[f32; 3]`    | constant per face direction        |
-//! | `ATTRIBUTE_UV_0`       | `[f32; 2]`    | [0,1] across the quad              |
+//! | `ATTRIBUTE_UV_0`       | ``f32; 2``    | `0,1` across the quad              |
 //! | `ATTRIBUTE_COLOR`      | `[f32; 4]`    | linear RGBA from `BlockDefinition` |
 //!
 //! # Coordinate conventions
@@ -105,7 +105,7 @@ impl MeshBuilder {
     ///
     /// * `quad`     — the greedy quad to emit
     /// * `registry` — block registry used to fetch the color for the quad's
-    ///   [`BlockId`]
+    ///   `BlockId`
     pub fn add_quad(&mut self, quad: &MergedQuad, registry: &BlockRegistry) {
         let color = match registry.get(quad.block_id) {
             Some(def) => linear_rgba(def.color),

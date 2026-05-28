@@ -61,7 +61,7 @@ pub(crate) fn loose_item_bundle(
 /// (splitting oversized stacks at the item's `max_stack`).
 ///
 /// Each spawned entity carries the components produced by
-/// [`loose_item_bundle`], with timers initialised from
+/// `loose_item_bundle`, with timers initialised from
 /// [`LooseItemConfig`].
 ///
 /// Runs in [`LooseItemSet::Spawn`](dd40_loose_item_core::LooseItemSet::Spawn).

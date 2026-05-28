@@ -1,6 +1,6 @@
 //! Client-side character replication systems.
 //!
-//! [`ClientCharacterPlugin`] is added automatically by [`NetworkCharacterPlugin`]
+//! `ClientCharacterPlugin` is added automatically by `NetworkCharacterPlugin`
 //! when the `client` feature is active.
 //!
 //! # Architecture
@@ -11,22 +11,22 @@
 //! |-----------|------|
 //! | [`PlayerPosition`] | Network / rollback truth — lightyear checkpoints and restores this |
 //! | [`PhysicsPosition`] | Physics truth — the pipeline reads and writes this each tick |
-//! | [`Transform`] | Visual truth — set by [`apply_frame_interpolation`] in `Update` |
+//! | `Transform` | Visual truth — set by `apply_frame_interpolation` in `Update` |
 //!
 //! Each `FixedUpdate` tick:
-//! 1. [`restore_and_record_previous`] detects rollbacks by comparing `PlayerPosition`
+//! 1. `restore_and_record_previous` detects rollbacks by comparing `PlayerPosition`
 //!    (restored to the confirmed checkpoint by lightyear) against `PhysicsPosition`
-//!    (the last predicted result).  If they differ, a [`VisualCorrectionOffset`] is
+//!    (the last predicted result).  If they differ, a `VisualCorrectionOffset` is
 //!    inserted.  Then `PhysicsPosition` is synced from `PlayerPosition`.
-//! 2. [`client_apply_inputs`] forwards buffered [`PlayerInput`] into [`CharacterInput`].
+//! 2. `client_apply_inputs` forwards buffered `PlayerInput` into `CharacterInput`.
 //! 3. The physics pipeline runs.
-//! 4. [`record_and_sync_post_physics`] saves `PhysicsPosition` as `current`, then
+//! 4. `record_and_sync_post_physics` saves `PhysicsPosition` as `current`, then
 //!    copies it back to `PlayerPosition` so lightyear records the new prediction.
 //!
 //! Each render frame (`Update`):
-//! - [`apply_frame_interpolation`] blends `previous` → `current` using the
+//! - `apply_frame_interpolation` blends `previous` → `current` using the
 //!   fixed-timestep overstep fraction and adds and decays any active
-//!   [`VisualCorrectionOffset`].
+//!   `VisualCorrectionOffset`.
 
 use bevy::{prelude::*, time::Fixed};
 use dd40_character_core::{
@@ -54,9 +54,9 @@ use crate::{
 /// Stores the [`PhysicsPosition`] from the two most recent physics ticks for
 /// sub-tick frame interpolation.
 ///
-/// Updated each `FixedUpdate` by [`restore_and_record_previous`] (writes
-/// `previous`) and [`record_and_sync_post_physics`] (writes `current`).
-/// Read each render frame by [`apply_frame_interpolation`].
+/// Updated each `FixedUpdate` by `restore_and_record_previous` (writes
+/// `previous`) and `record_and_sync_post_physics` (writes `current`).
+/// Read each render frame by `apply_frame_interpolation`.
 #[derive(Component)]
 pub struct PhysicsInterpolationData {
     /// Physics position at the **start** of the most recent tick (end of the
@@ -362,7 +362,7 @@ fn sync_local_rotation(mut query: Query<(&CharacterInput, &mut PlayerRotation), 
 
 /// Client-side character replication plugin.
 ///
-/// Registered automatically by [`NetworkCharacterPlugin`] when the `client`
+/// Registered automatically by `NetworkCharacterPlugin` when the `client`
 /// feature is active.
 pub struct ClientCharacterPlugin;
 

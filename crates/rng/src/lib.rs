@@ -10,7 +10,7 @@
 //!
 //! # Why a plugin and not a thread-local
 //!
-//! A Bevy [`Resource`] makes the RNG visible to schedule analysis: systems
+//! A Bevy `Resource` makes the RNG visible to schedule analysis: systems
 //! that touch [`GameRng`] cannot run in parallel with one another, which is
 //! exactly the behaviour you want for deterministic replay if the RNG ever
 //! becomes seeded.

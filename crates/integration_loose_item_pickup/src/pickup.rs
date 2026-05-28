@@ -1,11 +1,11 @@
 //! Pickup system: turn `BodyBodyContact` between a character with
-//! [`Inventory`] and a [`LooseItem`] into an inventory insert.
+//! `Inventory` and a [`LooseItem`] into an inventory insert.
 //!
 //! # Behaviour
 //!
 //! 1. Each tick, walk the [`BodyBodyContact`] message stream and
 //!    collect candidate `(character, loose_item)` pairs where:
-//!    - one side is a [`Character`] with an [`Inventory`];
+//!    - one side is a [`Character`] with an `Inventory`;
 //!    - the other side is a [`LooseItem`];
 //!    - the [`LooseItem`]'s [`PickupCooldown`] has elapsed.
 //!
@@ -15,16 +15,16 @@
 //!    the item's [`PhysicsPosition`] wins.  Exact ties go to the
 //!    lower [`Entity::index()`].
 //!
-//! 3. Try [`Inventory::insert_stack`].  If the entire stack fits,
+//! 3. Try `Inventory::insert_stack`.  If the entire stack fits,
 //!    despawn the loose entity.  If only part fits, shrink the
 //!    loose stack to the leftover and leave it on the ground.  If
 //!    nothing fits, the entity is untouched.
 //!
-//! [`Character`]: dd40_character_core::Character
-//! [`Inventory`]: dd40_inventory_core::inventory::Inventory
+//! `Character`: dd40_character_core::Character
+//! `Inventory`: dd40_inventory_core::inventory::Inventory
 //! [`LooseItem`]: dd40_loose_item_core::LooseItem
 //! [`PickupCooldown`]: dd40_loose_item_core::PickupCooldown
-//! [`PhysicsPosition`]: dd40_physics_core::PhysicsPosition
+//! `PhysicsPosition`: dd40_physics_core::PhysicsPosition
 
 use std::collections::HashMap;
 

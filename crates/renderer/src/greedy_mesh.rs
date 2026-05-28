@@ -20,7 +20,7 @@
 //! 3. Emit a [`MergedQuad`] and zero-out the consumed cells in the mask.
 //! 4. Repeat until the mask is exhausted.
 //!
-//! The caller ([`chunk_mesh`]) drives this per-direction, per-layer loop and
+//! The caller (`chunk_mesh`) drives this per-direction, per-layer loop and
 //! assembles the full set of quads for a chunk.
 
 use dd40_core::block::BlockId;

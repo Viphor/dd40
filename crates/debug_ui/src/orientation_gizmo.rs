@@ -20,7 +20,7 @@
 //! composites on top of the 3-D scene.  It is assigned to a private
 //! [`RenderLayers`] layer so it only sees the gizmo geometry and labels.
 //!
-//! Every frame [`draw_orientation_gizmo`] reads the main [`Camera3d`]
+//! Every frame `draw_orientation_gizmo` reads the main `Camera3d`
 //! rotation, projects each axis direction into camera space, converts the
 //! result to 2-D screen coordinates anchored in the bottom-right corner, and
 //! draws lines + arrowheads via [`Gizmos`].  Cardinal labels are rendered as

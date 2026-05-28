@@ -28,7 +28,7 @@
 //! - In memory by [`std::any::TypeId`] — the fast path.
 //! - On the wire / on disk by the string returned from
 //!   [`std::any::type_name::<T>`] — recorded at registration time and
-//!   sent inside [`NetworkedChunkChange`](crate::chunk::NetworkedChunkChange)
+//!   sent inside `NetworkedChunkChange`
 //!   (forthcoming) and chunk save files.
 //!
 //! Implementations of [`BlockData::type_key`] **must** return the same

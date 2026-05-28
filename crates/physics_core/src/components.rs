@@ -167,7 +167,7 @@ impl Velocity {
 /// - `0.0` — flying / no gravity
 /// - negative — inverted gravity
 ///
-/// The gravity constant itself lives in [`PhysicsConfig`].
+/// The gravity constant itself lives in `PhysicsConfig`.
 #[derive(Debug, Clone, Copy, Component, Reflect)]
 #[reflect(Component)]
 pub struct GravityScale(pub f32);
@@ -183,7 +183,7 @@ impl Default for GravityScale {
 /// Tracks whether the entity is resting on a solid surface.
 ///
 /// Set to `true` by the block-collision solver on Y-axis landing. Reset to
-/// `false` at the start of each [`PhysicsSet::Integrate`] frame. Use this to
+/// `false` at the start of each `PhysicsSet::Integrate` frame. Use this to
 /// determine whether a jump impulse may be applied.
 #[derive(Debug, Default, Clone, Copy, Component, Reflect)]
 #[reflect(Component)]
@@ -205,7 +205,7 @@ impl Grounded {
 ///
 /// This is the single source of truth for the physics solver. The pipeline
 /// reads it at the start of each tick and writes the resolved position back in
-/// [`PhysicsSet::Finalise`].
+/// `PhysicsSet::Finalise`.
 ///
 /// [`Transform`] is a **visual-only** output. For networked predicted entities,
 /// the network bridge overrides [`Transform`] in `Update` with a
@@ -234,7 +234,7 @@ impl PhysicsPosition {
 // ---------------------------------------------------------------------------
 
 /// Accumulates instantaneous velocity changes to be flushed at the start of
-/// the next [`PhysicsSet::Integrate`] tick.
+/// the next `PhysicsSet::Integrate` tick.
 ///
 /// Any system may add to this — the character controller, explosion knockback,
 /// ability systems, etc. The integration stage flushes it into [`Velocity`]
@@ -254,7 +254,7 @@ pub struct Impulse(pub Vec3);
 ///
 /// **Important:** [`Aabb`] is NOT auto-inserted because its dimensions are
 /// entity-specific.  You must add an [`Aabb`] yourself, otherwise
-/// [`PhysicsSet::BlockCollision`] will silently skip the entity and it will
+/// `PhysicsSet::BlockCollision` will silently skip the entity and it will
 /// fall through all geometry.
 ///
 /// Entities that should collide with other characters should also add

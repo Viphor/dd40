@@ -1,6 +1,6 @@
 //! Server-side replication for [`LooseItem`] entities.
 //!
-//! Loose items are spawned by [`dd40_loose_items`] without any
+//! Loose items are spawned by `dd40_loose_items` without any
 //! networking concern.  This module bridges those entities into
 //! lightyear by:
 //!

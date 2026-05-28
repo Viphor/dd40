@@ -15,7 +15,7 @@ use crate::{
 /// How long the client will wait for the initial spawn chunks before giving up
 /// and transitioning to [`AppState::Playing`] anyway.
 ///
-/// Override [`SpawnChunkTimeout`] after adding [`ClientNetworkPlugin`] to use
+/// Override `SpawnChunkTimeout` after adding `ClientNetworkPlugin` to use
 /// a different value.
 pub const DEFAULT_SPAWN_CHUNK_TIMEOUT_SECS: f32 = 15.0;
 
@@ -29,7 +29,7 @@ pub struct ClientId(u64);
 /// Tracks which of the initial spawn chunks are still pending during the
 /// loading phase.
 ///
-/// Inserted when a [`PlayerSpawnLocation`] message arrives (at which point the
+/// Inserted when a `PlayerSpawnLocation` message arrives (at which point the
 /// client derives the expected 3×3 [`ChunkPos`] grid) and removed once every
 /// one of those chunks has been received — or when the timeout fires.
 ///
@@ -46,7 +46,7 @@ pub struct InitialChunksGate {
 /// before forcibly releasing the loading gate.
 ///
 /// Inserted with a [`DEFAULT_SPAWN_CHUNK_TIMEOUT_SECS`] default by
-/// [`ClientNetworkPlugin`]. Override it after adding the plugin to change the
+/// `ClientNetworkPlugin`. Override it after adding the plugin to change the
 /// timeout for your project.
 ///
 /// # Example

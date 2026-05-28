@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-/// A [`ChunkProvider`] that reads and writes chunks as binary files on disk.
+/// A `ChunkProvider` that reads and writes chunks as binary files on disk.
 ///
 /// Each chunk is stored at `<dir>/chunk_<x>_<y>_<z>.bin`.
 /// Loading is performed on a background thread so the main thread is never

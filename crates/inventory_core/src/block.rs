@@ -55,7 +55,7 @@ pub struct BlockInventoryChanged {
 
 /// [`Inventory`] living against a specific block cell.
 ///
-/// Stored in the chunk's [`BlockDataTypeRegistry`]-driven cell-data
+/// Stored in the chunk's `BlockDataTypeRegistry`-driven cell-data
 /// table — see
 /// [`Chunk::insert_cell_data`](dd40_core::chunk::Chunk) for the
 /// machinery.

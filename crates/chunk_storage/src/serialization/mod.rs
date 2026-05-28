@@ -33,7 +33,7 @@
 //! 2. Add a variant to [`ChunkVersion`] with a fresh `u16` discriminant.
 //! 3. Add an arm to the `match` blocks in [`serialize_chunk_versioned`] and
 //!    [`deserialize_chunk`].
-//! 4. Update [`LATEST_VERSION`] if the new variant should be the default.
+//! 4. Update `LATEST_VERSION` if the new variant should be the default.
 
 use std::io::{self, Read, Write};
 

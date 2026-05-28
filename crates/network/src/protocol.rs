@@ -45,7 +45,7 @@ pub struct EventChannel;
 /// input layer decide per right-click while the interaction/placement systems
 /// stay agnostic.
 ///
-/// [`Predicted`]: lightyear::prelude::client::Predicted
+/// `Predicted`: lightyear::prelude::client::Predicted
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Reflect)]
 pub struct PlayerInput {
     /// Movement direction in world space (normalised or zero).
@@ -56,9 +56,9 @@ pub struct PlayerInput {
     pub yaw: f32,
     /// Whether the player wants to jump this tick.
     pub jump: bool,
-    /// Whether the player is sprinting (doubles [`MovementSpeed`]).
+    /// Whether the player is sprinting (doubles `MovementSpeed`).
     ///
-    /// [`MovementSpeed`]: dd40_core::character::MovementSpeed
+    /// `MovementSpeed`: dd40_core::character::MovementSpeed
     pub sprint: bool,
     /// Continuous primary-action intent. Held while the player wants to
     /// mine (and, eventually, melee-attack).
@@ -106,11 +106,11 @@ pub struct RequestSpawn(pub u64);
 /// then streams this message followed by the 9 surrounding [`RequestChunk`]
 /// responses through the normal chunk pipeline.
 ///
-/// The client uses this position to seed [`InitialChunksGate`] with the
+/// The client uses this position to seed `InitialChunksGate` with the
 /// expected 3×3 chunk grid and to place the player entity once all chunks
 /// have arrived.
 ///
-/// [`InitialChunksGate`]: crate::client::InitialChunksGate
+/// `InitialChunksGate`: crate::client::InitialChunksGate
 #[derive(Message, Clone, Serialize, Deserialize, Debug)]
 pub struct PlayerSpawnLocation {
     /// World-space position the player should spawn at.
@@ -197,8 +197,8 @@ pub struct ChunkSnapshot {
 /// [`Interpolated`] copies.  Client systems filter on `With<NetworkCharacter>`
 /// to locate the right entities without depending on any other crate.
 ///
-/// [`Predicted`]: lightyear::prelude::client::Predicted
-/// [`Interpolated`]: lightyear::prelude::client::Interpolated
+/// `Predicted`: lightyear::prelude::client::Predicted
+/// `Interpolated`: lightyear::prelude::client::Interpolated
 #[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq, Default, Reflect)]
 #[reflect(Component)]
 pub struct NetworkCharacter;

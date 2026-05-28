@@ -18,7 +18,7 @@ use crate::block_highlight::{BlockHighlightConfig, draw_targeted_block_highlight
 ///
 /// - [`BlockHighlightConfig`] — render-only colours for the highlight and
 ///   mining break overlay.
-/// - [`draw_targeted_block_highlight`] — wireframe cuboid around the local
+/// - `draw_targeted_block_highlight` — wireframe cuboid around the local
 ///   player's targeted block, gated on
 ///   [`AppState::Playing`] + [`GameState::Running`].
 ///

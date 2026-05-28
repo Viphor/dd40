@@ -82,7 +82,7 @@ impl ChunkEntry {
 ///
 /// # Usage
 ///
-/// Systems that produce new chunk data (e.g. [`systems::mark_dirty_on_chunk_ready`])
+/// Systems that produce new chunk data (e.g. `systems::mark_dirty_on_chunk_ready`)
 /// call [`ChunkRenderState::mark_dirty`].  The mesh-rebuild system queries
 /// [`ChunkRenderState::dirty_chunks`] each frame and calls
 /// [`ChunkRenderState::clear_dirty`] after rebuilding.

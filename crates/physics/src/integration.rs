@@ -7,7 +7,7 @@
 //! 2. Applying gravitational acceleration to [`Velocity`] (scaled by
 //!    [`GravityScale`]).
 //! 3. Clamping downward speed to [`PhysicsConfig::terminal_velocity`].
-//! 4. Writing `current_position + velocity * dt` into [`TentativePosition`]
+//! 4. Writing `current_position + velocity * dt` into `TentativePosition`
 //!    so the collision stages have a scratch value to refine.
 //!
 //! Nothing in this module touches [`Transform`] directly — that write happens

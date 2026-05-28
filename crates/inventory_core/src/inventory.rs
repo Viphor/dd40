@@ -9,7 +9,7 @@
 //! - [`InventoryComponent`](crate::component::InventoryComponent) — an
 //!   ECS component attached to an entity, where each mutation fires an
 //!   [`InventoryChanged`](crate::component::InventoryChanged) event
-//!   carrying the holder [`Entity`](bevy::prelude::Entity).
+//!   carrying the holder [`Entity`].
 //! - [`BlockInventory`](crate::block::BlockInventory) — a typed
 //!   [`BlockData`](dd40_core::block::BlockData) attached to a specific
 //!   block cell (chests, hoppers, furnaces, ...), where each mutation
@@ -101,7 +101,7 @@ impl std::error::Error for InsertError {}
 /// cell.
 ///
 /// Use [`Inventory::with_capacity`] to construct.  The
-/// [`Default`][std::default::Default] impl yields a zero-capacity
+/// [`Default`] impl yields a zero-capacity
 /// inventory.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Reflect, Serialize, Deserialize)]
 pub struct Inventory {

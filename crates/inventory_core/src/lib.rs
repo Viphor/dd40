@@ -9,7 +9,7 @@
 //!   exposes mutators that return per-slot diffs
 //!   ([`SlotChange`][inventory::SlotChange]) and do nothing ECS-aware.
 //! - [`InventoryComponent`][component::InventoryComponent] — Bevy
-//!   [`Component`][bevy::prelude::Component] wrapping an [`Inventory`].
+//!   `Component` wrapping an `Inventory`.
 //!   Mutators take `&mut Commands` and the holder entity, and trigger
 //!   [`InventoryChanged`][component::InventoryChanged] on every
 //!   non-empty diff.  This is the wrapper to use for characters, mobs,
@@ -22,13 +22,13 @@
 //!   hoppers, furnaces, droppers — anything that lives inside a block
 //!   cell rather than on an entity.
 //!
-//! Both wrappers share the same underlying [`Inventory`], so item-flow
+//! Both wrappers share the same underlying `Inventory`, so item-flow
 //! logic written against `&mut Inventory` works against either.
 //!
 //! # Why a targeted event, not just `Changed<InventoryComponent>`
 //!
-//! The per-slot diff carried on [`InventoryChanged`] /
-//! [`BlockInventoryChanged`] is the only signal that fires **only** on
+//! The per-slot diff carried on `InventoryChanged` /
+//! `BlockInventoryChanged` is the only signal that fires **only** on
 //! actual content changes — Bevy's
 //! [`Changed<T>`][bevy::ecs::query::Changed] filter triggers on every
 //! mutable borrow, including borrows that ended up writing nothing.
@@ -38,7 +38,7 @@
 //! # Escape hatch
 //!
 //! Both wrappers expose `inventory_mut()` to reach the inner
-//! [`Inventory`] directly.  Mutations made through that handle skip
+//! `Inventory` directly.  Mutations made through that handle skip
 //! event emission entirely.  Useful for pre-spawn population, batch
 //! operations, and tests; for player-facing mutations call the
 //! event-firing methods on the wrapper.

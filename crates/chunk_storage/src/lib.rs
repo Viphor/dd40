@@ -1,6 +1,6 @@
 //! Disk-backed chunk provider for the dd40 voxel engine.
 //!
-//! This crate wires [`dd40_core::ChunkProvider`] to the local filesystem.
+//! This crate wires `dd40_core::ChunkProvider` to the local filesystem.
 //! Each chunk is stored as an individual binary file named `chunk_X_Z.bin`
 //! inside a configurable directory.
 //!

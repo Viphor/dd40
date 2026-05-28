@@ -243,8 +243,8 @@ impl LoadingTracker {
 ///
 /// - Inserts the [`LoadingTracker`] resource.
 /// - Defines the [`LoadingSet`] system set (runs during `Startup`).
-/// - Runs a per-frame system (only while in [`AppState::Loading`]) that
-///   transitions to [`AppState::Playing`] as soon as [`LoadingTracker`] is
+/// - Runs a per-frame system (only while in `AppState::Loading`) that
+///   transitions to `AppState::Playing` as soon as `LoadingTracker` is
 ///   empty.
 ///
 /// # Usage

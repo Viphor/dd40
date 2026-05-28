@@ -39,7 +39,7 @@
 //! enforces replaceability;
 //! [`character_collision_validator`](crate::validators::character_collision_validator)
 //! enforces that no character occupies the target cell. Both run in
-//! [`ChunkAuthoritySet::Validate`] before the commit pass.
+//! `ChunkAuthoritySet::Validate` before the commit pass.
 //!
 //! # Source of the placement block
 //!

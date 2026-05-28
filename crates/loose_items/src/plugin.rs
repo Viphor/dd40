@@ -15,7 +15,7 @@ use crate::persister::{LOOSE_ITEM_KIND, LooseItemPersister};
 use crate::spawn::{spawn_loose_items, tick_lifetimes};
 
 /// Server-side plugin: spawns loose items from
-/// [`DropItems`](dd40_inventory_core::DropItems) messages and ticks
+/// `DropItems` messages and ticks
 /// their despawn + cooldown timers.
 ///
 /// Add this to the **server** binary only. Clients receive loose
