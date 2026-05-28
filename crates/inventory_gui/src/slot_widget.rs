@@ -87,6 +87,13 @@ pub fn spawn_slot_widget(
                 height: Val::Px(size),
                 margin: UiRect::all(Val::Px(SLOT_GAP / 2.0)),
                 border: UiRect::all(Val::Px(2.0)),
+                // Provide a positioned containing block for the
+                // absolutely-positioned icon + count children, and
+                // explicitly opt out of the parent row's flexbox so
+                // sibling slots cannot collapse onto the same cell.
+                position_type: PositionType::Relative,
+                flex_shrink: 0.0,
+                flex_grow: 0.0,
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::FlexEnd,
                 ..default()
@@ -95,14 +102,19 @@ pub fn spawn_slot_widget(
             BackgroundColor(SLOT_BACKGROUND),
         ))
         .with_children(|slot| {
-            // Icon node: full-size, drawn behind the count text.
+            // Icon node: fills the slot, drawn behind the count text.
+            // Anchors must be explicit — an absolute child with only
+            // width/height (and no left/top/right/bottom) collapses to
+            // the parent's content-box origin in bevy_ui.
             slot.spawn((
                 Name::new("SlotIcon"),
                 SlotIconNode,
                 Node {
                     position_type: PositionType::Absolute,
-                    width: Val::Px(size - 4.0),
-                    height: Val::Px(size - 4.0),
+                    left: Val::Px(2.0),
+                    top: Val::Px(2.0),
+                    right: Val::Px(2.0),
+                    bottom: Val::Px(2.0),
                     ..default()
                 },
                 BackgroundColor(Color::NONE),
