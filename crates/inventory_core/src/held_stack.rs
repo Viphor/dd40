@@ -1,21 +1,23 @@
-//! [`HeldStack`] — the item stack the player is currently dragging with
-//! the cursor inside an inventory GUI.
+//! [`HeldStackComponent`] — the item stack a character is currently
+//! dragging with the cursor inside an inventory GUI.
 //!
-//! Foundation vocabulary.  Owned by the active inventory rules crate
-//! (e.g. `dd40_vanilla_inventory`); read by the GUI crate to render
-//! the cursor-following stack visual.
+//! Foundation vocabulary.  Mutated by the active inventory rules crate
+//! (e.g. `dd40_vanilla_inventory`); read by GUI crates to render the
+//! local player's cursor-following stack visual.
 //!
-//! `HeldStack` is intentionally a single global `Resource` and not a
-//! per-character `Component` because v1 of the inventory GUI is
-//! local-only: there is one cursor, therefore one held stack at a
-//! time.  Multi-character / split-screen variants will need to
-//! revisit this.
+//! Per-character component (rather than a global resource) so that the
+//! server can be the authority on every player's cursor and so that
+//! other clients can observe a remote player's held stack — useful
+//! for anti-cheat (server can validate placements against this value)
+//! and for future features like rendering a remote player's held item
+//! above their head.
 
-use bevy::prelude::{Component, ReflectComponent, Reflect, Resource};
+use bevy::prelude::{Component, Reflect, ReflectComponent};
 use dd40_item_core::active_item::ItemStack;
 use serde::{Deserialize, Serialize};
 
-/// The stack the player is currently dragging with the cursor, if any.
+/// Per-character held stack — the cursor stack belonging to the
+/// player who controls this `Character`.
 ///
 /// - `Some(stack)` — there is a stack on the cursor; UI crates render
 ///   it floating at the cursor position and treat clicks outside any
@@ -24,48 +26,12 @@ use serde::{Deserialize, Serialize};
 ///   into the cursor according to the rules of the active inventory
 ///   crate.
 ///
-/// Cleared automatically by the rules crate on [`crate::drop::DropItems`].
-#[derive(Resource, Default, Debug, Clone, PartialEq)]
-pub struct HeldStack(pub Option<ItemStack>);
-
-impl HeldStack {
-    /// Returns `true` when a stack is currently held.
-    pub fn is_some(&self) -> bool {
-        self.0.is_some()
-    }
-
-    /// Returns `true` when no stack is held.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_none()
-    }
-
-    /// Borrows the held stack, if any.
-    pub fn get(&self) -> Option<&ItemStack> {
-        self.0.as_ref()
-    }
-
-    /// Takes the held stack out, leaving the cursor empty.
-    pub fn take(&mut self) -> Option<ItemStack> {
-        self.0.take()
-    }
-}
-
-/// Per-character held stack — the cursor stack belonging to the
-/// player who controls this `Character`.
-///
-/// This is the server-authoritative counterpart of the legacy
-/// [`HeldStack`] resource.  The server attaches one to every
-/// character and mutates it as inventory rules execute; lightyear
-/// replicates the component to all clients so they can render *any*
-/// player's cursor stack (the local player's own UI cursor, plus any
-/// future feature like showing a remote player's held stack above
-/// their head).
+/// Cleared automatically by the rules crate on
+/// [`crate::drop::DropItems`].
 ///
 /// `SelectedHotbarSlot` deliberately stays a client-local resource —
 /// it's pure UI state and does not need to be replicated.
-#[derive(
-    Component, Default, Debug, Clone, PartialEq, Reflect, Serialize, Deserialize,
-)]
+#[derive(Component, Default, Debug, Clone, PartialEq, Reflect, Serialize, Deserialize)]
 #[reflect(Component)]
 pub struct HeldStackComponent(pub Option<ItemStack>);
 
@@ -99,12 +65,12 @@ mod tests {
 
     #[test]
     fn default_is_empty() {
-        assert!(HeldStack::default().is_empty());
+        assert!(HeldStackComponent::default().is_empty());
     }
 
     #[test]
     fn take_clears() {
-        let mut h = HeldStack(Some(ItemStack::new(
+        let mut h = HeldStackComponent(Some(ItemStack::new(
             ItemId(1),
             NonZero::new(3).expect("nz"),
         )));

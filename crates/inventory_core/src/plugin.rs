@@ -16,7 +16,7 @@ use dd40_item_core::plugin::ItemCorePlugin;
 use crate::block::BlockInventory;
 use crate::component::InventoryComponent;
 use crate::drop::DropItems;
-use crate::held_stack::HeldStack;
+use crate::held_stack::HeldStackComponent;
 use crate::selected_slot::SelectedHotbarSlot;
 use crate::slot_interaction::SlotInteraction;
 
@@ -26,10 +26,10 @@ use crate::slot_interaction::SlotInteraction;
 ///
 /// - Auto-adds [`CorePlugin`] and [`ItemCorePlugin`] via
 ///   [`ensure_plugins!`][dd40_core::ensure_plugins].
-/// - Registers [`InventoryComponent`] and [`SelectedHotbarSlot`] for reflection.
+/// - Registers [`InventoryComponent`], [`HeldStackComponent`] and
+///   [`SelectedHotbarSlot`] for reflection.
 /// - Registers [`BlockInventory`] with the block-data type registry so
 ///   chunk cell data can carry it over the wire and on disk.
-/// - Inserts the [`HeldStack`] resource (defaults to empty).
 /// - Registers the [`DropItems`] and [`SlotInteraction`] messages.
 ///
 /// [`InventoryChanged`][crate::component::InventoryChanged] and
@@ -43,9 +43,9 @@ impl Plugin for InventoryCorePlugin {
     fn build(&self, app: &mut App) {
         ensure_plugins!(app, CorePlugin, ItemCorePlugin);
         app.register_type::<InventoryComponent>();
+        app.register_type::<HeldStackComponent>();
         app.register_type::<SelectedHotbarSlot>();
         app.register_block_data::<BlockInventory>();
-        app.init_resource::<HeldStack>();
         app.add_message::<DropItems>();
         app.add_message::<SlotInteraction>();
     }
@@ -113,10 +113,18 @@ mod tests {
     }
 
     #[test]
-    fn inserts_held_stack_resource() {
+    fn registers_held_stack_component_for_reflection() {
         let mut app = App::new();
         app.add_plugins(InventoryCorePlugin);
-        let held = app.world().resource::<HeldStack>();
-        assert!(held.is_empty(), "HeldStack must default to empty");
+        let registry = app
+            .world()
+            .resource::<bevy::ecs::reflect::AppTypeRegistry>()
+            .read();
+        assert!(
+            registry
+                .get(std::any::TypeId::of::<HeldStackComponent>())
+                .is_some(),
+            "HeldStackComponent must be registered for reflection"
+        );
     }
 }

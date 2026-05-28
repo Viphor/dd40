@@ -10,8 +10,8 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use dd40_character_core::components::Player;
 use dd40_inventory_core::prelude::{
-    DropItems, HOTBAR_SIZE, HeldStack, InventoryChanged, InventoryComponent, SelectedHotbarSlot,
-    SlotChange, SlotInteraction, SlotInteractionKind,
+    DropItems, HOTBAR_SIZE, HeldStackComponent, InventoryChanged, InventoryComponent,
+    SelectedHotbarSlot, SlotChange, SlotInteraction, SlotInteractionKind,
 };
 use dd40_item_core::active_item::{ActiveItem, ItemStack};
 use dd40_item_core::registry::{ItemDefinition, ItemId, ItemRegistry};
@@ -77,10 +77,14 @@ fn mouse_wheel_shifts_hotbar_selection_and_wraps() {
 fn drop_outside_clears_held_and_emits_drop_items() {
     let mut app = make_app();
     let stack = ItemStack::new(ItemId(1), nz(3));
-    app.world_mut().resource_mut::<HeldStack>().0 = Some(stack);
     let player = app
         .world_mut()
-        .spawn((Player, InventoryComponent::with_capacity(9), Transform::default()))
+        .spawn((
+            Player,
+            InventoryComponent::with_capacity(9),
+            HeldStackComponent(Some(stack)),
+            Transform::default(),
+        ))
         .id();
     app.update(); // attach SelectedHotbarSlot + ActiveItem.
 
@@ -92,7 +96,13 @@ fn drop_outside_clears_held_and_emits_drop_items() {
         });
     app.update();
 
-    assert!(app.world().resource::<HeldStack>().is_empty());
+    assert!(
+        app.world()
+            .get::<HeldStackComponent>(player)
+            .map(|h| h.is_empty())
+            .unwrap_or(false),
+        "HeldStackComponent on player must be empty after DropOutside",
+    );
     let drops = app
         .world()
         .resource::<bevy::ecs::message::Messages<DropItems>>();

@@ -24,8 +24,8 @@ use dd40_item_core::plugin::ItemCorePlugin;
 /// - `RequestActiveItem` bridge: external requests pick a matching
 ///   hotbar slot when possible.
 /// - `SlotInteraction` apply: drains click/drop messages, mutates the
-///   targeted inventory and the global `HeldStack`, and emits
-///   `DropItems` for drop-outside intent.
+///   targeted inventory and that character's `HeldStackComponent`,
+///   and emits `DropItems` for drop-outside intent.
 /// - Observer that keeps `ActiveItem` in sync with the selected slot
 ///   when the inventory mutates.
 #[derive(Default)]

@@ -1,15 +1,17 @@
 //! Cursor-following node that renders the currently-held stack while
 //! the inventory grid is open.
 //!
-//! The held stack is owned by [`HeldStack`] in `dd40_inventory_core`.
-//! When it is non-empty, [`sync_held_cursor`] spawns (or shows) a small
+//! The held stack is owned by [`HeldStackComponent`] on the local
+//! [`Player`] entity (replicated from the server).  When it is
+//! non-empty, [`sync_held_cursor`] spawns (or shows) a small
 //! ImageNode that tracks the mouse cursor.  When the stack is cleared
 //! the node is hidden.
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use dd40_character_core::components::Player;
 use dd40_core::block::BlockRegistry;
-use dd40_inventory_core::prelude::HeldStack;
+use dd40_inventory_core::prelude::HeldStackComponent;
 use dd40_item_core::registry::ItemRegistry;
 
 use crate::icons::{ItemIcon, ItemIconCache};
@@ -20,10 +22,11 @@ use crate::slot_widget::SLOT_SIZE;
 pub struct HeldCursorNode;
 
 /// Spawns the cursor node on first run, then each frame moves it to the
-/// cursor position and updates its icon to reflect [`HeldStack`].
+/// cursor position and updates its icon to reflect the local player's
+/// [`HeldStackComponent`].
 pub fn sync_held_cursor(
     mut commands: Commands,
-    held: Res<HeldStack>,
+    player_held: Query<&HeldStackComponent, With<Player>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     items: Res<ItemRegistry>,
     blocks: Res<BlockRegistry>,
@@ -42,13 +45,15 @@ pub fn sync_held_cursor(
         return;
     };
 
-    if held.is_empty() {
-        for (entity, _, _) in &mut node {
-            commands.entity(entity).insert(Visibility::Hidden);
+    let stack = match player_held.single() {
+        Ok(held) if held.is_some() => held.0.unwrap(),
+        _ => {
+            for (entity, _, _) in &mut node {
+                commands.entity(entity).insert(Visibility::Hidden);
+            }
+            return;
         }
-        return;
-    }
-    let stack = held.0.unwrap();
+    };
 
     let icon = cache.get_or_resolve(stack.item, &items, &blocks, &asset_server);
 

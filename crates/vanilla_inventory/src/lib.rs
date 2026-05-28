@@ -7,7 +7,8 @@
 //! This crate is the **rules** half of the dd40 player inventory.  It
 //! consumes player intent (`SlotInteraction` from a GUI crate, hotbar
 //! BEI actions from `dd40_player_input`) and mutates
-//! `InventoryComponent` + `HeldStack` accordingly.  It owns no UI;
+//! `InventoryComponent` + the per-character `HeldStackComponent`
+//! accordingly.  It owns no UI;
 //! the inventory GUI is a separate Tier 1 crate
 //! (`dd40_inventory_gui`) that talks to this crate only through the
 //! foundation vocabulary in `dd40_inventory_core`.

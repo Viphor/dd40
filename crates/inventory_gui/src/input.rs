@@ -6,13 +6,13 @@
 //! press.  Shift modifier is read from [`ButtonInput<KeyCode>`].
 //!
 //! Drop-outside detection is handled by [`translate_drop_outside`]:
-//! whenever the user releases the left mouse button while [`HeldStack`]
-//! is non-empty and no slot widget is hovered, a
+//! whenever the user releases the left mouse button while the local
+//! player is holding a stack and no slot widget is hovered, a
 //! `SlotInteraction::DropOutside` is emitted.
 
 use bevy::prelude::*;
 use dd40_character_core::components::Player;
-use dd40_inventory_core::prelude::{HeldStack, SlotInteraction, SlotInteractionKind};
+use dd40_inventory_core::prelude::{HeldStackComponent, SlotInteraction, SlotInteractionKind};
 
 use crate::slot_widget::SlotKey;
 
@@ -56,14 +56,16 @@ pub fn translate_clicks(
 /// left mouse button while holding a stack and no slot widget is hovered.
 pub fn translate_drop_outside(
     mouse: Res<ButtonInput<MouseButton>>,
-    held: Res<HeldStack>,
+    player: Query<(Entity, &HeldStackComponent), With<Player>>,
     hovered: Query<&Interaction, With<SlotKey>>,
-    players: Query<Entity, With<Player>>,
     mut writer: MessageWriter<SlotInteraction>,
 ) {
     if !mouse.just_released(MouseButton::Left) {
         return;
     }
+    let Ok((player, held)) = player.single() else {
+        return;
+    };
     if held.is_empty() {
         return;
     }
@@ -73,9 +75,6 @@ pub fn translate_drop_outside(
     if any_hovered {
         return;
     }
-    let Ok(player) = players.single() else {
-        return;
-    };
     writer.write(SlotInteraction {
         character: player,
         kind: SlotInteractionKind::DropOutside,

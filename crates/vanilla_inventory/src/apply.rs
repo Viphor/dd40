@@ -1,9 +1,9 @@
 //! Apply layer: drains [`SlotInteraction`] messages and applies the
 //! [`rules`][crate::rules] resolver to the target character's
-//! [`InventoryComponent`].
+//! [`InventoryComponent`] and per-character [`HeldStackComponent`].
 //!
 //! This system is the only place outside the pure resolver where the
-//! cursor [`HeldStack`] and an `Inventory` mutate together.
+//! cursor and an `Inventory` mutate together.
 //! Drop-outside intent is consumed here as well: the held stack is
 //! emitted as a [`DropItems`] message and the cursor is cleared.
 
@@ -11,7 +11,8 @@ use std::num::NonZero;
 
 use bevy::prelude::*;
 use dd40_inventory_core::prelude::{
-    DropItems, HOTBAR_SIZE, HeldStack, InventoryComponent, SlotInteraction, SlotInteractionKind,
+    DropItems, HOTBAR_SIZE, HeldStackComponent, InventoryComponent, SlotInteraction,
+    SlotInteractionKind,
 };
 use dd40_item_core::active_item::ItemStack;
 use dd40_item_core::registry::ItemRegistry;
@@ -19,31 +20,37 @@ use dd40_item_core::registry::ItemRegistry;
 use crate::rules::{SlotClickKind, SlotResolution, resolve_slot};
 
 /// Drains [`SlotInteraction`] messages and mutates the targeted
-/// inventory + the global [`HeldStack`] accordingly.
+/// inventory + that character's [`HeldStackComponent`] accordingly.
 ///
 /// Drop-outside emits a [`DropItems`] message at the character's
 /// `Transform.translation` and clears the cursor.  In v1 there is no
 /// scatter velocity — drops appear at the player's feet.
 pub fn apply_slot_interactions(
     mut reader: MessageReader<SlotInteraction>,
-    mut held: ResMut<HeldStack>,
     mut commands: Commands,
-    mut inventories: Query<(&mut InventoryComponent, &Transform)>,
+    mut inventories: Query<(
+        &mut InventoryComponent,
+        &mut HeldStackComponent,
+        &Transform,
+    )>,
     registry: Res<ItemRegistry>,
     mut drops: MessageWriter<DropItems>,
 ) {
     for msg in reader.read() {
+        let Ok((mut inv_comp, mut held, transform)) = inventories.get_mut(msg.character) else {
+            warn!(
+                "SlotInteraction for unknown character entity {:?}",
+                msg.character
+            );
+            continue;
+        };
         match &msg.kind {
             SlotInteractionKind::DropOutside => {
                 let Some(stack) = held.take() else {
                     continue;
                 };
-                let origin = inventories
-                    .get(msg.character)
-                    .map(|(_, t)| t.translation)
-                    .unwrap_or(Vec3::ZERO);
                 drops.write(DropItems {
-                    origin,
+                    origin: transform.translation,
                     velocity: Vec3::ZERO,
                     stacks: vec![stack],
                 });
@@ -51,13 +58,6 @@ pub fn apply_slot_interactions(
             SlotInteractionKind::LeftClick { slot }
             | SlotInteractionKind::RightClick { slot }
             | SlotInteractionKind::ShiftClick { slot } => {
-                let Ok((mut inv_comp, _)) = inventories.get_mut(msg.character) else {
-                    warn!(
-                        "SlotInteraction for unknown character entity {:?}",
-                        msg.character
-                    );
-                    continue;
-                };
                 let slot_idx = *slot as usize;
                 let capacity = inv_comp.inventory().capacity();
                 if slot_idx >= capacity {
