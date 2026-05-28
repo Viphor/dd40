@@ -36,7 +36,7 @@ There are currently no tracked exceptions to this rule.
 | `dd40_rng` | Pluggable `GameRng` resource, `RngPlugin` | — |
 | `dd40_loot_core` | `LootTable`, `LootEntry`, `LootMode`; `BlockData` impl so tables can attach to `BlockDefinition` | `dd40_core`, `dd40_item_core` |
 | `dd40_loose_item_core` | `LooseItem`, `DespawnTimer`, `PickupCooldown`, `LooseItemConfig`, `LooseItemSet` — vocabulary for items lying in the world | `dd40_core`, `dd40_item_core` |
-| `dd40_input_core` | Shared `bevy_enhanced_input` action types + networked `OnFoot` context (vocabulary only — no bindings, no systems) | — |
+| `dd40_input_core` | Shared `bevy_enhanced_input` action vocabulary, the `OnFoot` context, and the `InputTranslationSet` cross-crate ordering anchor (vocabulary only — no bindings, no systems) | — |
 
 ### Tier 1 — Implementation
 
@@ -48,9 +48,9 @@ There are currently no tracked exceptions to this rule.
 | `dd40_world` | World generation (generic over `WorldGenerator` trait) | `dd40_core` |
 | `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) | `dd40_core` |
 | `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD | `dd40_core`, `dd40_physics_core` |
-| `dd40_player_input` | BEI bindings, client-local `FreeCam`/`LocalUi` contexts, mouse-look, free-cam, pause/mode observers, and the headless `Action<T>` → `CharacterInput` translator (run on both client and server) | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_input_core`, `dd40_item_core` |
+| `dd40_player_input` | Client-only: BEI bindings, `FreeCam`/`LocalUi` contexts, mouse-look (Controller mode), free-cam look + movement, pause/mode observers, and the `Action<T>` → `CharacterInput` translator (placed in `InputTranslationSet`) | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_input_core`, `dd40_item_core` |
 | `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
-| `dd40_network` | lightyear client-server networking (feature-gated); input-stack agnostic — only attaches `OnFoot` + `InputMarker<OnFoot>` to characters | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_input_core` |
+| `dd40_network` | lightyear client-server networking (feature-gated). Wire input is `ActionState<PlayerInput>` (lightyear `input_native`); the client bridges `CharacterInput → ActionState<PlayerInput>` after the translator runs (ordered via `InputTranslationSet`). Server does not load BEI. | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_input_core` |
 | `dd40_debug_ui` | FPS overlay, orientation gizmo, custom debug elements | `dd40_core` |
 | `dd40_gui` | In-game HUD with no character coupling (crosshair) | `dd40_core` |
 | `dd40_character_gui` | Visuals keyed off character vocabulary: targeted-block highlight, mining break overlay | `dd40_core`, `dd40_character_core` |
@@ -360,7 +360,7 @@ free-cam, pause/mode observers) **and** the headless `Action<T>` →
 ```
 src/
 ├── lib.rs
-├── plugin.rs          — PlayerInputPlugin (client), PlayerInputTranslationPlugin (both)
+├── plugin.rs          — PlayerInputPlugin (client), PlayerInputTranslationPlugin (translator)
 ├── bindings.rs        — spawn_local_player_input_tree (Added<Player>)
 ├── contexts.rs        — FreeCam, LocalUi (client-only)
 ├── translation.rs     — Action<T> → CharacterInput (headless-safe, both sides)

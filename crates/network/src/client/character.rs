@@ -343,12 +343,12 @@ fn apply_interpolated_rotation(
 /// Writes the local player's current camera orientation into [`PlayerRotation`]
 /// so the server can replicate it to other clients.
 ///
-/// Runs in `PostUpdate` — after `player_input` (Update) has already copied the
-/// latest `CameraRotation` into `CharacterInput`, and after lightyear's
-/// replication receive (PreUpdate) may have overwritten the component with a
-/// stale server-confirmed value.  Running here guarantees the render pass
-/// always sees the locally-driven, zero-lag rotation rather than a rolled-back
-/// one.
+/// Runs in `PostUpdate` — after `dd40_player_input::mouse_look` (Update) has
+/// integrated the latest look delta into `CharacterInput.{yaw, pitch}`, and
+/// after lightyear's replication receive (PreUpdate) may have overwritten
+/// the component with a stale server-confirmed value.  Running here
+/// guarantees the render pass always sees the locally-driven, zero-lag
+/// rotation rather than a rolled-back one.
 fn sync_local_rotation(mut query: Query<(&CharacterInput, &mut PlayerRotation), With<Predicted>>) {
     for (char_input, mut player_rot) in &mut query {
         player_rot.pitch = char_input.pitch;

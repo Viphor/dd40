@@ -6,23 +6,18 @@
 //! [`ActionState<T>`](bevy_enhanced_input::prelude::ActionState) instead of
 //! polling raw [`ButtonInput`](bevy::prelude::ButtonInput).
 //!
-//! The vocabulary is split into two layers:
-//!
-//! - **Networked actions** ([`Move`], [`Jump`], [`Sprint`], [`Attack`],
-//!   [`Place`], [`Interact`]) — registered with lightyear so client input
-//!   replicates to the server. These compose into a per-tick
-//!   `CharacterInput` intent on both the server-authoritative entity and
-//!   the client predicted entity.
-//! - **Client-local actions** ([`Look`], [`Pause`], [`ToggleFreeCam`],
-//!   [`FreeCamUp`], [`FreeCamDown`]) — never leave the client; they drive
-//!   the camera, pause menu, and developer free-cam.
+//! All actions in this module are **client-side only**: BEI evaluates them
+//! on the player's machine, `dd40_player_input` folds them into the
+//! per-tick `CharacterInput` intent, and `dd40_network` ships that intent
+//! to the server as an `ActionState<PlayerInput>` (lightyear
+//! `input_native`). The server does **not** evaluate BEI; it consumes the
+//! wire `PlayerInput` directly. Action types live here as the single
+//! source of truth for the client's input vocabulary so that bindings,
+//! the translator, and any future input source (gamepad, scripting, demo
+//! replay) all refer to the same symbols.
 
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::InputAction;
-
-// ----------------------------------------------------------------------------
-// Networked actions
-// ----------------------------------------------------------------------------
 
 /// Planar movement intent in **local character space**.
 ///
@@ -73,24 +68,8 @@ pub struct Place;
 #[action_output(bool)]
 pub struct Interact;
 
-/// Absolute camera orientation, in **radians**.
-///
-/// `x` is yaw (left/right), `y` is pitch (up/down). Unlike [`Look`] this is
-/// the persistent orientation, not a per-frame delta — the controlling
-/// client integrates [`Look`] into [`CameraRotation`] locally and the
-/// translator on both server and client copies [`CameraRotation`] into
-/// `CharacterInput::yaw` / `CharacterInput::pitch`.
-///
-/// Replicated as part of the networked action set so the server-authoritative
-/// entity sees the same orientation as the local client, which lets the
-/// server compute downstream effects (look raycasts, replicated
-/// `PlayerRotation` to other clients) without any extra transport channel.
-#[derive(Debug, InputAction)]
-#[action_output(Vec2)]
-pub struct CameraRotation;
-
 // ----------------------------------------------------------------------------
-// Client-local actions
+// UI / camera actions
 // ----------------------------------------------------------------------------
 
 /// Camera look delta in **device units per frame**.

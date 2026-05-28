@@ -8,8 +8,8 @@
 use bevy::prelude::SystemSet;
 
 /// Marks the systems that translate raw `bevy_enhanced_input` action state
-/// into [`CharacterInput`](dd40_character_core::controller::CharacterInput)
-/// each `FixedPreUpdate` tick.
+/// into `dd40_character_core::controller::CharacterInput` each
+/// `FixedPreUpdate` tick.
 ///
 /// `dd40_player_input`'s `apply_actions_to_character_input` system is the
 /// canonical member of this set.

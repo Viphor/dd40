@@ -108,8 +108,8 @@ fn spawn_free_cam_actions(commands: &mut Commands, ctx: Entity) {
 
 fn spawn_local_ui_actions(commands: &mut Commands, ctx: Entity) {
     // Look: raw mouse motion → Vec2, scaled by sensitivity and negated so
-    // moving the mouse right yields +yaw (`CameraRotation.x`) and moving
-    // it forward yields -pitch (`CameraRotation.y`).
+    // moving the mouse right yields +yaw and moving it forward yields
+    // -pitch (the consumer expects pitch positive = up).
     commands.spawn((
         Action::<Look>::new(),
         ActionOf::<LocalUi>::new(ctx),

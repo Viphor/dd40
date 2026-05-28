@@ -26,11 +26,11 @@ use dd40_item_core::plugin::ItemCorePlugin;
 /// Translation-only plugin: BEI action state → [`CharacterInput`] every
 /// [`FixedPreUpdate`] tick.
 ///
-/// This plugin is **headless-safe**: it pulls in no windowing, no camera,
-/// no [`ButtonInput`] reads. Both client and server binaries add it so the
-/// same translation runs on the server-authoritative character entity and
-/// on the client predicted entity — a hard requirement for prediction /
-/// rollback convergence.
+/// This plugin is **client-only** — it is added by `dd40_client` via
+/// [`PlayerInputPlugin`] (which auto-pulls it through [`ensure_plugins!`]).
+/// The server consumes the replicated `ActionState<PlayerInput>` directly
+/// off the wire and does not evaluate BEI; this plugin is irrelevant
+/// there.
 ///
 /// ## What this plugin sets up
 ///
@@ -40,7 +40,9 @@ use dd40_item_core::plugin::ItemCorePlugin;
 ///   [`FixedPreUpdate`] (idempotent — guarded by a marker resource so
 ///   adding the plugin twice does not panic).
 /// - Adds [`apply_actions_to_character_input`] in [`FixedPreUpdate`] after
-///   [`EnhancedInputSystems::Apply`].
+///   [`EnhancedInputSystems::Apply`], placed in
+///   [`dd40_input_core::system_sets::InputTranslationSet`] so the network
+///   bridge can order against it.
 ///
 /// [`ensure_plugins!`]: dd40_core::ensure_plugins
 /// [`CharacterInput`]: dd40_character_core::controller::CharacterInput

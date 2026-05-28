@@ -20,8 +20,8 @@ use dd40_core::plugin::CorePlugin;
 /// - Auto-adds [`CorePlugin`] via [`ensure_plugins!`].
 ///
 /// Action types themselves live in [`crate::actions`] and are not registered
-/// here — registration happens in the consuming crate (binding definitions
-/// in `dd40_player_input`, network replication in `dd40_network`).
+/// here — registration happens in `dd40_player_input` (bindings + the
+/// translator from action state → `CharacterInput`).
 ///
 /// # Example
 ///
