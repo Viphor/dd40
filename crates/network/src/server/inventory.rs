@@ -55,11 +55,10 @@ pub fn forward_slot_interactions(
 
 /// Plugin that adds [`forward_slot_interactions`] to `Update`.
 ///
-/// Add this on the server *after* [`VanillaInventoryPlugin`]; that
-/// plugin owns the [`SlotInteraction`] message registration, the
-/// apply system, and the per-character bookkeeping.
-///
-/// [`VanillaInventoryPlugin`]: dd40_vanilla_inventory::VanillaInventoryPlugin
+/// Add this on the server *after* `VanillaInventoryPlugin` (from
+/// `dd40_vanilla_inventory`); that plugin owns the [`SlotInteraction`]
+/// message registration, the apply system, and the per-character
+/// bookkeeping.
 #[derive(Default)]
 pub struct ServerInventoryNetworkPlugin;
 

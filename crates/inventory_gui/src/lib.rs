@@ -23,8 +23,13 @@
 //!     .run();
 //! ```
 //!
-//! The crate is local-only for v1 — it should only be installed on the
-//! client binary, never on the dedicated server.
+//! The crate is client-only — it should only be installed on the
+//! client binary, never on the dedicated server.  Gestures travel
+//! over the wire as `NetSlotInteraction` (see
+//! `dd40_network::ClientInventoryNetworkPlugin`); the server runs
+//! `dd40_vanilla_inventory::VanillaInventoryRulesPlugin` to apply
+//! them and the result replicates back as `InventoryComponent` +
+//! `HeldStackComponent`.
 
 pub mod grid;
 pub mod held;

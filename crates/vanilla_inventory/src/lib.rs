@@ -29,16 +29,24 @@
 //!
 //! # Usage
 //!
-//! Add [`plugin::VanillaInventoryPlugin`] to the client app once.  In
-//! v1, inventory is local-only, so the server does not load this
-//! plugin.
+//! This crate is split into two plugins so the server can run the
+//! mutating rules without dragging in client-only selection state:
+//!
+//! - [`plugin::VanillaInventoryPlugin`] — hotbar selection,
+//!   `ActiveItem` bridge.  Add on both client and server.
+//! - [`plugin::VanillaInventoryRulesPlugin`] — the apply system that
+//!   mutates `InventoryComponent` / `HeldStackComponent`.  Add on the
+//!   **server only** in a networked build.  In a single-player binary,
+//!   add it on the client too.
 //!
 //! ```no_run
 //! use bevy::prelude::*;
-//! use dd40_vanilla_inventory::plugin::VanillaInventoryPlugin;
+//! use dd40_vanilla_inventory::plugin::{
+//!     VanillaInventoryPlugin, VanillaInventoryRulesPlugin,
+//! };
 //!
 //! App::new()
-//!     .add_plugins(VanillaInventoryPlugin)
+//!     .add_plugins((VanillaInventoryPlugin, VanillaInventoryRulesPlugin))
 //!     .run();
 //! ```
 //!
