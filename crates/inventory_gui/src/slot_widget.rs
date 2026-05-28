@@ -24,7 +24,7 @@ use crate::icons::{ItemIcon, ItemIconCache};
 /// Default slot edge length in logical pixels (hotbar size).
 pub const SLOT_SIZE: f32 = 40.0;
 /// Slot edge length used inside the toggleable inventory grid panel.
-pub const GRID_SLOT_SIZE: f32 = 96.0;
+pub const GRID_SLOT_SIZE: f32 = 56.0;
 /// Pixel gap between adjacent slot widgets.
 pub const SLOT_GAP: f32 = 4.0;
 
