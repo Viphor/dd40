@@ -18,7 +18,7 @@ use dd40_input_core::actions::ToggleInventory;
 use dd40_inventory_core::prelude::InventoryComponent;
 
 use crate::plugin::InventoryGuiOpen;
-use crate::slot_widget::{SlotKey, spawn_slot_widget};
+use crate::slot_widget::{GRID_SLOT_SIZE, SlotKey, spawn_slot_widget};
 
 const GRID_COLS: u8 = 9;
 const GRID_ROWS: u8 = 3;
@@ -136,6 +136,7 @@ fn spawn_grid(commands: &mut Commands, player: Entity, capacity: usize) {
                                             character: player,
                                             slot,
                                         },
+                                        GRID_SLOT_SIZE,
                                     );
                                 }
                             });

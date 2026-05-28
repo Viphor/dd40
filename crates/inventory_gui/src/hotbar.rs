@@ -10,7 +10,7 @@ use dd40_character_core::components::Player;
 use dd40_inventory_core::prelude::{HOTBAR_SIZE, SelectedHotbarSlot};
 
 use crate::slot_widget::{
-    SelectedMarker, SlotKey, refresh_selected_marker, spawn_slot_widget,
+    SLOT_SIZE, SelectedMarker, SlotKey, refresh_selected_marker, spawn_slot_widget,
 };
 
 /// Marker on the bottom-bar root node.
@@ -60,6 +60,7 @@ pub fn ensure_hotbar_root(
                             character: player,
                             slot,
                         },
+                        SLOT_SIZE,
                     );
                 }
             });

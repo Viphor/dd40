@@ -21,8 +21,10 @@ use dd40_item_core::registry::{ItemId, ItemRegistry};
 
 use crate::icons::{ItemIcon, ItemIconCache};
 
-/// Standard slot edge length in logical pixels.
-pub const SLOT_SIZE: f32 = 64.0;
+/// Default slot edge length in logical pixels (hotbar size).
+pub const SLOT_SIZE: f32 = 40.0;
+/// Slot edge length used inside the toggleable inventory grid panel.
+pub const GRID_SLOT_SIZE: f32 = 64.0;
 /// Pixel gap between adjacent slot widgets.
 pub const SLOT_GAP: f32 = 4.0;
 
@@ -64,17 +66,25 @@ pub struct SlotCountNode;
 
 /// Spawns a slot widget under `parent` and returns its entity.
 ///
+/// `size` is the edge length in logical pixels — pass [`SLOT_SIZE`] for
+/// the hotbar or [`GRID_SLOT_SIZE`] for the inventory grid.
+///
 /// The widget is initially empty (no icon, no count).  The companion
 /// [`sync_slot_widgets`] system keeps it in sync with the underlying
 /// inventory each frame.
-pub fn spawn_slot_widget(parent: &mut ChildSpawnerCommands, key: SlotKey) -> Entity {
+pub fn spawn_slot_widget(
+    parent: &mut ChildSpawnerCommands,
+    key: SlotKey,
+    size: f32,
+) -> Entity {
+    let count_font_size = (size * 0.28).max(12.0);
     parent
         .spawn((
             Name::new("InventorySlot"),
             key,
             Node {
-                width: Val::Px(SLOT_SIZE),
-                height: Val::Px(SLOT_SIZE),
+                width: Val::Px(size),
+                height: Val::Px(size),
                 margin: UiRect::all(Val::Px(SLOT_GAP / 2.0)),
                 border: UiRect::all(Val::Px(2.0)),
                 justify_content: JustifyContent::Center,
@@ -91,8 +101,8 @@ pub fn spawn_slot_widget(parent: &mut ChildSpawnerCommands, key: SlotKey) -> Ent
                 SlotIconNode,
                 Node {
                     position_type: PositionType::Absolute,
-                    width: Val::Px(SLOT_SIZE - 4.0),
-                    height: Val::Px(SLOT_SIZE - 4.0),
+                    width: Val::Px(size - 4.0),
+                    height: Val::Px(size - 4.0),
                     ..default()
                 },
                 BackgroundColor(Color::NONE),
@@ -104,7 +114,7 @@ pub fn spawn_slot_widget(parent: &mut ChildSpawnerCommands, key: SlotKey) -> Ent
                 SlotCountNode,
                 Text::new(""),
                 TextFont {
-                    font_size: 18.0,
+                    font_size: count_font_size,
                     ..default()
                 },
                 TextColor(Color::WHITE),
