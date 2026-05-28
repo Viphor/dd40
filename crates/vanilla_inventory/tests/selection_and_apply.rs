@@ -163,3 +163,67 @@ fn active_item_observer_reacts_to_slot_mutation() {
     let _ = std::any::TypeId::of::<InventoryChanged>();
     let _ = std::any::TypeId::of::<SlotChange>();
 }
+
+#[test]
+fn remote_character_without_player_marker_gets_no_hotbar_bookkeeping() {
+    // Multiplayer invariant: only the local `Player` entity should ever
+    // receive auto-attached hotbar state (`SelectedHotbarSlot`,
+    // `ActiveItem`).  Remote characters that arrive via replication carry
+    // `Character` + `InventoryComponent` but never the `Player` marker
+    // (see `with_predicted_local_player` in `dd40_network`).
+    //
+    // This test spawns one local player and one "remote" character
+    // (Character + InventoryComponent, no Player) and asserts:
+    //   1. The local player gets SelectedHotbarSlot + ActiveItem.
+    //   2. The remote character gets neither.
+    //   3. A mouse-wheel scroll only mutates the local player's slot.
+    use dd40_character_core::components::Character;
+
+    let mut app = make_app();
+    let local = app
+        .world_mut()
+        .spawn((Player, InventoryComponent::with_capacity(9)))
+        .id();
+    let remote = app
+        .world_mut()
+        .spawn((Character, InventoryComponent::with_capacity(9)))
+        .id();
+    app.update();
+
+    assert_eq!(
+        app.world().get::<SelectedHotbarSlot>(local).copied(),
+        Some(SelectedHotbarSlot(0)),
+        "local Player must auto-attach SelectedHotbarSlot",
+    );
+    assert!(
+        app.world().get::<ActiveItem>(local).is_some(),
+        "local Player must auto-attach ActiveItem",
+    );
+    assert!(
+        app.world().get::<SelectedHotbarSlot>(remote).is_none(),
+        "remote Character without Player must NOT get SelectedHotbarSlot",
+    );
+    assert!(
+        app.world().get::<ActiveItem>(remote).is_none(),
+        "remote Character without Player must NOT get ActiveItem",
+    );
+
+    // Scroll once: only the local player's slot should change.
+    app.world_mut()
+        .resource_mut::<bevy::ecs::message::Messages<MouseWheel>>()
+        .write(MouseWheel {
+            unit: MouseScrollUnit::Line,
+            x: 0.0,
+            y: -1.0,
+            window: Entity::PLACEHOLDER,
+        });
+    app.update();
+    assert_eq!(
+        app.world().get::<SelectedHotbarSlot>(local).copied(),
+        Some(SelectedHotbarSlot(1)),
+    );
+    assert!(
+        app.world().get::<SelectedHotbarSlot>(remote).is_none(),
+        "remote character's selection must remain absent after scroll",
+    );
+}

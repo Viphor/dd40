@@ -40,6 +40,24 @@
 //!     .add_plugins(VanillaInventoryPlugin)
 //!     .run();
 //! ```
+//!
+//! # Multiplayer contract
+//!
+//! This crate is multiplayer-safe by construction:
+//!
+//! - Every system that reads or writes hotbar / active-item state
+//!   filters with `With<Player>`.  The `Player` marker is added only
+//!   to the locally-predicted character (see
+//!   `dd40_network::with_predicted_local_player`); replicated remote
+//!   characters carry only `Character`, never `Player`.
+//! - Auto-attached components (`SelectedHotbarSlot`, `ActiveItem`) are
+//!   only inserted on entities with `Added<Player>`, so remote
+//!   characters never accrue local-only state.
+//! - Entity-addressed messages (`SlotInteraction`,
+//!   `RequestActiveItem`) target by `Entity`, so the caller is
+//!   responsible for naming the local player explicitly.
+//!
+//! Tests in `tests/selection_and_apply.rs` lock these invariants in.
 
 pub mod apply;
 pub mod plugin;
