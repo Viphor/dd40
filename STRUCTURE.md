@@ -58,12 +58,14 @@ There are currently no tracked exceptions to this rule.
 | `dd40_loose_items` | Server-only: drains `DropItems` into spawned `LooseItem` entities (with physics body), ticks `DespawnTimer` / `PickupCooldown`, merges same-item stacks on `BodyBodyContact`, registers `LooseItemPersister` so loose items survive restart | `dd40_core`, `dd40_physics_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loose_item_core` |
 | `dd40_integration_loose_item_pickup` | Server-only: only crate where `LooseItem` and `InventoryComponent` meet — subscribes to `BodyBodyContact` and grants stacks to the closest eligible character | `dd40_core`, `dd40_character_core`, `dd40_inventory_core`, `dd40_item_core`, `dd40_loose_item_core`, `dd40_physics_core` |
 | `dd40_loose_item_render` | Client-only: spinning, bobbing cube visual per `LooseItem` with placeable-block colour fallback | `dd40_core`, `dd40_item_core`, `dd40_loose_item_core` |
+| `dd40_vanilla_inventory` | Client-only (v1): selected hotbar slot, mouse-wheel + number-key selection, `SlotInteraction` resolver/apply, `RequestActiveItem` bridge, `DropOutside` → `DropItems` | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core` |
+| `dd40_inventory_gui` | Client-only (v1): hotbar widget, toggleable inventory grid window, per-slot widget with icon cache + colour fallback, held-stack cursor follower, click → `SlotInteraction` translator | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core` |
 
 ### Tier 2 — Binary
 
 | Crate | Plugins wired |
 |---|---|
-| `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin`, `CharacterGuiPlugin`, `LooseItemRenderPlugin` |
+| `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin`, `CharacterGuiPlugin`, `LooseItemRenderPlugin`, `VanillaInventoryPlugin`, `InventoryGuiPlugin` |
 | `dd40_server` | `CorePlugin`, `GracefulShutdownPlugin`, `PhysicsPlugin`, `IntegrationCharacterPhysicsPlugin`, `VanillaPalettePlugin`, `DiskStoragePlugin`, `WorldPlugin`, `CharacterInteractionPlugin`, `LootPlugin`, `LooseItemsPlugin`, `LooseItemPickupPlugin`, `ServerNetworkPlugin` |
 
 ---

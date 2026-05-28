@@ -37,8 +37,8 @@ const SLOT_BACKGROUND: Color = Color::srgba(0.1, 0.1, 0.1, 0.6);
 /// Identifies which inventory slot a widget presents.
 ///
 /// `character` is the owning [`Entity`] (the
-/// [`InventoryComponent`](dd40_inventory_core::InventoryComponent)
-/// holder).  `slot` is the index into that inventory.
+/// `InventoryComponent` holder).  `slot` is the index into that
+/// inventory.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct SlotKey {
     /// Inventory holder this widget points at.
@@ -64,9 +64,9 @@ pub struct SlotCountNode;
 
 /// Spawns a slot widget under `parent` and returns its entity.
 ///
-/// The widget is initially empty (no icon, no count).  Call
-/// [`update_slot_widget`] each frame from the owning module to keep it
-/// in sync with the underlying inventory.
+/// The widget is initially empty (no icon, no count).  The companion
+/// [`sync_slot_widgets`] system keeps it in sync with the underlying
+/// inventory each frame.
 pub fn spawn_slot_widget(parent: &mut ChildSpawnerCommands, key: SlotKey) -> Entity {
     parent
         .spawn((

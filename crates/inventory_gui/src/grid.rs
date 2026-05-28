@@ -1,7 +1,7 @@
 //! The toggleable inventory grid window.
 //!
-//! Toggle is driven by the [`ToggleInventory`](dd40_input_core::actions::ToggleInventory)
-//! BEI action.  When [`InventoryGuiOpen`] flips to `true`, [`toggle_grid`]
+//! Toggle is driven by the `ToggleInventory` BEI action.  When
+//! [`InventoryGuiOpen`] flips to `true`, [`toggle_grid`]
 //! spawns a centred 3×9 grid of slot widgets for the local player's
 //! inventory slots `9..36` and registers a [`UiWindow`] with
 //! [`OpenUiWindows`] so the cursor is released.  When closed, the grid

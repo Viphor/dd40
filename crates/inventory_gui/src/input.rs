@@ -8,7 +8,7 @@
 //! Drop-outside detection is handled by [`translate_drop_outside`]:
 //! whenever the user releases the left mouse button while [`HeldStack`]
 //! is non-empty and no slot widget is hovered, a
-//! [`SlotInteraction::DropOutside`] is emitted.
+//! `SlotInteraction::DropOutside` is emitted.
 
 use bevy::prelude::*;
 use dd40_character_core::components::Player;
@@ -52,7 +52,7 @@ pub fn translate_clicks(
     }
 }
 
-/// Emits [`SlotInteraction::DropOutside`] when the player releases the
+/// Emits `SlotInteraction::DropOutside` when the player releases the
 /// left mouse button while holding a stack and no slot widget is hovered.
 pub fn translate_drop_outside(
     mouse: Res<ButtonInput<MouseButton>>,

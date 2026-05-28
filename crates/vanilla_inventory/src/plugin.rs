@@ -17,10 +17,17 @@ use dd40_item_core::plugin::ItemCorePlugin;
 /// - Auto-adds [`CorePlugin`], [`InventoryCorePlugin`],
 ///   [`ItemCorePlugin`], and [`InputCorePlugin`] via
 ///   [`ensure_plugins!`][dd40_core::ensure_plugins].
-/// - TODO: hotbar selection system reading [`HotbarSelect`][dd40_input_core::actions::HotbarSelect].
-/// - TODO: apply system draining [`SlotInteraction`][dd40_inventory_core::SlotInteraction]
-///   messages.
-/// - TODO: `RequestActiveItem` bridge on hotbar / inventory change.
+/// - Ensures every [`Player`][dd40_character_core::components::Player]
+///   has a `SelectedHotbarSlot` and `ActiveItem` component.
+/// - Hotbar selection: number-key presses
+///   (`HotbarSelect`) and mouse-wheel scroll shift the selected slot.
+/// - `RequestActiveItem` bridge: external requests pick a matching
+///   hotbar slot when possible.
+/// - `SlotInteraction` apply: drains click/drop messages, mutates the
+///   targeted inventory and the global `HeldStack`, and emits
+///   `DropItems` for drop-outside intent.
+/// - Observer that keeps `ActiveItem` in sync with the selected slot
+///   when the inventory mutates.
 #[derive(Default)]
 pub struct VanillaInventoryPlugin;
 

@@ -1,18 +1,18 @@
 //! Player inventory GUI: the always-visible hotbar, the toggleable
-//! 3×9 grid window, item icons, and click-to-[`SlotInteraction`] input.
+//! 3×9 grid window, item icons, and click-to-`SlotInteraction` input.
 //!
 //! # Overview
 //!
 //! This crate owns the bevy_ui presentation layer for the player's
-//! [`InventoryComponent`]. It does **not** mutate inventories itself —
+//! `InventoryComponent`. It does **not** mutate inventories itself —
 //! every user gesture is published as a
-//! [`SlotInteraction`](dd40_inventory_core::SlotInteraction) message and
-//! resolved by whichever inventory-rules crate the binary wires in
-//! (the vanilla rules live in `dd40_vanilla_inventory`).
+//! [`SlotInteraction`](dd40_inventory_core::slot_interaction::SlotInteraction)
+//! message and resolved by whichever inventory-rules crate the binary
+//! wires in (the vanilla rules live in `dd40_vanilla_inventory`).
 //!
 //! # Usage
 //!
-//! Add [`plugin::InventoryGuiPlugin`] to your [`App`]:
+//! Add [`plugin::InventoryGuiPlugin`] to your [`bevy::prelude::App`]:
 //!
 //! ```no_run
 //! use bevy::prelude::*;

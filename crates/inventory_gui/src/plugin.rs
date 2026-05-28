@@ -42,8 +42,7 @@ pub struct InventoryGuiOpen(pub bool);
 /// - The grid window spawn/despawn observer keyed off the
 ///   `ToggleInventory` BEI action.
 /// - The held-stack cursor renderer.
-/// - bevy_ui `Interaction` → [`SlotInteraction`](dd40_inventory_core::SlotInteraction)
-///   translation.
+/// - bevy_ui `Interaction` → `SlotInteraction` translation.
 #[derive(Default)]
 pub struct InventoryGuiPlugin;
 

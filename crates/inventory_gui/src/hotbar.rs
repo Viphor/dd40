@@ -3,8 +3,7 @@
 //! [`ensure_hotbar_root`] spawns one row of [`HOTBAR_SIZE`] slot widgets
 //! the first time it finds a [`Player`] that doesn't already have a
 //! hotbar root attached.  The root is despawned automatically when the
-//! player is despawned, via [`HotbarFor`] relationship semantics handled
-//! by [`despawn_orphaned_hotbar`] below.
+//! player is despawned, via [`HotbarFor`] relationship semantics.
 
 use bevy::prelude::*;
 use dd40_character_core::components::Player;

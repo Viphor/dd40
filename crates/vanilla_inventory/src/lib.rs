@@ -16,9 +16,10 @@
 //!
 //! - Pure slot-mutation resolver ([`rules`]) — testable without any
 //!   ECS state.
-//! - Apply system that reads [`SlotInteraction`][dd40_inventory_core::SlotInteraction]
+//! - Apply system that reads
+//!   [`SlotInteraction`][dd40_inventory_core::slot_interaction::SlotInteraction]
 //!   messages, runs the resolver, mutates the target inventory, and
-//!   emits [`DropItems`][dd40_inventory_core::DropItems] on
+//!   emits [`DropItems`][dd40_inventory_core::drop::DropItems] on
 //!   drop-outside.
 //! - Hotbar selection from the [`HotbarSelect`][dd40_input_core::actions::HotbarSelect]
 //!   BEI action (keys 1–9, scroll wheel).
@@ -27,9 +28,9 @@
 //!
 //! # Usage
 //!
-//! Add [`VanillaInventoryPlugin`][plugin::VanillaInventoryPlugin] to
-//! the client app once.  In v1, inventory is local-only, so the
-//! server does not load this plugin.
+//! Add [`plugin::VanillaInventoryPlugin`] to the client app once.  In
+//! v1, inventory is local-only, so the server does not load this
+//! plugin.
 //!
 //! ```no_run
 //! use bevy::prelude::*;
@@ -44,3 +45,5 @@ pub mod apply;
 pub mod plugin;
 pub mod rules;
 pub mod selection;
+
+pub use plugin::VanillaInventoryPlugin;

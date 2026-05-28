@@ -167,17 +167,23 @@ const PLACEABLE_ITEMS: [(ItemId, &str, dd40_core::block::BlockId); 7] = [
 
 fn register_vanilla_items(mut registry: ResMut<ItemRegistry>) {
     for (item_id, name, block_id) in PLACEABLE_ITEMS {
-        registry.register(ItemDefinition::new(item_id, name).with_placeable(block_id));
+        registry.register(
+            ItemDefinition::new(item_id, name)
+                .with_placeable(block_id)
+                .with_icon_path(format!("items/{name}.png")),
+        );
     }
 
     for (kind_name, kind_id, base_item) in TOOL_KINDS {
         for (tier_index, (tier_name, tier_id)) in TOOL_TIERS.iter().enumerate() {
             let id = ItemId(base_item.0 + tier_index as u16);
             let name = format!("{tier_name}_{kind_name}");
+            let icon = format!("items/{name}.png");
             registry.register(
                 ItemDefinition::new(id, name)
                     .with_max_stack(NonZero::<u16>::MIN)
-                    .with_tool(kind_id, *tier_id),
+                    .with_tool(kind_id, *tier_id)
+                    .with_icon_path(icon),
             );
         }
     }

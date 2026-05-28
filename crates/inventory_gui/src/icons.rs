@@ -2,7 +2,7 @@
 //!
 //! The slot widget renders one of three things per item:
 //!
-//! 1. A PNG icon loaded from [`ItemDefinition::icon_path`] (when set).
+//! 1. A PNG icon loaded from `ItemDefinition::icon_path` (when set).
 //! 2. The flat colour of the item's placeable block, looked up via
 //!    [`BlockRegistry`] → [`BlockDefinition::color`].
 //! 3. Magenta — a "missing icon" placeholder — when the item has neither
