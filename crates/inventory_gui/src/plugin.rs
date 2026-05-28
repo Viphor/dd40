@@ -69,6 +69,7 @@ impl Plugin for InventoryGuiPlugin {
                 input::translate_drop_outside,
                 crate::slot_widget::sync_slot_widgets,
                 crate::slot_widget::sync_selection_border,
+                crate::tooltip::sync_tooltip,
             )
                 .in_set(InventoryGuiSet),
         );

@@ -33,5 +33,6 @@ pub mod icons;
 pub mod input;
 pub mod plugin;
 pub mod slot_widget;
+pub mod tooltip;
 
 pub use plugin::{InventoryGuiOpen, InventoryGuiPlugin, InventoryGuiSet};
