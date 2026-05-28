@@ -10,6 +10,7 @@ pub mod persistence;
 pub mod plugin;
 pub mod state;
 pub mod tools;
+pub mod ui_windows;
 
 pub mod prelude {
     pub use crate::{
@@ -32,5 +33,6 @@ pub mod prelude {
             ToolKindDefinition, ToolKindId, ToolRegistry, ToolRegistrySet, ToolTierDefinition,
             ToolTierId, mining_duration,
         },
+        ui_windows::{OpenUiWindows, UiWindow, UiWindowId},
     };
 }

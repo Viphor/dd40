@@ -15,7 +15,7 @@ use dd40_character_core::controller::CharacterInput;
 use dd40_character_core::face::{CameraRotation as FaceRotation, CharacterFace};
 use dd40_core::chunk::cache::ChunkCache;
 use dd40_core::debug::DebugInfo;
-use dd40_core::prelude::{BlockId, BlockPos, ChunkPos, GameState};
+use dd40_core::prelude::{BlockId, BlockPos, ChunkPos, GameState, OpenUiWindows};
 use dd40_input_core::actions::{
     FreeCamDown, FreeCamUp, Interact, Look, Move, Pause, Place, RmbPress, Sprint, ToggleFreeCam,
 };
@@ -39,17 +39,39 @@ pub(crate) fn setup_camera(mut commands: Commands) {
 // Cursor management
 // ---------------------------------------------------------------------------
 
-pub(crate) fn on_pause(mut cursor_options: Query<&mut CursorOptions>) {
-    if let Ok(mut opts) = cursor_options.single_mut() {
-        opts.visible = true;
-        opts.grab_mode = CursorGrabMode::None;
+/// Reconciles the cursor grab + visibility from
+/// [`GameState`] and [`OpenUiWindows`].
+///
+/// The cursor is released (visible, ungrabbed) whenever **either**:
+/// - the game is paused, **or**
+/// - at least one UI window registered in [`OpenUiWindows`] has
+///   `releases_cursor = true`.
+///
+/// Otherwise the cursor is locked (hidden, grabbed) so first-person
+/// look works.  Runs every frame but only writes to the
+/// [`CursorOptions`] component when the desired state differs from
+/// the current state, so it remains cheap.
+pub(crate) fn reconcile_cursor_grab(
+    game_state: Res<State<GameState>>,
+    windows: Res<OpenUiWindows>,
+    mut cursor_options: Query<&mut CursorOptions>,
+) {
+    let Ok(mut opts) = cursor_options.single_mut() else {
+        return;
+    };
+    let should_release =
+        matches!(game_state.get(), GameState::Paused) || windows.cursor_should_release();
+    let desired_grab = if should_release {
+        CursorGrabMode::None
+    } else {
+        CursorGrabMode::Locked
+    };
+    let desired_visible = should_release;
+    if opts.grab_mode != desired_grab {
+        opts.grab_mode = desired_grab;
     }
-}
-
-pub(crate) fn on_resume(mut cursor_options: Query<&mut CursorOptions>) {
-    if let Ok(mut opts) = cursor_options.single_mut() {
-        opts.visible = false;
-        opts.grab_mode = CursorGrabMode::Locked;
+    if opts.visible != desired_visible {
+        opts.visible = desired_visible;
     }
 }
 

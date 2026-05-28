@@ -3036,6 +3036,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_vanilla_inventory"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_enhanced_input 0.25.0",
+ "dd40_character_core",
+ "dd40_core",
+ "dd40_input_core",
+ "dd40_inventory_core",
+ "dd40_item_core",
+]
+
+[[package]]
 name = "dd40_vanilla_palette"
 version = "0.1.0"
 dependencies = [

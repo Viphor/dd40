@@ -22,6 +22,7 @@ impl Plugin for CorePlugin {
             .init_resource::<crate::block::BlockDataTypeRegistry>()
             .init_resource::<MaxDeltaBehind>()
             .init_resource::<crate::persistence::EntityPersisterRegistry>()
+            .init_resource::<crate::ui_windows::OpenUiWindows>()
             .register_type::<BlockId>()
             .register_type::<Block>()
             .register_type::<BlockRegistry>()

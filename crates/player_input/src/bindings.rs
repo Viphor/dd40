@@ -19,8 +19,8 @@ use bevy_enhanced_input::prelude::{
 };
 use dd40_character_core::components::Player;
 use dd40_input_core::actions::{
-    Attack, FreeCamDown, FreeCamUp, Interact, Jump, Look, Move, Pause, Place, RmbPress, Sprint,
-    ToggleFreeCam,
+    Attack, FreeCamDown, FreeCamUp, HotbarSelect, Interact, Jump, Look, Move, Pause, Place,
+    RmbPress, Sprint, ToggleFreeCam, ToggleInventory,
 };
 use dd40_input_core::contexts::OnFoot;
 
@@ -136,5 +136,31 @@ fn spawn_local_ui_actions(commands: &mut Commands, ctx: Entity) {
         ActionOf::<LocalUi>::new(ctx),
         bevy_enhanced_input::prelude::Press::default(),
         bevy_enhanced_input::prelude::bindings![MouseButton::Right],
+    ));
+
+    // Hotbar slot selection: nine digit keys, each scaled to emit its
+    // 1-based slot index as the action's f32 value. The selection system
+    // reacts on the press edge only.
+    commands.spawn((
+        Action::<HotbarSelect>::new(),
+        ActionOf::<LocalUi>::new(ctx),
+        bevy_enhanced_input::prelude::Press::default(),
+        bevy_enhanced_input::prelude::bindings![
+            (KeyCode::Digit1, Scale::splat(1.0)),
+            (KeyCode::Digit2, Scale::splat(2.0)),
+            (KeyCode::Digit3, Scale::splat(3.0)),
+            (KeyCode::Digit4, Scale::splat(4.0)),
+            (KeyCode::Digit5, Scale::splat(5.0)),
+            (KeyCode::Digit6, Scale::splat(6.0)),
+            (KeyCode::Digit7, Scale::splat(7.0)),
+            (KeyCode::Digit8, Scale::splat(8.0)),
+            (KeyCode::Digit9, Scale::splat(9.0)),
+        ],
+    ));
+    commands.spawn((
+        Action::<ToggleInventory>::new(),
+        ActionOf::<LocalUi>::new(ctx),
+        bevy_enhanced_input::prelude::Press::default(),
+        bevy_enhanced_input::prelude::bindings![KeyCode::KeyE],
     ));
 }

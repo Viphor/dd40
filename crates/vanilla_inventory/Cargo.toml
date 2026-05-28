@@ -1,0 +1,13 @@
+[package]
+name = "dd40_vanilla_inventory"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true, default-features = false, features = [] }
+bevy_enhanced_input = "0.25"
+dd40_core = { workspace = true }
+dd40_character_core = { workspace = true }
+dd40_inventory_core = { workspace = true }
+dd40_item_core = { workspace = true }
+dd40_input_core = { workspace = true }

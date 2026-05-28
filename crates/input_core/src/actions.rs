@@ -111,3 +111,32 @@ pub struct FreeCamDown;
 #[derive(Debug, InputAction)]
 #[action_output(bool)]
 pub struct RmbPress;
+
+// ----------------------------------------------------------------------------
+// Inventory actions
+// ----------------------------------------------------------------------------
+
+/// Select an active hotbar slot by index.
+///
+/// The action's value is the 1-based slot number of the key pressed:
+/// pressing `1` emits `1.0`, `2` emits `2.0`, …, `9` emits `9.0`. Consumers
+/// should round and subtract one to obtain the zero-based slot index, and
+/// only react on the press edge (`ActionEvents::FIRED`) so that holding
+/// a number key does not spam the selection.
+///
+/// Bound in `dd40_player_input` to `Digit1`..`Digit9` with per-key
+/// [`Scale`](bevy_enhanced_input::prelude::Scale) modifiers. Mouse-wheel
+/// scrolling is handled directly by the selection system, not by this
+/// action, so wheel-and-key sources do not race through the same value
+/// pipeline.
+#[derive(Debug, InputAction)]
+#[action_output(f32)]
+pub struct HotbarSelect;
+
+/// Toggle the inventory grid window.
+///
+/// One-shot press. The GUI crate listens for the press edge and toggles
+/// the grid window via [`OpenUiWindows`](dd40_core::ui_windows::OpenUiWindows).
+#[derive(Debug, InputAction)]
+#[action_output(bool)]
+pub struct ToggleInventory;

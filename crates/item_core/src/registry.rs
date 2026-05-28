@@ -32,6 +32,7 @@
 //! will simply find no definition until the block is registered.
 
 use std::num::NonZero;
+use std::path::PathBuf;
 
 use bevy::prelude::*;
 use dd40_core::block::BlockId;
@@ -102,6 +103,17 @@ pub struct ItemDefinition {
     /// Placement target: when `Some`, "use item" actions place this block at
     /// the targeted face when the targeted voxel is replaceable.
     pub placeable: Option<BlockId>,
+    /// Path to the item's icon, resolved through the Bevy
+    /// [`AssetServer`][bevy::asset::AssetServer] by inventory GUI crates.
+    ///
+    /// When `None`, GUI crates fall back to the
+    /// [`color`][dd40_core::block::BlockDefinition::color] of the
+    /// [`placeable`] block (rendering the slot as a flat colour swatch).
+    /// When the item has no placeable block either, the GUI renders a
+    /// magenta "missing icon" placeholder.
+    ///
+    /// [`placeable`]: ItemDefinition::placeable
+    pub icon_path: Option<PathBuf>,
 }
 
 impl ItemDefinition {
@@ -112,6 +124,7 @@ impl ItemDefinition {
     /// | `max_stack`  | `64`       |
     /// | `tool`       | `None`     |
     /// | `placeable`  | `None`     |
+    /// | `icon_path`  | `None`     |
     pub fn new(id: ItemId, name: impl Into<String>) -> Self {
         Self {
             id,
@@ -119,6 +132,7 @@ impl ItemDefinition {
             max_stack: NonZero::new(64).expect("64 is non-zero"),
             tool: None,
             placeable: None,
+            icon_path: None,
         }
     }
 
@@ -137,6 +151,13 @@ impl ItemDefinition {
     /// Marks this item as placeable, producing the given block on use.
     pub fn with_placeable(mut self, block: BlockId) -> Self {
         self.placeable = Some(block);
+        self
+    }
+
+    /// Sets the icon path, resolved through the Bevy
+    /// [`AssetServer`][bevy::asset::AssetServer] by inventory GUI crates.
+    pub fn with_icon_path(mut self, icon_path: impl Into<PathBuf>) -> Self {
+        self.icon_path = Some(icon_path.into());
         self
     }
 }
@@ -259,10 +280,21 @@ mod tests {
         let def = ItemDefinition::new(ItemId(1), "iron_pickaxe")
             .with_max_stack(nz(1))
             .with_tool(ToolKindId(1), ToolTierId(2))
-            .with_placeable(BlockId(7));
+            .with_placeable(BlockId(7))
+            .with_icon_path("items/iron_pickaxe.png");
         assert_eq!(def.max_stack, nz(1));
         assert_eq!(def.tool.unwrap().kind, ToolKindId(1));
         assert_eq!(def.tool.unwrap().tier, ToolTierId(2));
         assert_eq!(def.placeable, Some(BlockId(7)));
+        assert_eq!(
+            def.icon_path.as_deref(),
+            Some(std::path::Path::new("items/iron_pickaxe.png"))
+        );
+    }
+
+    #[test]
+    fn icon_path_defaults_to_none() {
+        let def = ItemDefinition::new(ItemId(2), "raw");
+        assert!(def.icon_path.is_none());
     }
 }

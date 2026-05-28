@@ -14,8 +14,8 @@ use crate::bindings::spawn_local_player_input_tree;
 use crate::contexts::{FreeCam, LocalUi};
 use crate::state::PlayerMode;
 use crate::systems::{
-    add_debug_info, free_cam_look, free_cam_movement, load_nearby_chunks, mouse_look, on_pause,
-    on_pause_action, on_resume, on_rmb_press, on_toggle_free_cam_action, setup_camera,
+    add_debug_info, free_cam_look, free_cam_movement, load_nearby_chunks, mouse_look,
+    on_pause_action, on_rmb_press, on_toggle_free_cam_action, reconcile_cursor_grab, setup_camera,
     sync_camera_to_face, sync_context_activity_to_mode,
 };
 use crate::translation::apply_actions_to_character_input;
@@ -124,8 +124,12 @@ impl Plugin for PlayerInputPlugin {
             // ── Startup ───────────────────────────────────────────────
             .add_systems(OnEnter(AppState::Playing), setup_camera)
             // ── Cursor management ─────────────────────────────────────
-            .add_systems(OnEnter(GameState::Paused), on_pause)
-            .add_systems(OnEnter(GameState::Running), on_resume)
+            // Single reconciler: cursor releases iff game is paused OR
+            // any UI window has registered `releases_cursor = true`.
+            .add_systems(
+                Update,
+                reconcile_cursor_grab.run_if(in_state(AppState::Playing)),
+            )
             // ── Spawn input tree for new local players ────────────────
             .add_systems(PreUpdate, spawn_local_player_input_tree)
             // ── PreUpdate ─────────────────────────────────────────────
