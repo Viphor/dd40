@@ -103,12 +103,26 @@ fn spawn_grid(commands: &mut Commands, player: Entity, capacity: usize) {
             Pickable::IGNORE,
         ))
         .with_children(|overlay| {
+            // Explicit panel size: 9 cols * (slot + gap) + 2*padding,
+            // 3 rows similarly.  Sizing the panel by content was
+            // collapsing it to ~zero in bevy_ui 0.18 because the slot
+            // children are absolutely-positioned-bearing flex items in
+            // a Center-aligned overlay; making the panel intrinsically
+            // sized avoids the collapse entirely.
+            let panel_pad = 12.0_f32;
+            let cell = GRID_SLOT_SIZE + crate::slot_widget::SLOT_GAP;
+            let panel_w = cell * GRID_COLS as f32 + panel_pad * 2.0;
+            let panel_h = cell * GRID_ROWS as f32 + panel_pad * 2.0;
             overlay
                 .spawn((
                     Name::new("InventoryGridPanel"),
                     Node {
+                        width: Val::Px(panel_w),
+                        height: Val::Px(panel_h),
                         flex_direction: FlexDirection::Column,
-                        padding: UiRect::all(Val::Px(12.0)),
+                        padding: UiRect::all(Val::Px(panel_pad)),
+                        flex_shrink: 0.0,
+                        flex_grow: 0.0,
                         ..default()
                     },
                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.75)),
@@ -120,7 +134,11 @@ fn spawn_grid(commands: &mut Commands, player: Entity, capacity: usize) {
                             .spawn((
                                 Name::new("GridRow"),
                                 Node {
+                                    width: Val::Px(cell * GRID_COLS as f32),
+                                    height: Val::Px(cell),
                                     flex_direction: FlexDirection::Row,
+                                    flex_shrink: 0.0,
+                                    flex_grow: 0.0,
                                     ..default()
                                 },
                             ))
