@@ -28,9 +28,6 @@ use serde::{Deserialize, Serialize};
 ///
 /// Cleared automatically by the rules crate on
 /// [`crate::drop::DropItems`].
-///
-/// `SelectedHotbarSlot` deliberately stays a client-local resource —
-/// it's pure UI state and does not need to be replicated.
 #[derive(Component, Default, Debug, Clone, PartialEq, Reflect, Serialize, Deserialize)]
 #[reflect(Component)]
 pub struct HeldStackComponent(pub Option<ItemStack>);

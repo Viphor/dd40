@@ -4,7 +4,7 @@
 //! Each slot is a fixed-size square with:
 //!
 //! - A border that subtly darkens when not selected and brightens when
-//!   the [`SelectedHotbarSlot`] marker is set.
+//!   the slot is the inventory's `active_slot`.
 //! - A child node showing either the item icon (image) or a flat colour
 //!   swatch (see [`crate::icons`]).
 //! - A child [`Text`] showing the stack count when greater than one.
@@ -15,7 +15,7 @@
 //! highlight state.
 
 use bevy::prelude::*;
-use dd40_inventory_core::prelude::{InventoryComponent, SelectedHotbarSlot};
+use dd40_inventory_core::prelude::InventoryComponent;
 use dd40_item_core::active_item::ItemStack;
 use dd40_item_core::registry::{ItemId, ItemRegistry};
 
@@ -286,9 +286,9 @@ pub fn refresh_selected_marker(
     commands: &mut Commands,
     slots: &Query<(Entity, &SlotKey, Has<SelectedMarker>), With<SlotKey>>,
     character: Entity,
-    selected: &SelectedHotbarSlot,
+    selected: u8,
 ) {
-    let want = selected.0;
+    let want = selected;
     for (entity, key, has_marker) in slots.iter() {
         if key.character != character {
             continue;

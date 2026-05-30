@@ -7,7 +7,7 @@
 //! This module is **pure** — no ECS, no globals, no IO.  Every branch
 //! is exercised by unit tests at the bottom of the file.
 //!
-//! Shift-click resolution requires knowledge of the rest of the
+//! Quick-transfer resolution requires knowledge of the rest of the
 //! inventory (which slot on the other side to merge into); the
 //! resolver leaves that to the apply layer by returning
 //! [`SlotResolution::ShiftMove`].  Drop-outside is also handled at
@@ -18,18 +18,22 @@ use std::num::NonZero;
 
 use dd40_item_core::active_item::ItemStack;
 
-/// Kinds of slot-targeted clicks the resolver handles.
+/// Kinds of slot-targeted intent the resolver handles.
 ///
-/// `DropOutside` is intentionally excluded — it is handled in the
-/// apply layer because it does not target a slot.
+/// Matches the intent vocabulary in
+/// [`SlotInteractionKind`][dd40_inventory_core::slot_interaction::SlotInteractionKind]
+/// (minus `DropHeld`, which does not target a slot and is handled in
+/// the apply layer).  The names describe *what the player wants to
+/// happen*, not which input fired.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SlotClickKind {
-    /// Primary click: pick up / drop / swap / merge.
-    Left,
-    /// Secondary click: pick half / drop one / swap.
-    Right,
-    /// Shift + primary click: move to the other inventory area.
-    Shift,
+    /// Take or place the whole stack.
+    Full,
+    /// Take half the slot's stack, or place a single item from the
+    /// cursor.
+    Partial,
+    /// Move the whole stack to the opposite inventory section.
+    Quick,
 }
 
 /// Output of [`resolve_slot`].
@@ -69,9 +73,9 @@ pub fn resolve_slot(
     from_slot: u8,
 ) -> SlotResolution {
     match kind {
-        SlotClickKind::Left => resolve_left(held, slot, max_stack),
-        SlotClickKind::Right => resolve_right(held, slot, max_stack),
-        SlotClickKind::Shift => {
+        SlotClickKind::Full => resolve_full(held, slot, max_stack),
+        SlotClickKind::Partial => resolve_partial(held, slot, max_stack),
+        SlotClickKind::Quick => {
             if slot.is_some() {
                 SlotResolution::ShiftMove { from_slot }
             } else {
@@ -81,7 +85,7 @@ pub fn resolve_slot(
     }
 }
 
-fn resolve_left(
+fn resolve_full(
     held: Option<ItemStack>,
     slot: Option<ItemStack>,
     max_stack: NonZero<u16>,
@@ -115,7 +119,7 @@ fn resolve_left(
     }
 }
 
-fn resolve_right(
+fn resolve_partial(
     held: Option<ItemStack>,
     slot: Option<ItemStack>,
     max_stack: NonZero<u16>,
@@ -173,17 +177,17 @@ mod tests {
         ItemStack::new(ItemId(item), nz(count))
     }
 
-    // ─── Left click ───────────────────────────────────────────────────
+    // ─── Full (take-or-place-all) ───────────────────────────────────────────────────
 
     #[test]
     fn left_empty_into_empty_is_noop() {
-        let out = resolve_slot(None, None, nz(64), SlotClickKind::Left, 0);
+        let out = resolve_slot(None, None, nz(64), SlotClickKind::Full, 0);
         assert_eq!(out, SlotResolution::NoOp);
     }
 
     #[test]
     fn left_pickup_from_slot() {
-        let out = resolve_slot(None, Some(stack(1, 7)), nz(64), SlotClickKind::Left, 0);
+        let out = resolve_slot(None, Some(stack(1, 7)), nz(64), SlotClickKind::Full, 0);
         assert_eq!(
             out,
             SlotResolution::Mutation {
@@ -195,7 +199,7 @@ mod tests {
 
     #[test]
     fn left_drop_into_empty() {
-        let out = resolve_slot(Some(stack(1, 5)), None, nz(64), SlotClickKind::Left, 0);
+        let out = resolve_slot(Some(stack(1, 5)), None, nz(64), SlotClickKind::Full, 0);
         assert_eq!(
             out,
             SlotResolution::Mutation {
@@ -211,7 +215,7 @@ mod tests {
             Some(stack(1, 10)),
             Some(stack(1, 20)),
             nz(64),
-            SlotClickKind::Left,
+            SlotClickKind::Full,
             0,
         );
         assert_eq!(
@@ -229,7 +233,7 @@ mod tests {
             Some(stack(1, 50)),
             Some(stack(1, 40)),
             nz(64),
-            SlotClickKind::Left,
+            SlotClickKind::Full,
             0,
         );
         // 50 + 40 = 90; slot caps at 64, leftover 26 stays held.
@@ -248,7 +252,7 @@ mod tests {
             Some(stack(1, 5)),
             Some(stack(1, 64)),
             nz(64),
-            SlotClickKind::Left,
+            SlotClickKind::Full,
             0,
         );
         assert_eq!(
@@ -266,7 +270,7 @@ mod tests {
             Some(stack(1, 3)),
             Some(stack(2, 7)),
             nz(64),
-            SlotClickKind::Left,
+            SlotClickKind::Full,
             0,
         );
         assert_eq!(
@@ -278,18 +282,18 @@ mod tests {
         );
     }
 
-    // ─── Right click ──────────────────────────────────────────────────
+    // ─── Partial (take-half / place-one) ──────────────────────────────────────────────────
 
     #[test]
     fn right_empty_into_empty_is_noop() {
-        let out = resolve_slot(None, None, nz(64), SlotClickKind::Right, 0);
+        let out = resolve_slot(None, None, nz(64), SlotClickKind::Partial, 0);
         assert_eq!(out, SlotResolution::NoOp);
     }
 
     #[test]
     fn right_take_half_rounds_up() {
         // 7 → take 4, leave 3
-        let out = resolve_slot(None, Some(stack(1, 7)), nz(64), SlotClickKind::Right, 0);
+        let out = resolve_slot(None, Some(stack(1, 7)), nz(64), SlotClickKind::Partial, 0);
         assert_eq!(
             out,
             SlotResolution::Mutation {
@@ -302,7 +306,7 @@ mod tests {
     #[test]
     fn right_take_half_even_count() {
         // 8 → take 4, leave 4
-        let out = resolve_slot(None, Some(stack(1, 8)), nz(64), SlotClickKind::Right, 0);
+        let out = resolve_slot(None, Some(stack(1, 8)), nz(64), SlotClickKind::Partial, 0);
         assert_eq!(
             out,
             SlotResolution::Mutation {
@@ -314,7 +318,7 @@ mod tests {
 
     #[test]
     fn right_take_single_takes_whole() {
-        let out = resolve_slot(None, Some(stack(1, 1)), nz(64), SlotClickKind::Right, 0);
+        let out = resolve_slot(None, Some(stack(1, 1)), nz(64), SlotClickKind::Partial, 0);
         assert_eq!(
             out,
             SlotResolution::Mutation {
@@ -326,7 +330,7 @@ mod tests {
 
     #[test]
     fn right_place_one_into_empty_with_remainder() {
-        let out = resolve_slot(Some(stack(1, 3)), None, nz(64), SlotClickKind::Right, 0);
+        let out = resolve_slot(Some(stack(1, 3)), None, nz(64), SlotClickKind::Partial, 0);
         assert_eq!(
             out,
             SlotResolution::Mutation {
@@ -338,7 +342,7 @@ mod tests {
 
     #[test]
     fn right_place_last_into_empty_clears_held() {
-        let out = resolve_slot(Some(stack(1, 1)), None, nz(64), SlotClickKind::Right, 0);
+        let out = resolve_slot(Some(stack(1, 1)), None, nz(64), SlotClickKind::Partial, 0);
         assert_eq!(
             out,
             SlotResolution::Mutation {
@@ -354,7 +358,7 @@ mod tests {
             Some(stack(1, 5)),
             Some(stack(1, 9)),
             nz(64),
-            SlotClickKind::Right,
+            SlotClickKind::Partial,
             0,
         );
         assert_eq!(
@@ -372,7 +376,7 @@ mod tests {
             Some(stack(1, 5)),
             Some(stack(1, 64)),
             nz(64),
-            SlotClickKind::Right,
+            SlotClickKind::Partial,
             0,
         );
         assert_eq!(out, SlotResolution::NoOp);
@@ -384,7 +388,7 @@ mod tests {
             Some(stack(1, 3)),
             Some(stack(2, 7)),
             nz(64),
-            SlotClickKind::Right,
+            SlotClickKind::Partial,
             0,
         );
         assert_eq!(
@@ -396,11 +400,11 @@ mod tests {
         );
     }
 
-    // ─── Shift click ──────────────────────────────────────────────────
+    // ─── Quick transfer ──────────────────────────────────────────────────
 
     #[test]
     fn shift_on_empty_slot_is_noop() {
-        let out = resolve_slot(None, None, nz(64), SlotClickKind::Shift, 5);
+        let out = resolve_slot(None, None, nz(64), SlotClickKind::Quick, 5);
         assert_eq!(out, SlotResolution::NoOp);
     }
 
@@ -410,7 +414,7 @@ mod tests {
             Some(stack(99, 1)),
             Some(stack(1, 4)),
             nz(64),
-            SlotClickKind::Shift,
+            SlotClickKind::Quick,
             5,
         );
         // Held is irrelevant for shift; apply layer takes the slot content.
@@ -426,7 +430,7 @@ mod tests {
             Some(stack(3, 10)),
             Some(stack(3, 12)),
             nz(16),
-            SlotClickKind::Left,
+            SlotClickKind::Full,
             0,
         );
         assert_eq!(

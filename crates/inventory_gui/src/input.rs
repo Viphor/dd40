@@ -8,7 +8,7 @@
 //! Drop-outside detection is handled by [`translate_drop_outside`]:
 //! whenever the user releases the left mouse button while the local
 //! player is holding a stack and no slot widget is hovered, a
-//! `SlotInteraction::DropOutside` is emitted.
+//! `SlotInteraction::DropHeld` is emitted.
 
 use bevy::prelude::*;
 use dd40_character_core::components::Player;
@@ -37,11 +37,11 @@ pub fn translate_clicks(
             continue;
         }
         let kind = if left && shift {
-            SlotInteractionKind::ShiftClick { slot: key.slot }
+            SlotInteractionKind::QuickTransfer { slot: key.slot }
         } else if left {
-            SlotInteractionKind::LeftClick { slot: key.slot }
+            SlotInteractionKind::TakeOrPlaceAll { slot: key.slot }
         } else if right {
-            SlotInteractionKind::RightClick { slot: key.slot }
+            SlotInteractionKind::TakeHalfOrPlaceOne { slot: key.slot }
         } else {
             continue;
         };
@@ -52,7 +52,7 @@ pub fn translate_clicks(
     }
 }
 
-/// Emits `SlotInteraction::DropOutside` when the player releases the
+/// Emits `SlotInteraction::DropHeld` when the player releases the
 /// left mouse button while holding a stack and no slot widget is hovered.
 pub fn translate_drop_outside(
     mouse: Res<ButtonInput<MouseButton>>,
@@ -77,6 +77,6 @@ pub fn translate_drop_outside(
     }
     writer.write(SlotInteraction {
         character: player,
-        kind: SlotInteractionKind::DropOutside,
+        kind: SlotInteractionKind::DropHeld,
     });
 }

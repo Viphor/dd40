@@ -169,7 +169,7 @@ pub(crate) fn try_place_block(
 /// Returns `None` if the character is holding nothing or the held item has no
 /// `placeable` field.
 fn placeable_block(active: Option<&ActiveItem>, items: &ItemRegistry) -> Option<BlockId> {
-    let stack = active?.0?;
+    let stack = active?.peek()?;
     let def: &ItemDefinition = items.get(stack.item)?;
     def.placeable
 }

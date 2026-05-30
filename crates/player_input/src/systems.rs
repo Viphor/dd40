@@ -184,7 +184,7 @@ pub(crate) fn on_rmb_press(
 }
 
 fn has_placeable(active: Option<&ActiveItem>, items: &ItemRegistry) -> bool {
-    let Some(stack) = active.and_then(|a| a.0) else {
+    let Some(stack) = active.and_then(|a| a.peek()) else {
         return false;
     };
     let Some(def) = items.get(stack.item) else {

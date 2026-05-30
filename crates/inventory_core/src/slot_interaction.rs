@@ -31,9 +31,14 @@ pub struct SlotInteraction {
 
 /// Concrete interaction variants.
 ///
-/// Mirrors the Minecraft conventions the GUI v1 spec calls for:
-/// left-click swap/pickup/drop, right-click split/place-one,
-/// shift-click move-to-other-half, drag-out-of-window drop.
+/// Named for **player intent**, not for any specific input device.
+/// A keyboard/mouse GUI maps left-click → [`TakeOrPlaceAll`][Self::TakeOrPlaceAll],
+/// right-click → [`TakeHalfOrPlaceOne`][Self::TakeHalfOrPlaceOne],
+/// shift-left-click → [`QuickTransfer`][Self::QuickTransfer], and a
+/// drop outside the window → [`DropHeld`][Self::DropHeld]; a gamepad,
+/// touch, or accessibility binding maps its own gestures onto the
+/// same intents and the rules layer never needs to know which input
+/// fired.
 ///
 /// Derives `Serialize` + `Deserialize` so it can travel as the payload
 /// of a network message (the `Entity` in [`SlotInteraction`] is
@@ -41,29 +46,32 @@ pub struct SlotInteraction {
 /// not need to be serialized).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SlotInteractionKind {
-    /// Primary click on a slot: pick up the stack, drop the held
-    /// stack, or swap.
-    LeftClick {
+    /// Pick up the full stack at `slot`, deposit the full held stack
+    /// into it, or swap the two when both are non-empty and
+    /// incompatible.  Same-item merges respect the target's
+    /// `max_stack`.
+    TakeOrPlaceAll {
         /// Index into [`InventoryComponent`][crate::component::InventoryComponent].
         slot: u8,
     },
-    /// Secondary click on a slot: pick up half the stack (rounded up)
-    /// when not holding; otherwise place one item from the cursor.
-    RightClick {
+    /// When the cursor is empty, pick up half the stack at `slot`
+    /// (rounded up).  When the cursor holds a compatible stack,
+    /// deposit a single item into `slot`.
+    TakeHalfOrPlaceOne {
         /// Index into [`InventoryComponent`][crate::component::InventoryComponent].
         slot: u8,
     },
-    /// Shift + primary click on a slot: move the full stack between
-    /// hotbar and main areas, into the first compatible target slot
-    /// on the opposite side.
-    ShiftClick {
+    /// Move the full stack at `slot` to the opposite inventory
+    /// section (hotbar ↔ main), merging into matching stacks first
+    /// and then filling the first empty slot.
+    QuickTransfer {
         /// Index into [`InventoryComponent`][crate::component::InventoryComponent].
         slot: u8,
     },
-    /// Player released the cursor outside any slot widget while
-    /// holding a stack.  The rules crate consumes the held stack and
-    /// emits [`DropItems`][crate::drop::DropItems].
-    DropOutside,
+    /// Drop whatever the player is currently holding into the world.
+    /// The rules crate consumes the held stack and emits
+    /// [`DropItems`][crate::drop::DropItems].
+    DropHeld,
 }
 
 #[cfg(test)]
@@ -87,7 +95,7 @@ mod tests {
                 |mut w: MessageWriter<SlotInteraction>| {
                     w.write(SlotInteraction {
                         character: Entity::from_raw_u32(7).unwrap(),
-                        kind: SlotInteractionKind::LeftClick { slot: 3 },
+                        kind: SlotInteractionKind::TakeOrPlaceAll { slot: 3 },
                     });
                 },
                 |mut r: MessageReader<SlotInteraction>, mut c: ResMut<Captured>| {
@@ -102,7 +110,7 @@ mod tests {
         app.update();
         let captured = &app.world().resource::<Captured>().0;
         assert_eq!(captured.len(), 1);
-        assert_eq!(captured[0], SlotInteractionKind::LeftClick { slot: 3 });
+        assert_eq!(captured[0], SlotInteractionKind::TakeOrPlaceAll { slot: 3 });
     }
 
     #[test]

@@ -9,7 +9,6 @@ use bevy::prelude::*;
 use dd40_core::ensure_plugins;
 use dd40_core::plugin::CorePlugin;
 
-use crate::active_item::ActiveItem;
 use crate::messages::RequestActiveItem;
 use crate::registry::ItemRegistry;
 
@@ -19,9 +18,12 @@ use crate::registry::ItemRegistry;
 ///
 /// - Inserts an empty [`ItemRegistry`] as a resource and registers it for
 ///   reflection.
-/// - Registers [`ActiveItem`] for reflection.
 /// - Registers the [`RequestActiveItem`] message.
 /// - Configures the [`ItemRegistrySet`] system set.
+///
+/// [`ActiveItem`][crate::active_item::ActiveItem] is **not** registered
+/// for reflection: it holds a `Box<dyn ActiveItemProvider>` and is
+/// local-only, never replicated or serialised.
 ///
 /// [`ActiveItemChanged`][crate::messages::ActiveItemChanged] is an
 /// `EntityEvent`, not a `Message`, so it does not need explicit
@@ -38,7 +40,6 @@ impl Plugin for ItemCorePlugin {
 
         app.insert_resource(ItemRegistry::new())
             .register_type::<ItemRegistry>()
-            .register_type::<ActiveItem>()
             .add_message::<RequestActiveItem>();
     }
 }

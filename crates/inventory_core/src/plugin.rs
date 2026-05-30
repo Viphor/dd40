@@ -17,7 +17,7 @@ use crate::block::BlockInventory;
 use crate::component::InventoryComponent;
 use crate::drop::DropItems;
 use crate::held_stack::HeldStackComponent;
-use crate::selected_slot::SelectedHotbarSlot;
+use crate::set_active_slot::SetActiveSlot;
 use crate::slot_interaction::SlotInteraction;
 
 /// Registers the inventory-system vocabulary.
@@ -26,11 +26,12 @@ use crate::slot_interaction::SlotInteraction;
 ///
 /// - Auto-adds [`CorePlugin`] and [`ItemCorePlugin`] via
 ///   [`ensure_plugins!`][dd40_core::ensure_plugins].
-/// - Registers [`InventoryComponent`], [`HeldStackComponent`] and
-///   [`SelectedHotbarSlot`] for reflection.
+/// - Registers [`InventoryComponent`] and [`HeldStackComponent`] for
+///   reflection.
 /// - Registers [`BlockInventory`] with the block-data type registry so
 ///   chunk cell data can carry it over the wire and on disk.
-/// - Registers the [`DropItems`] and [`SlotInteraction`] messages.
+/// - Registers the [`DropItems`], [`SlotInteraction`], and
+///   [`SetActiveSlot`] messages.
 ///
 /// [`InventoryChanged`][crate::component::InventoryChanged] and
 /// [`BlockInventoryChanged`][crate::block::BlockInventoryChanged] are
@@ -44,10 +45,10 @@ impl Plugin for InventoryCorePlugin {
         ensure_plugins!(app, CorePlugin, ItemCorePlugin);
         app.register_type::<InventoryComponent>();
         app.register_type::<HeldStackComponent>();
-        app.register_type::<SelectedHotbarSlot>();
         app.register_block_data::<BlockInventory>();
         app.add_message::<DropItems>();
         app.add_message::<SlotInteraction>();
+        app.add_message::<SetActiveSlot>();
     }
 }
 

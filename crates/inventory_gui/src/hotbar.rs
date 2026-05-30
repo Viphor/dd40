@@ -7,7 +7,7 @@
 
 use bevy::prelude::*;
 use dd40_character_core::components::Player;
-use dd40_inventory_core::prelude::{HOTBAR_SIZE, SelectedHotbarSlot};
+use dd40_inventory_core::prelude::{HOTBAR_SIZE, InventoryComponent};
 
 use crate::slot_widget::{
     SLOT_SIZE, SelectedMarker, SlotKey, refresh_selected_marker, spawn_slot_widget,
@@ -68,13 +68,13 @@ pub fn ensure_hotbar_root(
 }
 
 /// Adds / removes the [`SelectedMarker`] on each hotbar slot to match
-/// the local player's [`SelectedHotbarSlot`].
+/// the local player's [`Inventory::active_slot`][dd40_inventory_core::inventory::Inventory::active_slot].
 pub fn sync_hotbar_selection(
     mut commands: Commands,
-    selected: Query<(Entity, &SelectedHotbarSlot), (With<Player>, Changed<SelectedHotbarSlot>)>,
+    selected: Query<(Entity, &InventoryComponent), (With<Player>, Changed<InventoryComponent>)>,
     slots: Query<(Entity, &SlotKey, Has<SelectedMarker>), With<SlotKey>>,
 ) {
-    for (player, sel) in &selected {
-        refresh_selected_marker(&mut commands, &slots, player, sel);
+    for (player, inv) in &selected {
+        refresh_selected_marker(&mut commands, &slots, player, inv.inventory().active_slot());
     }
 }

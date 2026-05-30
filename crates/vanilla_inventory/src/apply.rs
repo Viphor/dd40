@@ -41,7 +41,7 @@ pub fn apply_slot_interactions(
             continue;
         };
         match &msg.kind {
-            SlotInteractionKind::DropOutside => {
+            SlotInteractionKind::DropHeld => {
                 let Some(stack) = held.take() else {
                     continue;
                 };
@@ -51,9 +51,9 @@ pub fn apply_slot_interactions(
                     stacks: vec![stack],
                 });
             }
-            SlotInteractionKind::LeftClick { slot }
-            | SlotInteractionKind::RightClick { slot }
-            | SlotInteractionKind::ShiftClick { slot } => {
+            SlotInteractionKind::TakeOrPlaceAll { slot }
+            | SlotInteractionKind::TakeHalfOrPlaceOne { slot }
+            | SlotInteractionKind::QuickTransfer { slot } => {
                 let slot_idx = *slot as usize;
                 let capacity = inv_comp.inventory().capacity();
                 if slot_idx >= capacity {
@@ -89,10 +89,10 @@ pub fn apply_slot_interactions(
 
 fn click_kind(kind: &SlotInteractionKind) -> SlotClickKind {
     match kind {
-        SlotInteractionKind::LeftClick { .. } => SlotClickKind::Left,
-        SlotInteractionKind::RightClick { .. } => SlotClickKind::Right,
-        SlotInteractionKind::ShiftClick { .. } => SlotClickKind::Shift,
-        SlotInteractionKind::DropOutside => unreachable!("filtered by caller"),
+        SlotInteractionKind::TakeOrPlaceAll { .. } => SlotClickKind::Full,
+        SlotInteractionKind::TakeHalfOrPlaceOne { .. } => SlotClickKind::Partial,
+        SlotInteractionKind::QuickTransfer { .. } => SlotClickKind::Quick,
+        SlotInteractionKind::DropHeld => unreachable!("filtered by caller"),
     }
 }
 

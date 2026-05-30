@@ -170,6 +170,33 @@ impl InventoryComponent {
         emit_if_nonempty(commands, entity, changes);
         previous
     }
+
+    /// Sets the [`Inventory::active_slot`].
+    ///
+    /// No [`InventoryChanged`] event fires (no slot contents move),
+    /// but the underlying [`InventoryComponent`] is mutably touched
+    /// so Bevy `Changed<InventoryComponent>` filters fire — which is
+    /// what the active-item refresh system observes.
+    ///
+    /// Out-of-range values are clamped (see
+    /// [`Inventory::set_active_slot`]).
+    pub fn set_active_slot(&mut self, slot: u8) {
+        self.inventory.set_active_slot(slot);
+    }
+
+    /// Removes up to `count` items from the currently-active slot,
+    /// firing an [`InventoryChanged`] event on `entity` when something
+    /// was actually removed.
+    pub fn decrement_active_slot(
+        &mut self,
+        count: u16,
+        commands: &mut Commands,
+        entity: Entity,
+    ) -> Option<ItemStack> {
+        let (taken, changes) = self.inventory.decrement_active_slot(count);
+        emit_if_nonempty(commands, entity, changes);
+        taken
+    }
 }
 
 fn emit_if_nonempty(commands: &mut Commands, entity: Entity, changes: Vec<SlotChange>) {

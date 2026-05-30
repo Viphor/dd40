@@ -68,9 +68,12 @@
 //!
 //! Tests in `tests/selection_and_apply.rs` lock these invariants in.
 
+pub mod active_item;
 pub mod apply;
 pub mod plugin;
 pub mod rules;
 pub mod selection;
 
-pub use plugin::{VanillaInventoryPlugin, VanillaInventoryRulesPlugin};
+pub use plugin::{
+    VanillaInventoryActiveItemPlugin, VanillaInventoryPlugin, VanillaInventoryRulesPlugin,
+};

@@ -106,6 +106,18 @@ impl std::error::Error for InsertError {}
 #[derive(Debug, Clone, Default, PartialEq, Eq, Reflect, Serialize, Deserialize)]
 pub struct Inventory {
     slots: Vec<Option<ItemStack>>,
+    /// Index of the currently-selected slot.
+    ///
+    /// Opaque to this crate; only the GUI and active-item layers attach
+    /// meaning ("which slot does the player consider held").  Always
+    /// clamped to `0..capacity().max(1)`; for empty inventories the
+    /// value is `0` and means nothing.
+    ///
+    /// Stored on `Inventory` itself so the replicated
+    /// `InventoryComponent` carries it for free — no separate
+    /// replicated component is required.
+    #[serde(default)]
+    active_slot: u8,
 }
 
 impl Inventory {
@@ -113,12 +125,55 @@ impl Inventory {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             slots: vec![None; capacity],
+            active_slot: 0,
         }
     }
 
     /// Returns the number of slots in the inventory.
     pub fn capacity(&self) -> usize {
         self.slots.len()
+    }
+
+    /// Returns the index of the currently-selected slot.
+    ///
+    /// Guaranteed to be `< capacity()` while the inventory is non-empty;
+    /// returns `0` for a zero-capacity inventory.
+    pub fn active_slot(&self) -> u8 {
+        self.active_slot
+    }
+
+    /// Sets the active slot.
+    ///
+    /// Values out of range are clamped to `capacity - 1` (or `0` for an
+    /// empty inventory) and a warning is logged.  Returns `true` if the
+    /// stored value changed.
+    pub fn set_active_slot(&mut self, slot: u8) -> bool {
+        let max = self.slots.len().saturating_sub(1).min(u8::MAX as usize) as u8;
+        let clamped = if self.slots.is_empty() {
+            0
+        } else if (slot as usize) >= self.slots.len() {
+            warn!(
+                "Inventory::set_active_slot: slot {slot} out of bounds (capacity {}); clamping to {max}",
+                self.slots.len()
+            );
+            max
+        } else {
+            slot
+        };
+        let changed = self.active_slot != clamped;
+        self.active_slot = clamped;
+        changed
+    }
+
+    /// Removes up to `count` items from the active slot, returning the
+    /// produced [`SlotChange`] (if any).
+    ///
+    /// Equivalent to `take_slot_n(self.active_slot() as usize, count)`
+    /// but expressed so callers — including ECS wrappers and provider
+    /// implementations — don't have to keep re-deriving the index.
+    pub fn decrement_active_slot(&mut self, count: u16) -> (Option<ItemStack>, Vec<SlotChange>) {
+        let slot = self.active_slot as usize;
+        self.take_slot_n(slot, count)
     }
 
     /// Returns the stack in `slot`, or `None` if the slot is empty or out

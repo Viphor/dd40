@@ -217,7 +217,7 @@ pub(crate) fn update_mining(
 /// character has no item, no [`ActiveItem`] component, or holds an item that
 /// is not a tool.
 fn active_tool(active: Option<&ActiveItem>, items: &ItemRegistry) -> (ToolKindId, ToolTierId) {
-    let Some(stack) = active.and_then(|a| a.0) else {
+    let Some(stack) = active.and_then(|a| a.peek()) else {
         return (ToolKindId::NONE, ToolTierId::DEFAULT);
     };
     match items.get(stack.item).and_then(|def| def.tool) {
