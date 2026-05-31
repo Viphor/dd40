@@ -1,19 +1,19 @@
-//! Root plugin for the `dd40_vanilla_inventory` crate.
+//! Root plugin for the `dd40_inventory` crate.
 //!
 //! The crate ships **three** plugins so the client/server split is
 //! explicit:
 //!
-//! - [`VanillaInventoryActiveItemPlugin`] — attaches
+//! - [`InventoryActiveItemPlugin`] — attaches
 //!   [`ActiveItem`][dd40_item_core::active_item::ActiveItem] (with an
 //!   [`InventorySlotProvider`][crate::active_item::InventorySlotProvider])
 //!   to every entity that gains an `InventoryComponent`, and keeps
 //!   its cache in sync.  Add this on **both** client and server.
-//! - [`VanillaInventoryPlugin`] — hotbar input (number keys, mouse
+//! - [`InventoryPlugin`] — hotbar input (number keys, mouse
 //!   wheel), [`RequestActiveItem`][dd40_item_core::messages::RequestActiveItem]
 //!   bridge.  Pure intent translation; emits
 //!   [`SetActiveSlot`][dd40_inventory_core::set_active_slot::SetActiveSlot]
 //!   messages.  Add this on the **client only** in a networked build.
-//! - [`VanillaInventoryRulesPlugin`] — the authoritative apply system
+//! - [`InventoryRulesPlugin`] — the authoritative apply system
 //!   that drains `SlotInteraction` and `SetActiveSlot` and mutates
 //!   `InventoryComponent`.  Add this on the **server only** in a
 //!   networked build.  Single-player binaries may add it on the
@@ -26,7 +26,7 @@ use dd40_input_core::plugin::InputCorePlugin;
 use dd40_inventory_core::plugin::InventoryCorePlugin;
 use dd40_item_core::plugin::ItemCorePlugin;
 
-pub use crate::active_item::VanillaInventoryActiveItemPlugin;
+pub use crate::active_item::InventoryActiveItemPlugin;
 
 /// Plugin that wires the vanilla inventory **input** layer.
 ///
@@ -43,12 +43,12 @@ pub use crate::active_item::VanillaInventoryActiveItemPlugin;
 ///   inventory and emit a `SetActiveSlot`.
 ///
 /// Does **not** mutate any inventory state itself.  See
-/// [`VanillaInventoryRulesPlugin`] for the apply system that
+/// [`InventoryRulesPlugin`] for the apply system that
 /// authoritatively consumes the emitted `SetActiveSlot` messages.
 #[derive(Default)]
-pub struct VanillaInventoryPlugin;
+pub struct InventoryPlugin;
 
-impl Plugin for VanillaInventoryPlugin {
+impl Plugin for InventoryPlugin {
     fn build(&self, app: &mut App) {
         ensure_plugins!(
             app,
@@ -76,9 +76,9 @@ impl Plugin for VanillaInventoryPlugin {
 /// onto the local message buses these systems consume.
 /// Single-player builds may also add it on the client.
 #[derive(Default)]
-pub struct VanillaInventoryRulesPlugin;
+pub struct InventoryRulesPlugin;
 
-impl Plugin for VanillaInventoryRulesPlugin {
+impl Plugin for InventoryRulesPlugin {
     fn build(&self, app: &mut App) {
         ensure_plugins!(app, CorePlugin, InventoryCorePlugin, ItemCorePlugin);
         app.add_systems(
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn auto_adds_foundation_plugins() {
         let mut app = App::new();
-        app.add_plugins(VanillaInventoryPlugin);
+        app.add_plugins(InventoryPlugin);
         assert!(app.is_plugin_added::<CorePlugin>());
         assert!(app.is_plugin_added::<InventoryCorePlugin>());
         assert!(app.is_plugin_added::<ItemCorePlugin>());
@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn rules_plugin_auto_adds_foundation_plugins() {
         let mut app = App::new();
-        app.add_plugins(VanillaInventoryRulesPlugin);
+        app.add_plugins(InventoryRulesPlugin);
         assert!(app.is_plugin_added::<CorePlugin>());
         assert!(app.is_plugin_added::<InventoryCorePlugin>());
         assert!(app.is_plugin_added::<ItemCorePlugin>());
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn active_item_plugin_auto_adds_foundation_plugins() {
         let mut app = App::new();
-        app.add_plugins(VanillaInventoryActiveItemPlugin);
+        app.add_plugins(InventoryActiveItemPlugin);
         assert!(app.is_plugin_added::<CorePlugin>());
         assert!(app.is_plugin_added::<InventoryCorePlugin>());
         assert!(app.is_plugin_added::<ItemCorePlugin>());

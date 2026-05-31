@@ -149,7 +149,7 @@ fn find_slot_for(
 /// the resulting index onto each target character's
 /// [`InventoryComponent`].
 ///
-/// Lives in the rules half of `dd40_vanilla_inventory` (server-side
+/// Lives in the rules half of `dd40_inventory` (server-side
 /// in networked builds) so client-emitted requests round-trip through
 /// the server and the new value comes back via `InventoryComponent`
 /// replication — the same shape as every other inventory mutation.

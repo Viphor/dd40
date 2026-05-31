@@ -2,7 +2,7 @@
 //! dragging with the cursor inside an inventory GUI.
 //!
 //! Foundation vocabulary.  Mutated by the active inventory rules crate
-//! (e.g. `dd40_vanilla_inventory`); read by GUI crates to render the
+//! (e.g. `dd40_inventory`); read by GUI crates to render the
 //! local player's cursor-following stack visual.
 //!
 //! Per-character component (rather than a global resource) so that the

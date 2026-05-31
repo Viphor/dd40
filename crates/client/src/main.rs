@@ -11,7 +11,7 @@ use dd40_network::{ClientInventoryNetworkPlugin, ClientNetworkPlugin};
 use dd40_physics::PhysicsPlugin;
 use dd40_player_input::PlayerInputPlugin;
 use dd40_renderer::RendererPlugin;
-use dd40_vanilla_inventory::{VanillaInventoryActiveItemPlugin, VanillaInventoryPlugin};
+use dd40_inventory::{InventoryActiveItemPlugin, InventoryPlugin};
 use dd40_vanilla_palette::VanillaPalettePlugin;
 
 fn main() {
@@ -42,9 +42,9 @@ fn main() {
         LooseItemRenderPlugin,
         GuiPlugin,
         CharacterGuiPlugin,
-        VanillaInventoryPlugin,
+        InventoryPlugin,
     ))
-    .add_plugins((VanillaInventoryActiveItemPlugin, InventoryGuiPlugin))
+    .add_plugins((InventoryActiveItemPlugin, InventoryGuiPlugin))
     .add_systems(Startup, setup);
 
     #[cfg(feature = "debug_network")]

@@ -8,7 +8,7 @@
 //! every user gesture is published as a
 //! [`SlotInteraction`](dd40_inventory_core::slot_interaction::SlotInteraction)
 //! message and resolved by whichever inventory-rules crate the binary
-//! wires in (the vanilla rules live in `dd40_vanilla_inventory`).
+//! wires in (the vanilla rules live in `dd40_inventory`).
 //!
 //! # Usage
 //!
@@ -27,7 +27,7 @@
 //! client binary, never on the dedicated server.  Gestures travel
 //! over the wire as `NetSlotInteraction` (see
 //! `dd40_network::ClientInventoryNetworkPlugin`); the server runs
-//! `dd40_vanilla_inventory::VanillaInventoryRulesPlugin` to apply
+//! `dd40_inventory::InventoryRulesPlugin` to apply
 //! them and the result replicates back as `InventoryComponent` +
 //! `HeldStackComponent`.
 

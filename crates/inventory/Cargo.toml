@@ -1,5 +1,5 @@
 [package]
-name = "dd40_vanilla_inventory"
+name = "dd40_inventory"
 version = "0.1.0"
 edition = "2024"
 

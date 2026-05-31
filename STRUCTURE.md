@@ -58,14 +58,14 @@ There are currently no tracked exceptions to this rule.
 | `dd40_loose_items` | Server-only: drains `DropItems` into spawned `LooseItem` entities (with physics body), ticks `DespawnTimer` / `PickupCooldown`, merges same-item stacks on `BodyBodyContact`, registers `LooseItemPersister` so loose items survive restart | `dd40_core`, `dd40_physics_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loose_item_core` |
 | `dd40_integration_loose_item_pickup` | Server-only: only crate where `LooseItem` and `InventoryComponent` meet — subscribes to `BodyBodyContact` and grants stacks to the closest eligible character | `dd40_core`, `dd40_character_core`, `dd40_inventory_core`, `dd40_item_core`, `dd40_loose_item_core`, `dd40_physics_core` |
 | `dd40_loose_item_render` | Client-only: spinning, bobbing cube visual per `LooseItem` with placeable-block colour fallback | `dd40_core`, `dd40_item_core`, `dd40_loose_item_core` |
-| `dd40_vanilla_inventory` | Both sides: `VanillaInventoryPlugin` (selection / hotbar / `ActiveItem`) + `VanillaInventoryRulesPlugin` (apply system, **server-only** in networked builds; client-only in single-player) | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core` |
+| `dd40_inventory` | Both sides: `InventoryPlugin` (selection / hotbar / `ActiveItem`) + `InventoryRulesPlugin` (apply system, **server-only** in networked builds; client-only in single-player) | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core` |
 | `dd40_inventory_gui` | Client-only: hotbar widget, toggleable inventory grid window, per-slot widget with icon cache + colour fallback, held-stack cursor follower, click → `SlotInteraction` translator (forwarded to server by `dd40_network::ClientInventoryNetworkPlugin`) | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core` |
 
 ### Tier 2 — Binary
 
 | Crate | Plugins wired |
 |---|---|
-| `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin`, `CharacterGuiPlugin`, `LooseItemRenderPlugin`, `VanillaInventoryPlugin`, `InventoryGuiPlugin` |
+| `dd40_client` | `CorePlugin`, `PhysicsPlugin`, `VanillaPalettePlugin`, `PlayerInputPlugin`, `RendererPlugin`, `ClientNetworkPlugin`, `DebugUiPlugin`, `GuiPlugin`, `CharacterGuiPlugin`, `LooseItemRenderPlugin`, `InventoryPlugin`, `InventoryGuiPlugin` |
 | `dd40_server` | `CorePlugin`, `GracefulShutdownPlugin`, `PhysicsPlugin`, `IntegrationCharacterPhysicsPlugin`, `VanillaPalettePlugin`, `DiskStoragePlugin`, `WorldPlugin`, `CharacterInteractionPlugin`, `LootPlugin`, `LooseItemsPlugin`, `LooseItemPickupPlugin`, `ServerNetworkPlugin` |
 
 ---
@@ -221,7 +221,7 @@ Foundation crate. Defines the item registry, the per-character
 `ActiveItem` component, and the inventory-facing messages
 (`RequestActiveItem`, `ActiveItemChanged`).  Contains no game logic and
 no inventory layout — implementation crates such as
-`dd40_vanilla_inventory` provide the storage and selection systems.
+`dd40_inventory` provide the storage and selection systems.
 
 ```
 src/

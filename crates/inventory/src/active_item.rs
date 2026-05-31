@@ -15,7 +15,7 @@
 //!
 //! # Wiring
 //!
-//! [`VanillaInventoryActiveItemPlugin`] handles attachment:
+//! [`InventoryActiveItemPlugin`] handles attachment:
 //!
 //! - On `Added<InventoryComponent>` with no existing `ActiveItem`,
 //!   inserts `ActiveItem::with_provider(InventorySlotProvider { ... })`
@@ -87,9 +87,9 @@ impl ActiveItemProvider for InventorySlotProvider {
 /// build — gameplay logic on both sides needs to read "what is this
 /// character holding".
 #[derive(Default)]
-pub struct VanillaInventoryActiveItemPlugin;
+pub struct InventoryActiveItemPlugin;
 
-impl Plugin for VanillaInventoryActiveItemPlugin {
+impl Plugin for InventoryActiveItemPlugin {
     fn build(&self, app: &mut App) {
         ensure_plugins!(app, CorePlugin, InventoryCorePlugin, ItemCorePlugin);
         app.add_systems(
@@ -150,7 +150,7 @@ mod tests {
 
     fn make_app() -> App {
         let mut app = App::new();
-        app.add_plugins(VanillaInventoryActiveItemPlugin);
+        app.add_plugins(InventoryActiveItemPlugin);
         app
     }
 

@@ -142,7 +142,7 @@ pub struct PlayerLeftMessage {
 /// meaning on the server.  Instead, the server resolves the controlling
 /// character via lightyear's connection → `ControlledBy` mapping and
 /// re-emits a local [`SlotInteraction`] on the Bevy bus that the
-/// existing `dd40_vanilla_inventory` apply system consumes unchanged.
+/// existing `dd40_inventory` apply system consumes unchanged.
 ///
 /// [`SlotInteraction`]: dd40_inventory_core::slot_interaction::SlotInteraction
 #[derive(Message, Clone, Debug, Serialize, Deserialize)]

@@ -15,8 +15,8 @@ use dd40_inventory_core::prelude::{
 };
 use dd40_item_core::active_item::{ActiveItem, ItemStack};
 use dd40_item_core::registry::{ItemDefinition, ItemId, ItemRegistry};
-use dd40_vanilla_inventory::{
-    VanillaInventoryActiveItemPlugin, VanillaInventoryPlugin, VanillaInventoryRulesPlugin,
+use dd40_inventory::{
+    InventoryActiveItemPlugin, InventoryPlugin, InventoryRulesPlugin,
 };
 
 fn make_app() -> App {
@@ -24,9 +24,9 @@ fn make_app() -> App {
     app.add_plugins(MinimalPlugins);
     app.add_message::<MouseWheel>();
     app.add_plugins((
-        VanillaInventoryActiveItemPlugin,
-        VanillaInventoryPlugin,
-        VanillaInventoryRulesPlugin,
+        InventoryActiveItemPlugin,
+        InventoryPlugin,
+        InventoryRulesPlugin,
     ));
     app
 }

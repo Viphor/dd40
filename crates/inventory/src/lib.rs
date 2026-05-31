@@ -32,21 +32,21 @@
 //! This crate is split into two plugins so the server can run the
 //! mutating rules without dragging in client-only selection state:
 //!
-//! - [`plugin::VanillaInventoryPlugin`] — hotbar selection,
+//! - [`plugin::InventoryPlugin`] — hotbar selection,
 //!   `ActiveItem` bridge.  Add on both client and server.
-//! - [`plugin::VanillaInventoryRulesPlugin`] — the apply system that
+//! - [`plugin::InventoryRulesPlugin`] — the apply system that
 //!   mutates `InventoryComponent` / `HeldStackComponent`.  Add on the
 //!   **server only** in a networked build.  In a single-player binary,
 //!   add it on the client too.
 //!
 //! ```no_run
 //! use bevy::prelude::*;
-//! use dd40_vanilla_inventory::plugin::{
-//!     VanillaInventoryPlugin, VanillaInventoryRulesPlugin,
+//! use dd40_inventory::plugin::{
+//!     InventoryPlugin, InventoryRulesPlugin,
 //! };
 //!
 //! App::new()
-//!     .add_plugins((VanillaInventoryPlugin, VanillaInventoryRulesPlugin))
+//!     .add_plugins((InventoryPlugin, InventoryRulesPlugin))
 //!     .run();
 //! ```
 //!
@@ -75,5 +75,5 @@ pub mod rules;
 pub mod selection;
 
 pub use plugin::{
-    VanillaInventoryActiveItemPlugin, VanillaInventoryPlugin, VanillaInventoryRulesPlugin,
+    InventoryActiveItemPlugin, InventoryPlugin, InventoryRulesPlugin,
 };

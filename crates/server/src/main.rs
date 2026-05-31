@@ -14,7 +14,7 @@ use dd40_network::{
     shared::connection::SHARED_SETTINGS,
 };
 use dd40_physics::PhysicsPlugin;
-use dd40_vanilla_inventory::{VanillaInventoryActiveItemPlugin, VanillaInventoryRulesPlugin};
+use dd40_inventory::{InventoryActiveItemPlugin, InventoryRulesPlugin};
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
 use dd40_world::{
     WorldPlugin,
@@ -69,24 +69,24 @@ fn main() {
             // NetSlotInteraction; ServerInventoryNetworkPlugin
             // (below) translates them onto the local bus.
             //
-            // The selection half of dd40_vanilla_inventory
-            // (VanillaInventoryPlugin) is client-only: it gates on
+            // The selection half of dd40_inventory
+            // (InventoryPlugin) is client-only: it gates on
             // `With<Player>`, which is only ever attached on the
             // locally-predicted character, and it reads
             // bevy_input::MouseWheel which the headless server does
             // not register.
-            VanillaInventoryRulesPlugin,
+            InventoryRulesPlugin,
             // Auto-attaches `ActiveItem` (with an `InventorySlotProvider`)
             // to every entity with an `InventoryComponent` and keeps the
             // cache in sync.  Required on the server so authoritative
             // gameplay (mining tool bonus, placement provider) can read
             // "what is this character holding"; required on the client so
             // RMB dispatch (Place vs Interact) can see the held stack.
-            VanillaInventoryActiveItemPlugin,
+            InventoryActiveItemPlugin,
             // Server-only: drain NetSlotInteraction messages from
             // lightyear, resolve the controlling Character via
             // ControlledBy, and re-emit a local SlotInteraction so the
-            // VanillaInventoryRulesPlugin apply system runs unchanged.
+            // InventoryRulesPlugin apply system runs unchanged.
             ServerInventoryNetworkPlugin,
             ServerNetworkPlugin(DDServer {
                 conditioner: Some(RecvLinkConditioner::new(

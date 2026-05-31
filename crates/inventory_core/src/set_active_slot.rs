@@ -7,7 +7,7 @@
 //! authoritative rules layer apply it — exactly the same shape as
 //! [`SlotInteraction`][crate::slot_interaction::SlotInteraction].
 //!
-//! Producers: input/GUI crates (e.g. `dd40_vanilla_inventory`'s hotbar
+//! Producers: input/GUI crates (e.g. `dd40_inventory`'s hotbar
 //! key/wheel handlers).
 //! Consumers in a networked build:
 //!

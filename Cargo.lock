@@ -2802,13 +2802,13 @@ dependencies = [
  "dd40_debug_ui",
  "dd40_gui",
  "dd40_integration_character_physics",
+ "dd40_inventory",
  "dd40_inventory_gui",
  "dd40_loose_item_render",
  "dd40_network",
  "dd40_physics",
  "dd40_player_input",
  "dd40_renderer",
- "dd40_vanilla_inventory",
  "dd40_vanilla_palette",
  "dd40_world",
  "lightyear_ui",
@@ -2875,6 +2875,19 @@ dependencies = [
  "dd40_item_core",
  "dd40_loose_item_core",
  "dd40_physics_core",
+]
+
+[[package]]
+name = "dd40_inventory"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_enhanced_input 0.25.0",
+ "dd40_character_core",
+ "dd40_core",
+ "dd40_input_core",
+ "dd40_inventory_core",
+ "dd40_item_core",
 ]
 
 [[package]]
@@ -3044,26 +3057,13 @@ dependencies = [
  "dd40_core",
  "dd40_integration_character_physics",
  "dd40_integration_loose_item_pickup",
+ "dd40_inventory",
  "dd40_loose_items",
  "dd40_loot",
  "dd40_network",
  "dd40_physics",
- "dd40_vanilla_inventory",
  "dd40_vanilla_palette",
  "dd40_world",
-]
-
-[[package]]
-name = "dd40_vanilla_inventory"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy_enhanced_input 0.25.0",
- "dd40_character_core",
- "dd40_core",
- "dd40_input_core",
- "dd40_inventory_core",
- "dd40_item_core",
 ]
 
 [[package]]

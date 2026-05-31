@@ -17,7 +17,7 @@
 
 /// Number of slots in the player hotbar.
 ///
-/// `dd40_vanilla_inventory` defines the hotbar as `Inventory` slots
+/// `dd40_inventory` defines the hotbar as `Inventory` slots
 /// `0..HOTBAR_SIZE`.  Other inventory crates are free to reinterpret
 /// these slots, but GUI crates assume this many cells when rendering
 /// the always-visible hotbar.

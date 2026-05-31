@@ -7,7 +7,7 @@
 //! the tool kind/tier; placement reads it for the placeable block; future
 //! "use item" code paths will read it for consumable / weapon behaviour.
 //!
-//! Inventory crates (`dd40_vanilla_inventory`, hypothetical `dd40_multi_equip`,
+//! Inventory crates (`dd40_inventory`, hypothetical `dd40_multi_equip`,
 //! etc.) attach [`ActiveItem`] with a concrete
 //! [`ActiveItemProvider`] that knows how to read and consume from
 //! whatever storage they use.  A character without an [`ActiveItem`]
@@ -82,7 +82,7 @@ impl ItemStack {
 /// - [`EmptyProvider`] — always empty, consume is a no-op.  Used as
 ///   the default when an `ActiveItem` is freshly inserted but no
 ///   inventory has claimed it yet.
-/// - `dd40_vanilla_inventory::InventorySlotProvider` — reads/mutates
+/// - `dd40_inventory::InventorySlotProvider` — reads/mutates
 ///   the entity's `InventoryComponent` at its current `active_slot`.
 ///
 /// Future providers might wrap a creative-mode infinite stack, a

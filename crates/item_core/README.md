@@ -11,7 +11,7 @@ no inventory layout.
 `ActiveItem` is the **single seam** that lets inventory crates be swapped
 out without touching gameplay code. Mining, placement, and any future
 "use item" system read `ActiveItem` on the character; an inventory crate
-(`dd40_vanilla_inventory`, hypothetical `dd40_multi_equip`) writes it.
+(`dd40_inventory`, hypothetical `dd40_multi_equip`) writes it.
 The two messages — `RequestActiveItem` (queued; inventory drains it) and
 `ActiveItemChanged` (emitted by the inventory; HUD/network observe it) —
 let policy crates such as `dd40_auto_tool_swap` plug in without

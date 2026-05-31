@@ -1,6 +1,6 @@
 //! Server-side bridge that turns wire-form [`NetSlotInteraction`]
 //! messages into local [`SlotInteraction`] messages so the
-//! `dd40_vanilla_inventory` apply system can consume them unchanged.
+//! `dd40_inventory` apply system can consume them unchanged.
 //!
 //! The wire form deliberately omits the target `Entity` (it would be
 //! the client's local id, meaningless on the server).  Instead the
@@ -89,8 +89,8 @@ pub fn forward_set_active_slot(
 /// Plugin that adds [`forward_slot_interactions`] and
 /// [`forward_set_active_slot`] to `Update`.
 ///
-/// Add this on the server *after* `VanillaInventoryRulesPlugin` (from
-/// `dd40_vanilla_inventory`); that plugin owns the [`SlotInteraction`]
+/// Add this on the server *after* `InventoryRulesPlugin` (from
+/// `dd40_inventory`); that plugin owns the [`SlotInteraction`]
 /// / [`SetActiveSlot`] message registrations and the apply systems.
 #[derive(Default)]
 pub struct ServerInventoryNetworkPlugin;

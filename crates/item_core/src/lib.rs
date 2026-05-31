@@ -6,7 +6,7 @@
 //! items: identifiers, definitions, the per-character "currently active item"
 //! component, and the messages inventory crates exchange.  It contains no
 //! game behaviour and no inventory layout — those live in implementation
-//! crates such as `dd40_vanilla_inventory`.
+//! crates such as `dd40_inventory`.
 //!
 //! # The moddable seam
 //!

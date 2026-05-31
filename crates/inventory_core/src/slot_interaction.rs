@@ -7,7 +7,7 @@
 //! whichever inventory rules crate is wired in.
 //!
 //! Producers: GUI crates (e.g. `dd40_inventory_gui`).
-//! Consumers: rules crates (e.g. `dd40_vanilla_inventory`).
+//! Consumers: rules crates (e.g. `dd40_inventory`).
 //!
 //! # Slot indexing
 //!
