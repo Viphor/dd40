@@ -4,10 +4,18 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
+[features]
+default = []
+# Attaches `BlockTextures` (and `RenderLayer` for leaves) to every
+# renderable vanilla block. Without this feature, vanilla blocks
+# ship colour-only data — the runtime stays unchanged.
+textures = ["dep:dd40_texture_core"]
+
 [dependencies]
 dd40_core = { workspace = true }
 dd40_item_core = { workspace = true }
 dd40_loot_core = { workspace = true }
+dd40_texture_core = { workspace = true, optional = true }
 bevy = { workspace = true, default-features = false, features = ["bevy_color"] }
 
 [dev-dependencies]
