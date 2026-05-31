@@ -11,9 +11,13 @@
 
 #import bevy_pbr::forward_io::VertexOutput
 
-@group(2) @binding(0) var atlas: texture_2d_array<f32>;
-@group(2) @binding(1) var atlas_sampler: sampler;
-@group(2) @binding(2) var<uniform> params: BlockAtlasParams;
+// Bevy 0.18 reserves @group(2) for mesh data; custom material bindings
+// live at the index exposed via the `MATERIAL_BIND_GROUP` shader-def
+// (currently 3). Using the shader-def keeps us forward-compatible if
+// upstream renumbers groups.
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var atlas: texture_2d_array<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var atlas_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(2) var<uniform> params: BlockAtlasParams;
 
 struct BlockAtlasParams {
     // Array layer this material samples from.
