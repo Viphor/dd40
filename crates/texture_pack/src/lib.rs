@@ -51,10 +51,14 @@
 //! ```
 
 pub mod config;
+pub mod decode;
 pub mod discover;
+pub mod mcmeta;
 pub mod plugin;
 pub mod prelude;
 
 pub use config::TexturePackConfig;
+pub use decode::{DecodeError, DecodedTexture, decode, decode_all};
 pub use discover::{DiscoveredTexture, discover};
+pub use mcmeta::{McmetaError, TICK_MS, parse_mcmeta, parse_mcmeta_bytes};
 pub use plugin::TexturePackPlugin;
