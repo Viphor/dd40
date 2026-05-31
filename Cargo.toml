@@ -30,6 +30,7 @@ members = [
     "crates/inventory",
     "crates/inventory_gui",
     "crates/texture_core",
+    "crates/texture_pack",
 ]
 resolver = "3"
 
@@ -82,3 +83,4 @@ dd40_input_core = { path = "crates/input_core" }
 dd40_inventory = { path = "crates/inventory" }
 dd40_inventory_gui = { path = "crates/inventory_gui" }
 dd40_texture_core = { path = "crates/texture_core" }
+dd40_texture_pack = { path = "crates/texture_pack" }
