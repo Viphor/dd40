@@ -134,7 +134,7 @@ impl Plugin for BlockAtlasMaterialPlugin {
         // Embed the shader source so the binary ships standalone.
         // `assets/shaders/block_atlas.wgsl` is relative to the
         // renderer crate root and loaded once at startup.
-        let source = include_str!("../assets/shaders/block_atlas.wgsl");
+        let source = include_str!("../../assets/shaders/block_atlas.wgsl");
         let shader = bevy::shader::Shader::from_wgsl(source, "block_atlas.wgsl");
         let _ = app
             .world_mut()
@@ -143,12 +143,6 @@ impl Plugin for BlockAtlasMaterialPlugin {
 
         app.add_plugins(MaterialPlugin::<BlockAtlasMaterial>::default());
     }
-}
-
-/// Returns `true` once the texture pipeline modules are populated.
-/// Bucket-split mesh code will flip this on when it lands.
-pub const fn pipeline_ready() -> bool {
-    false
 }
 
 #[cfg(test)]
@@ -176,10 +170,5 @@ mod tests {
         assert!(matches!(m.alpha_mode, AlphaMode::Blend));
         assert_eq!(m.params.layer, 7);
         assert_eq!(m.params.alpha_cutoff, 0.0);
-    }
-
-    #[test]
-    fn pipeline_is_not_ready_yet() {
-        assert!(!pipeline_ready());
     }
 }
