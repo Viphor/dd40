@@ -50,15 +50,19 @@
 //!     .run();
 //! ```
 
+pub mod build;
 pub mod config;
 pub mod decode;
 pub mod discover;
 pub mod mcmeta;
+pub mod pack;
 pub mod plugin;
 pub mod prelude;
 
+pub use build::{BuiltAtlas, StaticBlockAtlasSource, build_image, build_pixels, install};
 pub use config::TexturePackConfig;
 pub use decode::{DecodeError, DecodedTexture, decode, decode_all};
 pub use discover::{DiscoveredTexture, discover};
 pub use mcmeta::{McmetaError, TICK_MS, parse_mcmeta, parse_mcmeta_bytes};
+pub use pack::{AtlasLayout, TilePlacement, compute_layout};
 pub use plugin::TexturePackPlugin;

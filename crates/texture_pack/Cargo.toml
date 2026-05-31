@@ -9,6 +9,7 @@ bevy = { workspace = true, default-features = false, features = [
     "bevy_asset",
     "bevy_image",
     "bevy_log",
+    "bevy_render",
     "bevy_state",
 ] }
 serde = { version = "1.0", features = ["derive"] }

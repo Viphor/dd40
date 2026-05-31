@@ -87,7 +87,7 @@ pub mod render_layer;
 pub mod texture_ref;
 
 pub use animation::AnimationSpec;
-pub use atlas::{AtlasId, AtlasReady, AtlasUv, BlockAtlas, ResolvedTexture};
+pub use atlas::{AtlasId, AtlasReady, AtlasUv, BlockAtlas, BlockAtlasSource, ResolvedTexture};
 pub use block_textures::{BlockTextures, Face};
 pub use plugin::TextureCorePlugin;
 pub use render_layer::RenderLayer;

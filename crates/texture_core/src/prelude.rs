@@ -5,7 +5,9 @@
 //! ```
 
 pub use crate::animation::AnimationSpec;
-pub use crate::atlas::{AtlasId, AtlasReady, AtlasUv, BlockAtlas, ResolvedTexture};
+pub use crate::atlas::{
+    AtlasId, AtlasReady, AtlasUv, BlockAtlas, BlockAtlasSource, ResolvedTexture,
+};
 pub use crate::block_textures::{BlockTextures, Face};
 pub use crate::plugin::TextureCorePlugin;
 pub use crate::render_layer::RenderLayer;
