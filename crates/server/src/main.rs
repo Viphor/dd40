@@ -14,7 +14,7 @@ use dd40_network::{
     shared::connection::SHARED_SETTINGS,
 };
 use dd40_physics::PhysicsPlugin;
-use dd40_vanilla_inventory::VanillaInventoryRulesPlugin;
+use dd40_vanilla_inventory::{VanillaInventoryActiveItemPlugin, VanillaInventoryRulesPlugin};
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
 use dd40_world::{
     WorldPlugin,
@@ -76,6 +76,13 @@ fn main() {
             // bevy_input::MouseWheel which the headless server does
             // not register.
             VanillaInventoryRulesPlugin,
+            // Auto-attaches `ActiveItem` (with an `InventorySlotProvider`)
+            // to every entity with an `InventoryComponent` and keeps the
+            // cache in sync.  Required on the server so authoritative
+            // gameplay (mining tool bonus, placement provider) can read
+            // "what is this character holding"; required on the client so
+            // RMB dispatch (Place vs Interact) can see the held stack.
+            VanillaInventoryActiveItemPlugin,
             // Server-only: drain NetSlotInteraction messages from
             // lightyear, resolve the controlling Character via
             // ControlledBy, and re-emit a local SlotInteraction so the
