@@ -177,14 +177,14 @@ impl BlockDataTypeRegistry {
             return false;
         }
         let type_key = std::any::type_name::<T>();
-        if let Some(existing) = self.by_type_key.get(type_key) {
-            if *existing != tid {
-                panic!(
-                    "BlockDataTypeRegistry: type_name `{type_key}` is already \
+        if let Some(existing) = self.by_type_key.get(type_key)
+            && *existing != tid
+        {
+            panic!(
+                "BlockDataTypeRegistry: type_name `{type_key}` is already \
                      registered to a different TypeId; this would corrupt \
                      wire decoding",
-                );
-            }
+            );
         }
         let decoder: BlockDataDecoder = |d| {
             let value: T = erased_serde::deserialize(d)?;

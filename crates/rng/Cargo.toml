@@ -7,3 +7,6 @@ authors.workspace = true
 [dependencies]
 bevy = { workspace = true, default-features = false }
 rand = { workspace = true }
+
+[lints]
+workspace = true

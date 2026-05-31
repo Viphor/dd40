@@ -8,3 +8,6 @@ authors.workspace = true
 dd40_core = { workspace = true }
 dd40_physics_core = { workspace = true }
 bevy = { workspace = true, default-features = false }
+
+[lints]
+workspace = true

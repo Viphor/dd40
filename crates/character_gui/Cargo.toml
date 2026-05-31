@@ -8,3 +8,6 @@ authors.workspace = true
 bevy = { workspace = true, default-features = false, features = ["bevy_gizmos"] }
 dd40_core = { workspace = true }
 dd40_character_core = { workspace = true }
+
+[lints]
+workspace = true

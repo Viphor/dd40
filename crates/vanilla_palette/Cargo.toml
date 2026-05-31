@@ -12,3 +12,6 @@ bevy = { workspace = true, default-features = false, features = ["bevy_color"] }
 
 [dev-dependencies]
 rand = { workspace = true }
+
+[lints]
+workspace = true

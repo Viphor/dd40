@@ -214,11 +214,11 @@ pub fn save_all_entities(world: &mut World) {
         return;
     }
 
-    if !by_chunk.is_empty() {
-        if let Err(err) = std::fs::create_dir_all(&dir) {
-            warn!("failed to create entity-sidecar directory {dir:?}: {err}");
-            return;
-        }
+    if !by_chunk.is_empty()
+        && let Err(err) = std::fs::create_dir_all(&dir)
+    {
+        warn!("failed to create entity-sidecar directory {dir:?}: {err}");
+        return;
     }
 
     for (chunk, entities) in by_chunk {

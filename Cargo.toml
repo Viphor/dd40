@@ -37,6 +37,18 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Andreas H. Klostergaard <akl@klostergaard.net>"]
 
+# Workspace-wide clippy lint configuration.
+#
+# Bevy ECS system signatures naturally produce many parameters and deeply
+# nested `Query<...>` filter types. Both `clippy::type_complexity` and
+# `clippy::too_many_arguments` flag these as warnings even though the
+# resulting code is idiomatic and well-typed. Silencing them keeps
+# `cargo clippy` signal-to-noise high for the warnings that actually
+# matter (genuine bugs, unused code, etc.).
+[workspace.lints.clippy]
+type_complexity = "allow"
+too_many_arguments = "allow"
+
 [workspace.dependencies]
 bevy = { version = "0.18", default-features = false }
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "os_rng"] }

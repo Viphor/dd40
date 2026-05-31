@@ -23,3 +23,6 @@ dd40_loot = { workspace = true }
 dd40_loose_items = { workspace = true }
 dd40_integration_loose_item_pickup = { workspace = true }
 dd40_vanilla_inventory = { workspace = true }
+
+[lints]
+workspace = true

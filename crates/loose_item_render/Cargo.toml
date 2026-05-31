@@ -13,3 +13,6 @@ bevy = { workspace = true, default-features = false, features = [
 dd40_core = { workspace = true }
 dd40_item_core = { workspace = true }
 dd40_loose_item_core = { workspace = true }
+
+[lints]
+workspace = true

@@ -91,10 +91,10 @@ pub fn sync_tooltip(
                 node.top = Val::Px(cursor.y + CURSOR_OFFSET_Y);
                 *vis = Visibility::Visible;
                 for child in children.iter() {
-                    if let Ok(mut t) = texts.get_mut(child) {
-                        if t.0 != text {
-                            t.0 = text.clone();
-                        }
+                    if let Ok(mut t) = texts.get_mut(child)
+                        && t.0 != text
+                    {
+                        t.0 = text.clone();
                     }
                 }
             } else {

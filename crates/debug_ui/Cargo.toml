@@ -7,3 +7,6 @@ authors.workspace = true
 [dependencies]
 bevy = { workspace = true, features = ["default"] }
 dd40_core = { workspace = true }
+
+[lints]
+workspace = true

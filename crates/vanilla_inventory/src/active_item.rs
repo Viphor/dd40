@@ -69,10 +69,10 @@ impl ActiveItemProvider for InventorySlotProvider {
         };
         // Mutate via the underlying `Inventory` so we don't need a
         // `Commands` (which would conflict with the `&mut World`
-        // borrow we already hold).  We trigger the equivalent
-        // `InventoryChanged` event ourselves once the borrow is gone.
+        // borrow we already hold). The `entity_mut` borrow ends after
+        // the last use here (NLL), freeing the world for the
+        // subsequent `world.trigger` call.
         let (taken, changes) = inv.inventory_mut().decrement_active_slot(count);
-        drop(entity_mut);
         if !changes.is_empty() {
             world.trigger(dd40_inventory_core::component::InventoryChanged { entity, changes });
         }

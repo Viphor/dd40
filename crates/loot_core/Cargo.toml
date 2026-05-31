@@ -13,3 +13,6 @@ dd40_item_core = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
+
+[lints]
+workspace = true

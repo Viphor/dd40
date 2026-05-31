@@ -12,3 +12,6 @@ dd40_physics_core = { workspace = true }
 
 [dev-dependencies]
 dd40_physics = { workspace = true }
+
+[lints]
+workspace = true

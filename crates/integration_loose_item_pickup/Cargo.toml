@@ -12,3 +12,6 @@ dd40_inventory_core = { workspace = true }
 dd40_item_core = { workspace = true }
 dd40_loose_item_core = { workspace = true }
 dd40_physics_core = { workspace = true }
+
+[lints]
+workspace = true
