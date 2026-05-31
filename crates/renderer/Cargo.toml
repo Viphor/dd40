@@ -4,6 +4,15 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
+[features]
+default = []
+# Enables the textured-block rendering path: the renderer reads
+# `BlockTextures` from `BlockDataRegistry`, splits each chunk's mesh
+# by `RenderLayer`, and samples the `BlockAtlas` 2D-array texture.
+# Without this feature, the renderer behaves exactly as before:
+# colour-only meshes built from `BlockDefinition::color`.
+textures = ["dep:dd40_texture_core"]
+
 [dependencies]
 bevy = { workspace = true, default-features = false, features = [
     "bevy_pbr",
@@ -16,6 +25,7 @@ bevy = { workspace = true, default-features = false, features = [
 ] }
 dd40_core = { workspace = true }
 dd40_physics_core = { workspace = true }
+dd40_texture_core = { workspace = true, optional = true }
 
 [lints]
 workspace = true

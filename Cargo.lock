@@ -3037,6 +3037,7 @@ dependencies = [
  "bevy",
  "dd40_core",
  "dd40_physics_core",
+ "dd40_texture_core",
 ]
 
 [[package]]

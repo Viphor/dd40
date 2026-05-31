@@ -84,6 +84,9 @@ pub mod mesh_task;
 pub mod render_state;
 pub mod systems;
 
+#[cfg(feature = "textures")]
+pub mod textures;
+
 use bevy::prelude::*;
 use dd40_core::{plugin::CorePlugin, prelude::AppState};
 use dd40_physics_core::plugin::PhysicsCorePlugin;
@@ -151,6 +154,9 @@ pub struct RendererPlugin;
 impl Plugin for RendererPlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
+
+        #[cfg(feature = "textures")]
+        dd40_core::ensure_plugins!(app, dd40_texture_core::TextureCorePlugin);
 
         // Insert resources only if they haven't been added already so the
         // caller can override them before adding the plugin.
