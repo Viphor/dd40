@@ -5,10 +5,13 @@
 //! bevy_ui's `Interaction` enum doesn't carry which button caused the
 //! press.  Shift modifier is read from [`ButtonInput<KeyCode>`].
 //!
-//! Drop-outside detection is handled by [`translate_drop_outside`]:
-//! whenever the user releases the left mouse button while the local
-//! player is holding a stack and no slot widget is hovered, a
-//! `SlotInteraction::DropHeld` is emitted.
+//! Cursor state (empty vs holding a stack) is read from the local
+//! player's [`HeldStackComponent`] so we can pick the right intent
+//! variant: left-click → `TakeAll` when the cursor is empty,
+//! `PlaceAll` when it is holding; right-click → `TakeHalf` vs
+//! `PlaceOne` similarly.  Shift-left-click always emits
+//! `QuickTransfer`.  Drop-outside is handled by
+//! [`translate_drop_outside`].
 
 use bevy::prelude::*;
 use dd40_character_core::components::Player;
@@ -24,6 +27,7 @@ pub fn translate_clicks(
     slots: Query<(&Interaction, &SlotKey), Changed<Interaction>>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
+    player: Query<&HeldStackComponent, With<Player>>,
     mut writer: MessageWriter<SlotInteraction>,
 ) {
     let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
@@ -32,16 +36,21 @@ pub fn translate_clicks(
     if !left && !right {
         return;
     }
+    let holding = player.single().is_ok_and(|h| !h.is_empty());
     for (interaction, key) in &slots {
         if !matches!(interaction, Interaction::Pressed) {
             continue;
         }
         let kind = if left && shift {
             SlotInteractionKind::QuickTransfer { slot: key.slot }
+        } else if left && holding {
+            SlotInteractionKind::PlaceAll { slot: key.slot }
         } else if left {
-            SlotInteractionKind::TakeOrPlaceAll { slot: key.slot }
+            SlotInteractionKind::TakeAll { slot: key.slot }
+        } else if right && holding {
+            SlotInteractionKind::PlaceOne { slot: key.slot }
         } else if right {
-            SlotInteractionKind::TakeHalfOrPlaceOne { slot: key.slot }
+            SlotInteractionKind::TakeHalf { slot: key.slot }
         } else {
             continue;
         };

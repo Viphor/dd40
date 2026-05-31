@@ -1,42 +1,35 @@
-//! Pure slot-interaction resolver.
+//! Pure slot-interaction resolvers.
 //!
-//! Given the current state of the cursor (`held`) and a slot (`slot`),
-//! plus the item's max-stack size and the click kind, returns the
+//! Each [`SlotInteractionKind`][dd40_inventory_core::slot_interaction::SlotInteractionKind]
+//! variant maps to one resolver function in this module.  Given the
+//! current state of the cursor (`held`) and a slot (`slot`), plus the
+//! relevant item's max-stack size, each resolver returns a
 //! [`SlotResolution`] describing what the apply layer should do.
 //!
 //! This module is **pure** — no ECS, no globals, no IO.  Every branch
 //! is exercised by unit tests at the bottom of the file.
 //!
-//! Quick-transfer resolution requires knowledge of the rest of the
-//! inventory (which slot on the other side to merge into); the
-//! resolver leaves that to the apply layer by returning
-//! [`SlotResolution::ShiftMove`].  Drop-outside is also handled at
-//! the apply layer — this resolver only deals with slot-targeted
-//! interactions.
+//! Quick-transfer (`QuickTransfer`) and drop-held (`DropHeld`) are
+//! handled directly in the apply layer because they require knowledge
+//! of the rest of the inventory (quick-transfer) or of the world
+//! (drop-held); only the per-slot intents (`TakeAll`, `PlaceAll`,
+//! `TakeHalf`, `PlaceOne`) live here.
+//!
+//! # Intent / cursor-state contract
+//!
+//! `Take*` resolvers are no-ops when the cursor is non-empty;
+//! `Place*` resolvers are no-ops when the cursor is empty.  This is
+//! intentional — the GUI is responsible for sending the intent that
+//! matches the *current* cursor state, and a mismatch (caused by lag
+//! or by a buggy / hostile client) must not silently flip the
+//! operation around.  When in doubt the server treats the message as
+//! a no-op.
 
 use std::num::NonZero;
 
 use dd40_item_core::active_item::ItemStack;
 
-/// Kinds of slot-targeted intent the resolver handles.
-///
-/// Matches the intent vocabulary in
-/// [`SlotInteractionKind`][dd40_inventory_core::slot_interaction::SlotInteractionKind]
-/// (minus `DropHeld`, which does not target a slot and is handled in
-/// the apply layer).  The names describe *what the player wants to
-/// happen*, not which input fired.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SlotClickKind {
-    /// Take or place the whole stack.
-    Full,
-    /// Take half the slot's stack, or place a single item from the
-    /// cursor.
-    Partial,
-    /// Move the whole stack to the opposite inventory section.
-    Quick,
-}
-
-/// Output of [`resolve_slot`].
+/// Output of every resolver in this module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SlotResolution {
     /// The cursor and the slot both reach a new state.
@@ -46,61 +39,48 @@ pub enum SlotResolution {
         /// New slot contents (`None` empties the slot).
         new_slot: Option<ItemStack>,
     },
-    /// The apply layer must move the slot's contents to the first
-    /// compatible target on the opposite inventory area.
-    ShiftMove {
-        /// The slot the move originates from.
-        from_slot: u8,
-    },
     /// Nothing happens.
     NoOp,
 }
 
-/// Resolves a single slot-targeted click into a [`SlotResolution`].
+/// Resolver for [`TakeAll`][dd40_inventory_core::slot_interaction::SlotInteractionKind::TakeAll].
 ///
-/// `max_stack` is the per-item cap from
-/// [`ItemDefinition::max_stack`][dd40_item_core::registry::ItemDefinition::max_stack]
-/// for whichever item is *relevant* — that is the `held` item when
-/// merging into a slot, or the slot item when picking from it.  When
-/// both `held` and `slot` are `Some` of different items it does not
-/// matter which is passed since the resolver swaps without consulting
-/// the cap.  The apply layer is responsible for looking the cap up.
-pub fn resolve_slot(
-    held: Option<ItemStack>,
-    slot: Option<ItemStack>,
-    max_stack: NonZero<u16>,
-    kind: SlotClickKind,
-    from_slot: u8,
-) -> SlotResolution {
-    match kind {
-        SlotClickKind::Full => resolve_full(held, slot, max_stack),
-        SlotClickKind::Partial => resolve_partial(held, slot, max_stack),
-        SlotClickKind::Quick => {
-            if slot.is_some() {
-                SlotResolution::ShiftMove { from_slot }
-            } else {
-                SlotResolution::NoOp
-            }
-        }
-    }
-}
-
-fn resolve_full(
-    held: Option<ItemStack>,
-    slot: Option<ItemStack>,
-    max_stack: NonZero<u16>,
-) -> SlotResolution {
+/// Picks up the slot's full stack into the cursor.  No-op when the
+/// cursor is non-empty or the slot is empty.
+pub fn resolve_take_all(held: Option<ItemStack>, slot: Option<ItemStack>) -> SlotResolution {
     match (held, slot) {
-        (None, None) => SlotResolution::NoOp,
         (None, Some(s)) => SlotResolution::Mutation {
             new_held: Some(s),
             new_slot: None,
         },
-        (Some(h), None) => SlotResolution::Mutation {
+        _ => SlotResolution::NoOp,
+    }
+}
+
+/// Resolver for [`PlaceAll`][dd40_inventory_core::slot_interaction::SlotInteractionKind::PlaceAll].
+///
+/// Deposits the held stack into `slot`:
+///
+/// - empty slot → drop the full held stack into the slot.
+/// - matching item → merge up to `max_stack`; any leftover stays in
+///   the cursor.
+/// - different item → swap.
+///
+/// No-op when the cursor is empty.
+pub fn resolve_place_all(
+    held: Option<ItemStack>,
+    slot: Option<ItemStack>,
+    max_stack: NonZero<u16>,
+) -> SlotResolution {
+    let Some(h) = held else {
+        return SlotResolution::NoOp;
+    };
+    match slot {
+        None => SlotResolution::Mutation {
             new_held: None,
             new_slot: Some(h),
         },
-        (Some(h), Some(s)) if h.item == s.item => {
+        Some(s) if s.item == h.item => {
             let cap = max_stack.get();
             let total = h.count.get() as u32 + s.count.get() as u32;
             let new_slot_count = total.min(cap as u32) as u16;
@@ -112,39 +92,60 @@ fn resolve_full(
             let new_held = NonZero::new(leftover as u16).map(|c| ItemStack::new(h.item, c));
             SlotResolution::Mutation { new_held, new_slot }
         }
-        (Some(h), Some(s)) => SlotResolution::Mutation {
+        Some(s) => SlotResolution::Mutation {
             new_held: Some(s),
             new_slot: Some(h),
         },
     }
 }
 
-fn resolve_partial(
+/// Resolver for [`TakeHalf`][dd40_inventory_core::slot_interaction::SlotInteractionKind::TakeHalf].
+///
+/// Picks up ceil(slot.count / 2) into the cursor; the remaining
+/// floor(count / 2) stays in the slot.  No-op when the cursor is
+/// non-empty or the slot is empty.
+pub fn resolve_take_half(held: Option<ItemStack>, slot: Option<ItemStack>) -> SlotResolution {
+    let (None, Some(s)) = (held, slot) else {
+        return SlotResolution::NoOp;
+    };
+    let take = s.count.get().div_ceil(2);
+    let leave = s.count.get() - take;
+    let new_held = Some(ItemStack::new(
+        s.item,
+        NonZero::new(take).expect("take >= 1 since count >= 1"),
+    ));
+    let new_slot = NonZero::new(leave).map(|c| ItemStack::new(s.item, c));
+    SlotResolution::Mutation { new_held, new_slot }
+}
+
+/// Resolver for [`PlaceOne`][dd40_inventory_core::slot_interaction::SlotInteractionKind::PlaceOne].
+///
+/// Deposits a single item from the cursor into `slot`:
+///
+/// - empty slot → place 1 item; held shrinks by 1.
+/// - matching item below `max_stack` → +1 to slot; held shrinks by 1.
+/// - matching item already at `max_stack` → no-op.
+/// - different item → swap (mirrors the original right-click
+///   semantics; the alternative would be to no-op, but swap is what
+///   players expect from a Minecraft-style GUI).
+///
+/// No-op when the cursor is empty.
+pub fn resolve_place_one(
     held: Option<ItemStack>,
     slot: Option<ItemStack>,
     max_stack: NonZero<u16>,
 ) -> SlotResolution {
-    match (held, slot) {
-        (None, None) => SlotResolution::NoOp,
-        (None, Some(s)) => {
-            // Take ceil(count / 2) into the cursor; leave floor in slot.
-            let take = s.count.get().div_ceil(2);
-            let leave = s.count.get() - take;
-            let new_held = Some(ItemStack::new(
-                s.item,
-                NonZero::new(take).expect("take >= 1 since count >= 1"),
-            ));
-            let new_slot = NonZero::new(leave).map(|c| ItemStack::new(s.item, c));
-            SlotResolution::Mutation { new_held, new_slot }
-        }
-        (Some(h), None) => {
-            // Place one item into the empty slot.
+    let Some(h) = held else {
+        return SlotResolution::NoOp;
+    };
+    match slot {
+        None => {
             let new_slot = Some(ItemStack::single(h.item));
             let remaining = h.count.get() - 1;
             let new_held = NonZero::new(remaining).map(|c| ItemStack::new(h.item, c));
             SlotResolution::Mutation { new_held, new_slot }
         }
-        (Some(h), Some(s)) if h.item == s.item => {
+        Some(s) if s.item == h.item => {
             if s.count.get() >= max_stack.get() {
                 return SlotResolution::NoOp;
             }
@@ -157,7 +158,7 @@ fn resolve_partial(
             let new_held = NonZero::new(remaining).map(|c| ItemStack::new(h.item, c));
             SlotResolution::Mutation { new_held, new_slot }
         }
-        (Some(h), Some(s)) => SlotResolution::Mutation {
+        Some(s) => SlotResolution::Mutation {
             new_held: Some(s),
             new_slot: Some(h),
         },
@@ -177,19 +178,17 @@ mod tests {
         ItemStack::new(ItemId(item), nz(count))
     }
 
-    // ─── Full (take-or-place-all) ───────────────────────────────────────────────────
+    // ─── TakeAll ──────────────────────────────────────────────────────
 
     #[test]
-    fn left_empty_into_empty_is_noop() {
-        let out = resolve_slot(None, None, nz(64), SlotClickKind::Full, 0);
-        assert_eq!(out, SlotResolution::NoOp);
+    fn take_all_empty_slot_is_noop() {
+        assert_eq!(resolve_take_all(None, None), SlotResolution::NoOp);
     }
 
     #[test]
-    fn left_pickup_from_slot() {
-        let out = resolve_slot(None, Some(stack(1, 7)), nz(64), SlotClickKind::Full, 0);
+    fn take_all_picks_up_full_slot() {
         assert_eq!(
-            out,
+            resolve_take_all(None, Some(stack(1, 7))),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 7)),
                 new_slot: None,
@@ -198,10 +197,29 @@ mod tests {
     }
 
     #[test]
-    fn left_drop_into_empty() {
-        let out = resolve_slot(Some(stack(1, 5)), None, nz(64), SlotClickKind::Full, 0);
+    fn take_all_with_held_cursor_is_noop() {
+        // Wrong intent for the cursor state — must be a no-op so a
+        // lagged client can't accidentally swap.
         assert_eq!(
-            out,
+            resolve_take_all(Some(stack(1, 1)), Some(stack(2, 3))),
+            SlotResolution::NoOp
+        );
+    }
+
+    // ─── PlaceAll ─────────────────────────────────────────────────────
+
+    #[test]
+    fn place_all_empty_cursor_is_noop() {
+        assert_eq!(
+            resolve_place_all(None, Some(stack(1, 5)), nz(64)),
+            SlotResolution::NoOp
+        );
+    }
+
+    #[test]
+    fn place_all_into_empty_slot() {
+        assert_eq!(
+            resolve_place_all(Some(stack(1, 5)), None, nz(64)),
             SlotResolution::Mutation {
                 new_held: None,
                 new_slot: Some(stack(1, 5)),
@@ -210,16 +228,9 @@ mod tests {
     }
 
     #[test]
-    fn left_merge_same_item_fits() {
-        let out = resolve_slot(
-            Some(stack(1, 10)),
-            Some(stack(1, 20)),
-            nz(64),
-            SlotClickKind::Full,
-            0,
-        );
+    fn place_all_merge_same_item_fits() {
         assert_eq!(
-            out,
+            resolve_place_all(Some(stack(1, 10)), Some(stack(1, 20)), nz(64)),
             SlotResolution::Mutation {
                 new_held: None,
                 new_slot: Some(stack(1, 30)),
@@ -228,17 +239,10 @@ mod tests {
     }
 
     #[test]
-    fn left_merge_same_item_overflows() {
-        let out = resolve_slot(
-            Some(stack(1, 50)),
-            Some(stack(1, 40)),
-            nz(64),
-            SlotClickKind::Full,
-            0,
-        );
+    fn place_all_merge_same_item_overflows() {
         // 50 + 40 = 90; slot caps at 64, leftover 26 stays held.
         assert_eq!(
-            out,
+            resolve_place_all(Some(stack(1, 50)), Some(stack(1, 40)), nz(64)),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 26)),
                 new_slot: Some(stack(1, 64)),
@@ -247,16 +251,9 @@ mod tests {
     }
 
     #[test]
-    fn left_merge_into_full_stack_leaves_held_unchanged() {
-        let out = resolve_slot(
-            Some(stack(1, 5)),
-            Some(stack(1, 64)),
-            nz(64),
-            SlotClickKind::Full,
-            0,
-        );
+    fn place_all_merge_into_full_stack_leaves_held_unchanged() {
         assert_eq!(
-            out,
+            resolve_place_all(Some(stack(1, 5)), Some(stack(1, 64)), nz(64)),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 5)),
                 new_slot: Some(stack(1, 64)),
@@ -265,16 +262,9 @@ mod tests {
     }
 
     #[test]
-    fn left_swap_different_items() {
-        let out = resolve_slot(
-            Some(stack(1, 3)),
-            Some(stack(2, 7)),
-            nz(64),
-            SlotClickKind::Full,
-            0,
-        );
+    fn place_all_swap_different_items() {
         assert_eq!(
-            out,
+            resolve_place_all(Some(stack(1, 3)), Some(stack(2, 7)), nz(64)),
             SlotResolution::Mutation {
                 new_held: Some(stack(2, 7)),
                 new_slot: Some(stack(1, 3)),
@@ -282,20 +272,38 @@ mod tests {
         );
     }
 
-    // ─── Partial (take-half / place-one) ──────────────────────────────────────────────────
+    #[test]
+    fn place_all_merge_respects_low_max_stack() {
+        // Eggs cap at 16.
+        assert_eq!(
+            resolve_place_all(Some(stack(3, 10)), Some(stack(3, 12)), nz(16)),
+            SlotResolution::Mutation {
+                new_held: Some(stack(3, 6)),
+                new_slot: Some(stack(3, 16)),
+            }
+        );
+    }
+
+    // ─── TakeHalf ─────────────────────────────────────────────────────
 
     #[test]
-    fn right_empty_into_empty_is_noop() {
-        let out = resolve_slot(None, None, nz(64), SlotClickKind::Partial, 0);
-        assert_eq!(out, SlotResolution::NoOp);
+    fn take_half_empty_slot_is_noop() {
+        assert_eq!(resolve_take_half(None, None), SlotResolution::NoOp);
     }
 
     #[test]
-    fn right_take_half_rounds_up() {
-        // 7 → take 4, leave 3
-        let out = resolve_slot(None, Some(stack(1, 7)), nz(64), SlotClickKind::Partial, 0);
+    fn take_half_with_held_cursor_is_noop() {
         assert_eq!(
-            out,
+            resolve_take_half(Some(stack(1, 1)), Some(stack(1, 5))),
+            SlotResolution::NoOp
+        );
+    }
+
+    #[test]
+    fn take_half_rounds_up() {
+        // 7 → take 4, leave 3
+        assert_eq!(
+            resolve_take_half(None, Some(stack(1, 7))),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 4)),
                 new_slot: Some(stack(1, 3)),
@@ -304,11 +312,10 @@ mod tests {
     }
 
     #[test]
-    fn right_take_half_even_count() {
+    fn take_half_even_count() {
         // 8 → take 4, leave 4
-        let out = resolve_slot(None, Some(stack(1, 8)), nz(64), SlotClickKind::Partial, 0);
         assert_eq!(
-            out,
+            resolve_take_half(None, Some(stack(1, 8))),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 4)),
                 new_slot: Some(stack(1, 4)),
@@ -317,10 +324,9 @@ mod tests {
     }
 
     #[test]
-    fn right_take_single_takes_whole() {
-        let out = resolve_slot(None, Some(stack(1, 1)), nz(64), SlotClickKind::Partial, 0);
+    fn take_half_single_takes_whole() {
         assert_eq!(
-            out,
+            resolve_take_half(None, Some(stack(1, 1))),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 1)),
                 new_slot: None,
@@ -328,11 +334,20 @@ mod tests {
         );
     }
 
+    // ─── PlaceOne ─────────────────────────────────────────────────────
+
     #[test]
-    fn right_place_one_into_empty_with_remainder() {
-        let out = resolve_slot(Some(stack(1, 3)), None, nz(64), SlotClickKind::Partial, 0);
+    fn place_one_empty_cursor_is_noop() {
         assert_eq!(
-            out,
+            resolve_place_one(None, Some(stack(1, 5)), nz(64)),
+            SlotResolution::NoOp
+        );
+    }
+
+    #[test]
+    fn place_one_into_empty_with_remainder() {
+        assert_eq!(
+            resolve_place_one(Some(stack(1, 3)), None, nz(64)),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 2)),
                 new_slot: Some(stack(1, 1)),
@@ -341,10 +356,9 @@ mod tests {
     }
 
     #[test]
-    fn right_place_last_into_empty_clears_held() {
-        let out = resolve_slot(Some(stack(1, 1)), None, nz(64), SlotClickKind::Partial, 0);
+    fn place_one_last_into_empty_clears_held() {
         assert_eq!(
-            out,
+            resolve_place_one(Some(stack(1, 1)), None, nz(64)),
             SlotResolution::Mutation {
                 new_held: None,
                 new_slot: Some(stack(1, 1)),
@@ -353,16 +367,9 @@ mod tests {
     }
 
     #[test]
-    fn right_place_one_onto_matching_slot() {
-        let out = resolve_slot(
-            Some(stack(1, 5)),
-            Some(stack(1, 9)),
-            nz(64),
-            SlotClickKind::Partial,
-            0,
-        );
+    fn place_one_onto_matching_slot() {
         assert_eq!(
-            out,
+            resolve_place_one(Some(stack(1, 5)), Some(stack(1, 9)), nz(64)),
             SlotResolution::Mutation {
                 new_held: Some(stack(1, 4)),
                 new_slot: Some(stack(1, 10)),
@@ -371,73 +378,20 @@ mod tests {
     }
 
     #[test]
-    fn right_place_onto_full_matching_slot_is_noop() {
-        let out = resolve_slot(
-            Some(stack(1, 5)),
-            Some(stack(1, 64)),
-            nz(64),
-            SlotClickKind::Partial,
-            0,
+    fn place_one_onto_full_matching_slot_is_noop() {
+        assert_eq!(
+            resolve_place_one(Some(stack(1, 5)), Some(stack(1, 64)), nz(64)),
+            SlotResolution::NoOp
         );
-        assert_eq!(out, SlotResolution::NoOp);
     }
 
     #[test]
-    fn right_on_different_item_swaps() {
-        let out = resolve_slot(
-            Some(stack(1, 3)),
-            Some(stack(2, 7)),
-            nz(64),
-            SlotClickKind::Partial,
-            0,
-        );
+    fn place_one_on_different_item_swaps() {
         assert_eq!(
-            out,
+            resolve_place_one(Some(stack(1, 3)), Some(stack(2, 7)), nz(64)),
             SlotResolution::Mutation {
                 new_held: Some(stack(2, 7)),
                 new_slot: Some(stack(1, 3)),
-            }
-        );
-    }
-
-    // ─── Quick transfer ──────────────────────────────────────────────────
-
-    #[test]
-    fn shift_on_empty_slot_is_noop() {
-        let out = resolve_slot(None, None, nz(64), SlotClickKind::Quick, 5);
-        assert_eq!(out, SlotResolution::NoOp);
-    }
-
-    #[test]
-    fn shift_on_filled_slot_returns_shift_move() {
-        let out = resolve_slot(
-            Some(stack(99, 1)),
-            Some(stack(1, 4)),
-            nz(64),
-            SlotClickKind::Quick,
-            5,
-        );
-        // Held is irrelevant for shift; apply layer takes the slot content.
-        assert_eq!(out, SlotResolution::ShiftMove { from_slot: 5 });
-    }
-
-    // ─── max_stack < 64 edge case ─────────────────────────────────────
-
-    #[test]
-    fn left_merge_respects_low_max_stack() {
-        // Eggs cap at 16.
-        let out = resolve_slot(
-            Some(stack(3, 10)),
-            Some(stack(3, 12)),
-            nz(16),
-            SlotClickKind::Full,
-            0,
-        );
-        assert_eq!(
-            out,
-            SlotResolution::Mutation {
-                new_held: Some(stack(3, 6)),
-                new_slot: Some(stack(3, 16)),
             }
         );
     }

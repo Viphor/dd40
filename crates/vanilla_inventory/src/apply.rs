@@ -1,11 +1,13 @@
 //! Apply layer: drains [`SlotInteraction`] messages and applies the
-//! [`rules`][crate::rules] resolver to the target character's
-//! [`InventoryComponent`] and per-character [`HeldStackComponent`].
+//! per-intent [`rules`][crate::rules] resolvers to the target
+//! character's [`InventoryComponent`] and per-character
+//! [`HeldStackComponent`].
 //!
-//! This system is the only place outside the pure resolver where the
-//! cursor and an `Inventory` mutate together.
-//! Drop-outside intent is consumed here as well: the held stack is
-//! emitted as a [`DropItems`] message and the cursor is cleared.
+//! This system is the only place outside the pure resolvers where the
+//! cursor and an `Inventory` mutate together.  Quick-transfer
+//! (cross-section move) and drop-held (drop-into-world) are both
+//! handled directly here because they need information beyond a
+//! single slot.
 
 use std::num::NonZero;
 
@@ -17,12 +19,14 @@ use dd40_inventory_core::prelude::{
 use dd40_item_core::active_item::ItemStack;
 use dd40_item_core::registry::ItemRegistry;
 
-use crate::rules::{SlotClickKind, SlotResolution, resolve_slot};
+use crate::rules::{
+    SlotResolution, resolve_place_all, resolve_place_one, resolve_take_all, resolve_take_half,
+};
 
 /// Drains [`SlotInteraction`] messages and mutates the targeted
 /// inventory + that character's [`HeldStackComponent`] accordingly.
 ///
-/// Drop-outside emits a [`DropItems`] message at the character's
+/// `DropHeld` emits a [`DropItems`] message at the character's
 /// `Transform.translation` and clears the cursor.  In v1 there is no
 /// scatter velocity — drops appear at the player's feet.
 pub fn apply_slot_interactions(
@@ -51,35 +55,45 @@ pub fn apply_slot_interactions(
                     stacks: vec![stack],
                 });
             }
-            SlotInteractionKind::TakeOrPlaceAll { slot }
-            | SlotInteractionKind::TakeHalfOrPlaceOne { slot }
-            | SlotInteractionKind::QuickTransfer { slot } => {
+            SlotInteractionKind::QuickTransfer { slot } => {
                 let slot_idx = *slot as usize;
-                let capacity = inv_comp.inventory().capacity();
-                if slot_idx >= capacity {
-                    warn!(
-                        "SlotInteraction targets out-of-bounds slot {} (capacity {})",
-                        slot_idx, capacity
-                    );
+                if !check_slot_bounds(slot_idx, inv_comp.inventory().capacity()) {
+                    continue;
+                }
+                quick_transfer(
+                    &mut inv_comp,
+                    slot_idx,
+                    &registry,
+                    &mut commands,
+                    msg.character,
+                );
+            }
+            SlotInteractionKind::TakeAll { slot }
+            | SlotInteractionKind::PlaceAll { slot }
+            | SlotInteractionKind::TakeHalf { slot }
+            | SlotInteractionKind::PlaceOne { slot } => {
+                let slot_idx = *slot as usize;
+                if !check_slot_bounds(slot_idx, inv_comp.inventory().capacity()) {
                     continue;
                 }
                 let current_slot = inv_comp.inventory().slot(slot_idx).copied();
-                let click = click_kind(&msg.kind);
                 let max_stack = max_stack_for(current_slot, held.0, &registry);
-                match resolve_slot(held.0, current_slot, max_stack, click, *slot) {
+                let resolution = match &msg.kind {
+                    SlotInteractionKind::TakeAll { .. } => resolve_take_all(held.0, current_slot),
+                    SlotInteractionKind::PlaceAll { .. } => {
+                        resolve_place_all(held.0, current_slot, max_stack)
+                    }
+                    SlotInteractionKind::TakeHalf { .. } => resolve_take_half(held.0, current_slot),
+                    SlotInteractionKind::PlaceOne { .. } => {
+                        resolve_place_one(held.0, current_slot, max_stack)
+                    }
+                    _ => unreachable!("filtered by outer match"),
+                };
+                match resolution {
                     SlotResolution::NoOp => {}
                     SlotResolution::Mutation { new_held, new_slot } => {
                         inv_comp.set_slot(slot_idx, new_slot, &mut commands, msg.character);
                         held.0 = new_held;
-                    }
-                    SlotResolution::ShiftMove { from_slot } => {
-                        shift_move(
-                            &mut inv_comp,
-                            from_slot as usize,
-                            &registry,
-                            &mut commands,
-                            msg.character,
-                        );
                     }
                 }
             }
@@ -87,13 +101,15 @@ pub fn apply_slot_interactions(
     }
 }
 
-fn click_kind(kind: &SlotInteractionKind) -> SlotClickKind {
-    match kind {
-        SlotInteractionKind::TakeOrPlaceAll { .. } => SlotClickKind::Full,
-        SlotInteractionKind::TakeHalfOrPlaceOne { .. } => SlotClickKind::Partial,
-        SlotInteractionKind::QuickTransfer { .. } => SlotClickKind::Quick,
-        SlotInteractionKind::DropHeld => unreachable!("filtered by caller"),
+fn check_slot_bounds(slot_idx: usize, capacity: usize) -> bool {
+    if slot_idx >= capacity {
+        warn!(
+            "SlotInteraction targets out-of-bounds slot {} (capacity {})",
+            slot_idx, capacity
+        );
+        return false;
     }
+    true
 }
 
 /// Looks up the relevant `max_stack` cap for the resolver call.
@@ -116,7 +132,7 @@ fn max_stack_for(
 /// area (hotbar ↔ main).  Merges into matching stacks first (slot
 /// order), then fills the first empty slot, and finally puts any
 /// leftover back into the source slot.
-fn shift_move(
+fn quick_transfer(
     inv_comp: &mut InventoryComponent,
     from_slot: usize,
     registry: &ItemRegistry,

@@ -31,14 +31,22 @@ pub struct SlotInteraction {
 
 /// Concrete interaction variants.
 ///
-/// Named for **player intent**, not for any specific input device.
-/// A keyboard/mouse GUI maps left-click → [`TakeOrPlaceAll`][Self::TakeOrPlaceAll],
-/// right-click → [`TakeHalfOrPlaceOne`][Self::TakeHalfOrPlaceOne],
-/// shift-left-click → [`QuickTransfer`][Self::QuickTransfer], and a
-/// drop outside the window → [`DropHeld`][Self::DropHeld]; a gamepad,
-/// touch, or accessibility binding maps its own gestures onto the
-/// same intents and the rules layer never needs to know which input
-/// fired.
+/// Named for **player intent**, not for any specific input device or
+/// cursor state.  A keyboard/mouse GUI inspects the local
+/// [`HeldStackComponent`][crate::held_stack::HeldStackComponent] and
+/// translates each click into the right intent variant before sending;
+/// a gamepad, touch, or accessibility binding maps its own gestures
+/// onto the same intents.  The rules layer never branches on input
+/// device.
+///
+/// Each variant is also strictly typed in *what state it operates on*:
+/// `Take*` always reads from `slot` into the cursor and is a no-op
+/// when the cursor is already non-empty; `Place*` always writes from
+/// the cursor into `slot` and is a no-op when the cursor is empty.
+/// This is intentional — sending the wrong intent for the current
+/// cursor state must not silently flip the operation around, because
+/// the server may have a different view of the cursor than the
+/// client.  When in doubt the server treats it as a no-op.
 ///
 /// Derives `Serialize` + `Deserialize` so it can travel as the payload
 /// of a network message (the `Entity` in [`SlotInteraction`] is
@@ -46,18 +54,31 @@ pub struct SlotInteraction {
 /// not need to be serialized).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SlotInteractionKind {
-    /// Pick up the full stack at `slot`, deposit the full held stack
-    /// into it, or swap the two when both are non-empty and
-    /// incompatible.  Same-item merges respect the target's
-    /// `max_stack`.
-    TakeOrPlaceAll {
+    /// Pick up the full stack at `slot` into the cursor.  No-op if
+    /// the cursor is already non-empty or the slot is empty.
+    TakeAll {
         /// Index into [`InventoryComponent`][crate::component::InventoryComponent].
         slot: u8,
     },
-    /// When the cursor is empty, pick up half the stack at `slot`
-    /// (rounded up).  When the cursor holds a compatible stack,
-    /// deposit a single item into `slot`.
-    TakeHalfOrPlaceOne {
+    /// Deposit the held stack into `slot`.  Merges into a matching
+    /// stack up to `max_stack` (leftover stays in the cursor), swaps
+    /// when the items differ, or simply fills an empty slot.  No-op
+    /// when the cursor is empty.
+    PlaceAll {
+        /// Index into [`InventoryComponent`][crate::component::InventoryComponent].
+        slot: u8,
+    },
+    /// Pick up ceil(slot.count / 2) into the cursor.  No-op if the
+    /// cursor is already non-empty or the slot is empty.
+    TakeHalf {
+        /// Index into [`InventoryComponent`][crate::component::InventoryComponent].
+        slot: u8,
+    },
+    /// Deposit a single item from the cursor into `slot`.  Increments
+    /// a matching stack (up to `max_stack`), swaps when the items
+    /// differ, or starts a new stack in an empty slot.  No-op when
+    /// the cursor is empty.
+    PlaceOne {
         /// Index into [`InventoryComponent`][crate::component::InventoryComponent].
         slot: u8,
     },
@@ -95,7 +116,7 @@ mod tests {
                 |mut w: MessageWriter<SlotInteraction>| {
                     w.write(SlotInteraction {
                         character: Entity::from_raw_u32(7).unwrap(),
-                        kind: SlotInteractionKind::TakeOrPlaceAll { slot: 3 },
+                        kind: SlotInteractionKind::TakeAll { slot: 3 },
                     });
                 },
                 |mut r: MessageReader<SlotInteraction>, mut c: ResMut<Captured>| {
@@ -110,7 +131,7 @@ mod tests {
         app.update();
         let captured = &app.world().resource::<Captured>().0;
         assert_eq!(captured.len(), 1);
-        assert_eq!(captured[0], SlotInteractionKind::TakeOrPlaceAll { slot: 3 });
+        assert_eq!(captured[0], SlotInteractionKind::TakeAll { slot: 3 });
     }
 
     #[test]
