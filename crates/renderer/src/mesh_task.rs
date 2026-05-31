@@ -25,32 +25,63 @@ use crate::lod::LodLevel;
 
 // ── MeshData ──────────────────────────────────────────────────────────────────
 
+/// Which material the apply pass should pair a [`ChunkMeshPart`] with.
+///
+/// Untextured is the colour-only fallback (used today, and when the
+/// `textures` feature is off or the atlas is not yet ready).  The
+/// textured variants — currently just [`Self::AtlasStatic`] — carry
+/// the data the apply pass needs to construct the right
+/// [`BlockAtlasMaterial`](crate::textures::material::BlockAtlasMaterial)
+/// instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ChunkMaterialKind {
+    /// Use a shared colour-only `StandardMaterial::default()`.  Vertex
+    /// colour drives the appearance.
+    Untextured,
+    /// Sample the block atlas at `atlas_layer` with the alpha mode
+    /// implied by `render_layer`.
+    #[cfg(feature = "textures")]
+    AtlasStatic {
+        /// Which atlas to sample.
+        atlas_id: dd40_texture_core::AtlasId,
+        /// Array layer.
+        atlas_layer: u32,
+        /// Composition pass.
+        render_layer: dd40_texture_core::RenderLayer,
+    },
+}
+
+/// One piece of a chunk's mesh + the material it wants.
+///
+/// A chunk produces one [`ChunkMeshPart`] when the colour-only path is
+/// active, or up to one part per bucket when the textured path is
+/// active.  Each part becomes a child of the chunk's root entity.
+pub struct ChunkMeshPart {
+    /// The mesh itself.
+    pub mesh: Mesh,
+    /// Which material the apply pass should pair it with.
+    pub material: ChunkMaterialKind,
+}
+
 /// The raw output produced by an off-thread chunk meshing task.
 ///
-/// Returned by the [`Task`] spawned in [`systems::spawn_mesh_tasks`] and
-/// consumed by [`systems::apply_mesh_tasks`] to upload the mesh to the GPU.
+/// Returned by the [`Task`] spawned in
+/// [`spawn_mesh_tasks`](crate::systems::spawn_mesh_tasks) and consumed
+/// by [`apply_mesh_tasks`](crate::systems::apply_mesh_tasks) to upload
+/// the meshes to the GPU.
 ///
 /// # All-air chunks
 ///
-/// When the chunk contains only air (or all faces are fully occluded) no
-/// geometry is produced.  In that case `mesh` is `None` and `apply_mesh_tasks`
-/// will skip spawning a mesh entity for this chunk.
-///
-/// [`systems::spawn_mesh_tasks`]: crate::systems::spawn_mesh_tasks
-/// [`systems::apply_mesh_tasks`]: crate::systems::apply_mesh_tasks
+/// `parts` is empty when the chunk produced no visible geometry
+/// (all-air or fully occluded).
 pub struct MeshData {
     /// The chunk whose mesh was built.
     pub pos: ChunkPos,
     /// The LOD level at which the mesh was built.
-    ///
-    /// Stored so that [`ChunkRenderState`] can be updated with the correct
-    /// level after the task completes.
-    ///
-    /// [`ChunkRenderState`]: crate::render_state::ChunkRenderState
     pub lod: LodLevel,
-    /// The finished mesh, or `None` when the chunk produced no visible
-    /// geometry (all-air or fully occluded).
-    pub mesh: Option<Mesh>,
+    /// One mesh + material per render bucket.  Empty when the chunk
+    /// has no visible geometry.
+    pub parts: Vec<ChunkMeshPart>,
 }
 
 // ── PendingMeshTasks ──────────────────────────────────────────────────────────

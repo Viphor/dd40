@@ -32,8 +32,11 @@ use std::collections::HashMap;
 
 use dd40_core::block::{BlockId, BlockRegistry};
 use dd40_texture_core::{
-    AtlasId, AtlasUv, BlockAtlas, BlockTextures, Face, RenderLayer, ResolvedTexture, TextureRef,
+    AtlasId, AtlasUv, BlockAtlas, BlockTextures, Face, RenderLayer, ResolvedTexture,
 };
+
+#[cfg(test)]
+use dd40_texture_core::TextureRef;
 
 use crate::face_culling::FaceDir;
 

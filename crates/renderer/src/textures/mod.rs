@@ -16,10 +16,9 @@ pub use material::{
 pub use textured_mesh::{BucketMesh, build_chunk_bucket_meshes, collect_color_map};
 
 /// Returns `true` once the bucket-split mesh code is wired into the
-/// renderer's task pipeline.  Bucket precomputation alone (`bucket.rs`)
-/// does not flip this — the mesh-split commit will.
+/// renderer's task pipeline.
 pub const fn pipeline_ready() -> bool {
-    false
+    true
 }
 
 #[cfg(test)]
@@ -27,7 +26,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pipeline_is_not_ready_yet() {
-        assert!(!pipeline_ready());
+    fn pipeline_is_ready() {
+        assert!(pipeline_ready());
     }
 }

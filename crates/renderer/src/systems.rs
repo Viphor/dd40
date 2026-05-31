@@ -180,6 +180,7 @@ pub fn spawn_mesh_tasks(
     mut pending: ResMut<PendingMeshTasks>,
     chunk_cache: Res<ChunkCache>,
     registry: Res<BlockRegistry>,
+    #[cfg(feature = "textures")] atlas: Option<Res<dd40_texture_core::BlockAtlas>>,
 ) {
     // Collect dirty positions up-front to avoid borrow conflicts.
     let dirty: Vec<ChunkPos> = render_state.dirty_chunks().collect();
@@ -197,6 +198,18 @@ pub fn spawn_mesh_tasks(
             (def.id, [c.red, c.green, c.blue, c.alpha])
         })
         .collect();
+
+    // When the `textures` feature is on and the atlas is loaded,
+    // precompute per-block face buckets once per dispatch.  This is
+    // cloned into every spawned task so the task does not need access
+    // to the (non-`Send`) [`BlockAtlas`] or [`BlockRegistry`]
+    // resources directly.
+    #[cfg(feature = "textures")]
+    let face_buckets: Option<std::sync::Arc<HashMap<BlockId, crate::textures::FaceBuckets>>> =
+        atlas
+            .as_ref()
+            .filter(|a| a.is_ready())
+            .map(|a| std::sync::Arc::new(crate::textures::compute_face_buckets(&registry, a)));
 
     let task_pool = AsyncComputeTaskPool::get();
 
@@ -239,6 +252,9 @@ pub fn spawn_mesh_tasks(
             .map(|def| def.id)
             .collect();
 
+        #[cfg(feature = "textures")]
+        let textured = face_buckets.clone();
+
         // --- Spawn the meshing task off the main thread ----------------------
         let task = task_pool.spawn(async move {
             let origin_x = (pos.x * 16) as f32;
@@ -280,18 +296,39 @@ pub fn spawn_mesh_tasks(
 
             let quads = build_chunk_quads(&chunk, lod, &registry, &neighbour_cache);
 
-            let mut builder = MeshBuilder::new(origin_x, origin_z);
-            for quad in &quads {
-                if let Some(&color) = color_map.get(&quad.block_id) {
-                    builder.add_quad_with_color(quad, color);
-                }
-            }
+            #[cfg(feature = "textures")]
+            let parts: Vec<crate::mesh_task::ChunkMeshPart> = if let Some(buckets) = textured {
+                let bucket_meshes = crate::textures::build_chunk_bucket_meshes(
+                    origin_x, origin_z, &quads, &buckets, &color_map,
+                );
+                bucket_meshes
+                    .into_iter()
+                    .map(|bm| crate::mesh_task::ChunkMeshPart {
+                        material: match bm.bucket {
+                            crate::textures::BucketKey::Untextured => {
+                                crate::mesh_task::ChunkMaterialKind::Untextured
+                            }
+                            crate::textures::BucketKey::Static {
+                                atlas_id,
+                                atlas_layer,
+                                render_layer,
+                            } => crate::mesh_task::ChunkMaterialKind::AtlasStatic {
+                                atlas_id,
+                                atlas_layer,
+                                render_layer,
+                            },
+                        },
+                        mesh: bm.mesh,
+                    })
+                    .collect()
+            } else {
+                build_untextured_parts(&quads, origin_x, origin_z, &color_map)
+            };
+            #[cfg(not(feature = "textures"))]
+            let parts: Vec<crate::mesh_task::ChunkMeshPart> =
+                build_untextured_parts(&quads, origin_x, origin_z, &color_map);
 
-            MeshData {
-                pos,
-                lod,
-                mesh: builder.build(),
-            }
+            MeshData { pos, lod, parts }
         });
 
         pending.tasks.push(task);
@@ -310,15 +347,20 @@ pub fn spawn_mesh_tasks(
 ///
 /// # All-air chunks
 ///
-/// When a task returns `MeshData { mesh: None, .. }` the chunk produced no
-/// visible geometry (all-air or fully occluded).  No entity is spawned and the
-/// chunk's [`ChunkRenderState`] entry records `mesh_entity = None`.
+/// When a task returns `MeshData { parts, .. }` with `parts.is_empty()`,
+/// the chunk produced no visible geometry (all-air or fully occluded).
+/// No entity is spawned and the chunk's [`ChunkRenderState`] entry
+/// records `mesh_entity = None`.
 pub fn apply_mesh_tasks(
     mut commands: Commands,
     mut pending: ResMut<PendingMeshTasks>,
     mut render_state: ResMut<ChunkRenderState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    #[cfg(feature = "textures")] atlas: Option<Res<dd40_texture_core::BlockAtlas>>,
+    #[cfg(feature = "textures")] mut atlas_materials: Option<
+        ResMut<Assets<crate::textures::BlockAtlasMaterial>>,
+    >,
 ) {
     // Drain completed tasks, keep pending ones.
     let drained: Vec<_> = pending.tasks.drain(..).collect();
@@ -340,31 +382,43 @@ pub fn apply_mesh_tasks(
                 // gap where the chunk has no geometry on screen.
                 let old_entity = render_state.mesh_entity(&pos);
 
-                if let Some(mesh) = data.mesh {
-                    let mesh_handle = meshes.add(mesh);
-
-                    // Bevy 0.18 automatically enables vertex colors in the PBR
-                    // shader when the mesh contains ATTRIBUTE_COLOR — no extra
-                    // field needed on the material.
-                    let material_handle = materials.add(StandardMaterial::default());
-
-                    let entity = commands
-                        .spawn((
-                            Name::new(format!("ChunkMesh ({}, {})", pos.x, pos.z)),
-                            ChunkMeshMarker { chunk_pos: pos },
-                            Mesh3d(mesh_handle),
-                            MeshMaterial3d(material_handle),
-                            Transform::default(),
-                            GlobalTransform::default(),
-                        ))
-                        .id();
-
-                    render_state.set_mesh_entity(pos, Some(entity));
-                } else {
+                if data.parts.is_empty() {
                     // Chunk produced no geometry (all-air / fully occluded).
                     // Clear the stored entity so a future rebuild does not
                     // think a mesh is still associated with this chunk.
                     render_state.set_mesh_entity(pos, None);
+                } else {
+                    // Root entity owns the chunk mesh as a whole.  Each
+                    // bucket part becomes a child so a single
+                    // `commands.entity(root).despawn()` cleans up the
+                    // entire chunk (Bevy 0.18 despawn cascades through
+                    // `Children`).
+                    let root = commands
+                        .spawn((
+                            Name::new(format!("ChunkMesh ({}, {})", pos.x, pos.z)),
+                            ChunkMeshMarker { chunk_pos: pos },
+                            Transform::default(),
+                            GlobalTransform::default(),
+                            Visibility::default(),
+                        ))
+                        .id();
+
+                    for part in data.parts {
+                        let mesh_handle = meshes.add(part.mesh);
+                        spawn_part_child(
+                            &mut commands,
+                            root,
+                            mesh_handle,
+                            part.material,
+                            &mut materials,
+                            #[cfg(feature = "textures")]
+                            atlas.as_deref(),
+                            #[cfg(feature = "textures")]
+                            atlas_materials.as_deref_mut(),
+                        );
+                    }
+
+                    render_state.set_mesh_entity(pos, Some(root));
                 }
 
                 if let Some(old) = old_entity {
@@ -375,6 +429,103 @@ pub fn apply_mesh_tasks(
     }
 
     pending.tasks = still_pending;
+}
+
+/// Builds the colour-only path's mesh parts.  Always returns either zero or
+/// one [`ChunkMeshPart`] (the latter only when there is visible geometry).
+fn build_untextured_parts(
+    quads: &[crate::greedy_mesh::MergedQuad],
+    origin_x: f32,
+    origin_z: f32,
+    color_map: &HashMap<BlockId, [f32; 4]>,
+) -> Vec<crate::mesh_task::ChunkMeshPart> {
+    let mut builder = MeshBuilder::new(origin_x, origin_z);
+    for quad in quads {
+        if let Some(&color) = color_map.get(&quad.block_id) {
+            builder.add_quad_with_color(quad, color);
+        }
+    }
+    match builder.build() {
+        Some(mesh) => vec![crate::mesh_task::ChunkMeshPart {
+            mesh,
+            material: crate::mesh_task::ChunkMaterialKind::Untextured,
+        }],
+        None => Vec::new(),
+    }
+}
+
+/// Spawns one child mesh entity under `root` carrying the appropriate
+/// material for the given [`ChunkMaterialKind`].
+fn spawn_part_child(
+    commands: &mut Commands,
+    root: Entity,
+    mesh_handle: Handle<Mesh>,
+    material: crate::mesh_task::ChunkMaterialKind,
+    standard_materials: &mut Assets<StandardMaterial>,
+    #[cfg(feature = "textures")] atlas: Option<&dd40_texture_core::BlockAtlas>,
+    #[cfg(feature = "textures")] atlas_materials: Option<
+        &mut Assets<crate::textures::BlockAtlasMaterial>,
+    >,
+) {
+    match material {
+        crate::mesh_task::ChunkMaterialKind::Untextured => {
+            let material_handle = standard_materials.add(StandardMaterial::default());
+            commands.spawn((
+                ChildOf(root),
+                Mesh3d(mesh_handle),
+                MeshMaterial3d(material_handle),
+                Transform::default(),
+                GlobalTransform::default(),
+                Visibility::default(),
+            ));
+        }
+        #[cfg(feature = "textures")]
+        crate::mesh_task::ChunkMaterialKind::AtlasStatic {
+            atlas_id,
+            atlas_layer,
+            render_layer,
+        } => {
+            // If the atlas resource is missing (shouldn't happen — we only
+            // produce AtlasStatic when the atlas is ready), or the texture
+            // handle is missing, fall back to a colour-only material so
+            // something renders rather than nothing.
+            let texture = atlas.and_then(|a| a.texture(atlas_id));
+            let atlas_materials = atlas_materials;
+            match (texture, atlas_materials) {
+                (Some(tex), Some(atlas_materials)) => {
+                    let mat = crate::textures::BlockAtlasMaterial::for_layer(
+                        tex,
+                        atlas_layer,
+                        render_layer,
+                    );
+                    let handle = atlas_materials.add(mat);
+                    commands.spawn((
+                        ChildOf(root),
+                        Mesh3d(mesh_handle),
+                        MeshMaterial3d(handle),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::default(),
+                    ));
+                }
+                _ => {
+                    warn!(
+                        "atlas material requested but atlas resource or handle missing; \
+                         falling back to colour-only material"
+                    );
+                    let material_handle = standard_materials.add(StandardMaterial::default());
+                    commands.spawn((
+                        ChildOf(root),
+                        Mesh3d(mesh_handle),
+                        MeshMaterial3d(material_handle),
+                        Transform::default(),
+                        GlobalTransform::default(),
+                        Visibility::default(),
+                    ));
+                }
+            }
+        }
+    }
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────────
