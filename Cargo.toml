@@ -29,6 +29,7 @@ members = [
     "crates/input_core",
     "crates/inventory",
     "crates/inventory_gui",
+    "crates/texture_core",
 ]
 resolver = "3"
 
@@ -80,3 +81,4 @@ dd40_integration_loose_item_pickup = { path = "crates/integration_loose_item_pic
 dd40_input_core = { path = "crates/input_core" }
 dd40_inventory = { path = "crates/inventory" }
 dd40_inventory_gui = { path = "crates/inventory_gui" }
+dd40_texture_core = { path = "crates/texture_core" }

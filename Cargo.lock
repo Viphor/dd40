@@ -3067,6 +3067,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_texture_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_core",
+ "serde",
+]
+
+[[package]]
 name = "dd40_vanilla_palette"
 version = "0.1.0"
 dependencies = [
