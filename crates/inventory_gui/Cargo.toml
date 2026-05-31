@@ -3,6 +3,14 @@ name = "dd40_inventory_gui"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+## Enables hooks for sampling block textures from the shared atlas
+## (`dd40_texture_core::BlockAtlas`) when rendering placeable-block
+## icons.  Without this feature the GUI continues to use the
+## procedural three-face isometric cube fallback only.
+textures = ["dep:dd40_texture_core"]
+
 [dependencies]
 bevy = { workspace = true, default-features = false, features = ["bevy_ui", "bevy_picking", "ui_picking", "bevy_window", "bevy_asset", "bevy_image", "bevy_text", "default_font"] }
 wgpu-types = "27"
@@ -12,6 +20,7 @@ dd40_character_core = { workspace = true }
 dd40_inventory_core = { workspace = true }
 dd40_item_core = { workspace = true }
 dd40_input_core = { workspace = true }
+dd40_texture_core = { workspace = true, optional = true }
 
 [lints]
 workspace = true

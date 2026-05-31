@@ -4,6 +4,14 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
+[features]
+default = []
+## Enables hooks for sampling block textures from the shared atlas
+## (`dd40_texture_core::BlockAtlas`) when rendering loose items that
+## map to placeable blocks.  Without this feature the visual is the
+## existing single-colour spinning cube.
+textures = ["dep:dd40_texture_core"]
+
 [dependencies]
 bevy = { workspace = true, default-features = false, features = [
     "bevy_pbr",
@@ -13,6 +21,7 @@ bevy = { workspace = true, default-features = false, features = [
 dd40_core = { workspace = true }
 dd40_item_core = { workspace = true }
 dd40_loose_item_core = { workspace = true }
+dd40_texture_core = { workspace = true, optional = true }
 
 [lints]
 workspace = true

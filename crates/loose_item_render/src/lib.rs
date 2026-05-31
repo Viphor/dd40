@@ -19,5 +19,7 @@
 //! [`ItemDefinition`]: dd40_item_core::registry::ItemDefinition
 
 pub mod plugin;
+#[cfg(feature = "textures")]
+pub mod textures;
 
 pub use plugin::LooseItemRenderPlugin;

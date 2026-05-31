@@ -11,6 +11,8 @@ use dd40_core::plugin::CorePlugin;
 use dd40_input_core::plugin::InputCorePlugin;
 use dd40_inventory_core::plugin::InventoryCorePlugin;
 use dd40_item_core::plugin::ItemCorePlugin;
+#[cfg(feature = "textures")]
+use dd40_texture_core::TextureCorePlugin;
 
 use crate::grid;
 use crate::held;
@@ -56,6 +58,8 @@ impl Plugin for InventoryGuiPlugin {
             ItemCorePlugin,
             InputCorePlugin
         );
+        #[cfg(feature = "textures")]
+        ensure_plugins!(app, TextureCorePlugin);
         app.init_resource::<InventoryGuiOpen>()
             .init_resource::<icons::ItemIconCache>()
             .init_resource::<icons::BlockIconAssets>();

@@ -112,6 +112,8 @@ pub struct LooseItemRenderPlugin;
 impl Plugin for LooseItemRenderPlugin {
     fn build(&self, app: &mut App) {
         ensure_plugins!(app, CorePlugin, ItemCorePlugin, LooseItemCorePlugin);
+        #[cfg(feature = "textures")]
+        ensure_plugins!(app, dd40_texture_core::TextureCorePlugin);
 
         app.add_systems(Startup, setup_assets)
             .add_systems(Update, (attach_visuals, animate_visuals));

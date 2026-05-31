@@ -39,6 +39,8 @@ pub mod icons;
 pub mod input;
 pub mod plugin;
 pub mod slot_widget;
+#[cfg(feature = "textures")]
+pub mod textures;
 pub mod tooltip;
 
 pub use plugin::{InventoryGuiOpen, InventoryGuiPlugin, InventoryGuiSet};
