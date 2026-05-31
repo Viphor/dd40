@@ -37,6 +37,7 @@ There are currently no tracked exceptions to this rule.
 | `dd40_loot_core` | `LootTable`, `LootEntry`, `LootMode`; `BlockData` impl so tables can attach to `BlockDefinition` | `dd40_core`, `dd40_item_core` |
 | `dd40_loose_item_core` | `LooseItem`, `DespawnTimer`, `PickupCooldown`, `LooseItemConfig`, `LooseItemSet` — vocabulary for items lying in the world | `dd40_core`, `dd40_item_core` |
 | `dd40_input_core` | Shared `bevy_enhanced_input` action vocabulary, the `OnFoot` context, and the `InputTranslationSet` cross-crate ordering anchor (vocabulary only — no bindings, no systems) | — |
+| `dd40_texture_core` | Texture vocabulary: `BlockTextures` (per-face), `TextureRef`, `RenderLayer`, `BlockAtlas` resource, `AtlasUv`, `ResolvedTexture`, `AnimationSpec`, `AtlasReady` set | `dd40_core` |
 
 ### Tier 1 — Implementation
 
@@ -44,10 +45,10 @@ There are currently no tracked exceptions to this rule.
 |---|---|---|
 | `dd40_physics` | Gravity integration, block collision, character collision | `dd40_core`, `dd40_physics_core` |
 | `dd40_integration_character_physics` | Bridges `CharacterInput` → physics `Impulse` (the only crate that knows about both `dd40_character_core` and `dd40_physics_core`) | `dd40_core`, `dd40_character_core`, `dd40_physics_core` |
-| `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999); attaches `LootTable` block-data | `dd40_core`, `dd40_item_core`, `dd40_loot_core` |
+| `dd40_vanilla_palette` | Vanilla block/tool definitions (IDs 0–999); attaches `LootTable` block-data. Optional `textures` feature additionally attaches `BlockTextures` referencing `minecraft:block/<name>` (per-face for grass, wood). | `dd40_core`, `dd40_item_core`, `dd40_loot_core`, *(opt)* `dd40_texture_core` |
 | `dd40_world` | World generation (generic over `WorldGenerator` trait) | `dd40_core` |
 | `dd40_chunk_storage` | Disk-backed chunk persistence (bincode v1) | `dd40_core` |
-| `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD | `dd40_core`, `dd40_physics_core` |
+| `dd40_renderer` | Greedy-mesh renderer, async mesh tasks, LOD. Optional `textures` feature scaffolds the future `BlockAtlasMaterial` + per-render-layer mesh-split pipeline; without the feature the renderer emits colour-only meshes (unchanged from the pre-texture era). | `dd40_core`, `dd40_physics_core`, *(opt)* `dd40_texture_core` |
 | `dd40_player_input` | Client-only: BEI bindings, `FreeCam`/`LocalUi` contexts, mouse-look (Controller mode), free-cam look + movement, pause/mode observers, and the `Action<T>` → `CharacterInput` translator (placed in `InputTranslationSet`) | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_input_core`, `dd40_item_core` |
 | `dd40_character_interaction` | Block targeting, mining, placement for any `Character` entity | `dd40_core`, `dd40_physics_core`, `dd40_character_core` |
 | `dd40_network` | lightyear client-server networking (feature-gated). Wire input is `ActionState<PlayerInput>` (lightyear `input_native`); the client bridges `CharacterInput → ActionState<PlayerInput>` after the translator runs (ordered via `InputTranslationSet`). Server does not load BEI. Also provides `ClientInventoryNetworkPlugin` (forwards local `SlotInteraction` as `NetSlotInteraction` over `InventoryChannel`) and `ServerInventoryNetworkPlugin` (drains incoming `NetSlotInteraction`, resolves the controlled `Character` via lightyear's `ControlledBy`, re-emits `SlotInteraction` for the apply system). Replicates `InventoryComponent` and `HeldStackComponent` server→client. | `dd40_core`, `dd40_physics_core`, `dd40_character_core`, `dd40_input_core`, `dd40_inventory_core` |
@@ -57,9 +58,10 @@ There are currently no tracked exceptions to this rule.
 | `dd40_loot` | Server-only: turns accepted `ChunkChange::Remove` into `DropItems` messages, consulting cell-data and `BlockDefinition`-level `LootTable`s with `placeable`-item fallback | `dd40_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loot_core`, `dd40_rng` |
 | `dd40_loose_items` | Server-only: drains `DropItems` into spawned `LooseItem` entities (with physics body), ticks `DespawnTimer` / `PickupCooldown`, merges same-item stacks on `BodyBodyContact`, registers `LooseItemPersister` so loose items survive restart | `dd40_core`, `dd40_physics_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_loose_item_core` |
 | `dd40_integration_loose_item_pickup` | Server-only: only crate where `LooseItem` and `InventoryComponent` meet — subscribes to `BodyBodyContact` and grants stacks to the closest eligible character | `dd40_core`, `dd40_character_core`, `dd40_inventory_core`, `dd40_item_core`, `dd40_loose_item_core`, `dd40_physics_core` |
-| `dd40_loose_item_render` | Client-only: spinning, bobbing cube visual per `LooseItem` with placeable-block colour fallback | `dd40_core`, `dd40_item_core`, `dd40_loose_item_core` |
+| `dd40_loose_item_render` | Client-only: spinning, bobbing cube visual per `LooseItem` with placeable-block colour fallback. Optional `textures` feature scaffolds the future atlas-textured per-face cube. | `dd40_core`, `dd40_item_core`, `dd40_loose_item_core`, *(opt)* `dd40_texture_core` |
 | `dd40_inventory` | Both sides: `InventoryPlugin` (selection / hotbar / `ActiveItem`) + `InventoryRulesPlugin` (apply system, **server-only** in networked builds; client-only in single-player) | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core` |
-| `dd40_inventory_gui` | Client-only: hotbar widget, toggleable inventory grid window, per-slot widget with icon cache + colour fallback, held-stack cursor follower, click → `SlotInteraction` translator (forwarded to server by `dd40_network::ClientInventoryNetworkPlugin`) | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core` |
+| `dd40_inventory_gui` | Client-only: hotbar widget, toggleable inventory grid window, per-slot widget with icon cache + colour fallback, held-stack cursor follower, click → `SlotInteraction` translator (forwarded to server by `dd40_network::ClientInventoryNetworkPlugin`). Optional `textures` feature scaffolds the future atlas-slice icon path. | `dd40_core`, `dd40_character_core`, `dd40_item_core`, `dd40_inventory_core`, `dd40_input_core`, *(opt)* `dd40_texture_core` |
+| `dd40_texture_pack` | Minecraft-compatible resource-pack loader: scans `assets/<ns>/textures/block/**/*.png` (+ `.mcmeta`), decodes PNGs, parses animation metadata, builds a 2D-array texture atlas, installs it on `BlockAtlas` during `AtlasReady`. Client-only. | `dd40_core`, `dd40_texture_core` |
 
 ### Tier 2 — Binary
 
