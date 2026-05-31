@@ -32,16 +32,19 @@ use std::collections::HashMap;
 
 use dd40_core::block::{BlockId, BlockRegistry};
 use dd40_texture_core::{
-    AtlasId, BlockAtlas, BlockTextures, Face, RenderLayer, ResolvedTexture, TextureRef,
+    AtlasId, AtlasUv, BlockAtlas, BlockTextures, Face, RenderLayer, ResolvedTexture, TextureRef,
 };
 
 use crate::face_culling::FaceDir;
 
-/// Equivalence class a single block face falls into for greedy
-/// merging and mesh splitting.
+/// Equivalence class a single block face falls into for mesh splitting.
 ///
-/// Two adjacent faces merge into one rectangle only if they share both
-/// their [`BlockId`] **and** their `BucketKey`.
+/// One Bevy mesh entity (and one
+/// [`BlockAtlasMaterial`](super::material::BlockAtlasMaterial)
+/// instance) is emitted per `BucketKey` per chunk.  Greedy meshing
+/// itself keys by `BlockId` alone — within a single face-direction
+/// slice every cell with the same `BlockId` necessarily resolves to
+/// the same texture, so no extra merge key is needed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BucketKey {
     /// Block has no texture, or the atlas is not ready, or the
@@ -60,12 +63,34 @@ pub enum BucketKey {
     },
 }
 
-/// Per-block bucket assignment: one entry per face, indexed by the
+/// Resolved per-face texture data: which bucket the face belongs to
+/// and (for textured faces) where in its atlas layer the texels live.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FaceTextureInfo {
+    /// Mesh / material grouping.
+    pub bucket: BucketKey,
+    /// UV sub-rectangle within the atlas layer; `None` for
+    /// [`BucketKey::Untextured`].  When `Some`, the mesh builder
+    /// remaps the unit-square per-quad UV (`(0,0)..(1,1)`) into this
+    /// rect so a single mesh + single material can carry many tiles.
+    pub uv: Option<AtlasUv>,
+}
+
+impl FaceTextureInfo {
+    /// Untextured fallback: belongs in the colour-only bucket, has no
+    /// atlas UV.
+    pub const UNTEXTURED: Self = Self {
+        bucket: BucketKey::Untextured,
+        uv: None,
+    };
+}
+
+/// Per-block face-texture lookup: one entry per face, indexed by the
 /// declaration order in [`Face::ALL`].
 ///
-/// Use [`face_dir_to_face`] to map a renderer [`FaceDir`] to its
-/// position in this array.
-pub type FaceBuckets = [BucketKey; 6];
+/// Use [`face_dir_to_face`] + [`face_index`] to project a renderer
+/// [`FaceDir`] into this array.
+pub type FaceBuckets = [FaceTextureInfo; 6];
 
 /// Maps a renderer [`FaceDir`] to the corresponding
 /// [`dd40_texture_core::Face`].
@@ -94,7 +119,7 @@ pub fn face_index(face: Face) -> usize {
         .expect("Face::ALL must contain every Face variant — guaranteed by texture_core")
 }
 
-/// Resolves a single face to a [`BucketKey`].
+/// Resolves a single face to a [`FaceTextureInfo`].
 ///
 /// `block_textures` may be `None` if the block has no [`BlockTextures`]
 /// attached (which is fine — the face falls into the untextured bucket).
@@ -102,36 +127,34 @@ pub fn resolve_face_bucket(
     block_textures: Option<&BlockTextures>,
     face: Face,
     atlas: &BlockAtlas,
-) -> BucketKey {
+) -> FaceTextureInfo {
     let Some(textures) = block_textures else {
-        return BucketKey::Untextured;
+        return FaceTextureInfo::UNTEXTURED;
     };
     let Some(texture_ref) = textures.get(face) else {
-        return BucketKey::Untextured;
+        return FaceTextureInfo::UNTEXTURED;
     };
     let Some(resolved) = atlas.resolve(texture_ref) else {
-        return BucketKey::Untextured;
+        return FaceTextureInfo::UNTEXTURED;
     };
-    bucket_from_resolved(&resolved)
+    info_from_resolved(&resolved)
 }
 
-/// Builds a [`BucketKey`] from a fully-resolved atlas entry.
+/// Builds a [`FaceTextureInfo`] from a fully-resolved atlas entry.
 ///
 /// Animated textures currently fall back to [`BucketKey::Untextured`];
 /// the animated-bucket variant lands in a follow-up commit.
-fn bucket_from_resolved(r: &ResolvedTexture) -> BucketKey {
+fn info_from_resolved(r: &ResolvedTexture) -> FaceTextureInfo {
     if r.animation.is_some() {
-        // Animation support is deferred — render the first frame as
-        // static rather than dropping these faces entirely would be
-        // *wrong* because animated textures are usually translucent or
-        // cutout (water, fire) and falling back to per-block colour is
-        // a more honest failure mode.
-        return BucketKey::Untextured;
+        return FaceTextureInfo::UNTEXTURED;
     }
-    BucketKey::Static {
-        atlas_id: r.atlas,
-        atlas_layer: r.uv.base_layer,
-        render_layer: r.render_layer,
+    FaceTextureInfo {
+        bucket: BucketKey::Static {
+            atlas_id: r.atlas,
+            atlas_layer: r.uv.base_layer,
+            render_layer: r.render_layer,
+        },
+        uv: Some(r.uv),
     }
 }
 
@@ -140,9 +163,10 @@ fn bucket_from_resolved(r: &ResolvedTexture) -> BucketKey {
 /// Called once per atlas-ready frame inside the mesh-task dispatcher;
 /// the result is cloned into each spawned task so the task does not
 /// need to touch the [`BlockRegistry`] or [`BlockAtlas`] resources
-/// directly (both are `!Send`-friendly but `BlockRegistry` is large).
+/// directly.
 ///
-/// Blocks that have no [`BlockTextures`] receive `[BucketKey::Untextured; 6]`.
+/// Blocks that have no [`BlockTextures`] receive
+/// `[FaceTextureInfo::UNTEXTURED; 6]`.
 pub fn compute_face_buckets(
     registry: &BlockRegistry,
     atlas: &BlockAtlas,
@@ -150,7 +174,7 @@ pub fn compute_face_buckets(
     let mut out = HashMap::new();
     for def in registry.iter() {
         let textures = def.data::<BlockTextures>();
-        let mut buckets = [BucketKey::Untextured; 6];
+        let mut buckets = [FaceTextureInfo::UNTEXTURED; 6];
         for (i, face) in Face::ALL.iter().enumerate() {
             buckets[i] = resolve_face_bucket(textures, *face, atlas);
         }
@@ -208,23 +232,25 @@ mod tests {
     fn untextured_when_no_block_textures_attached() {
         let atlas = stub_atlas(&[("ns:foo", 0, RenderLayer::Opaque)]);
         let b = resolve_face_bucket(None, Face::Top, &atlas);
-        assert_eq!(b, BucketKey::Untextured);
+        assert_eq!(b.bucket, BucketKey::Untextured);
+        assert!(b.uv.is_none());
     }
 
     #[test]
     fn untextured_when_face_has_no_texture_ref() {
         let atlas = stub_atlas(&[]);
-        let textures = BlockTextures::default(); // every face = None
+        let textures = BlockTextures::default();
         let b = resolve_face_bucket(Some(&textures), Face::Top, &atlas);
-        assert_eq!(b, BucketKey::Untextured);
+        assert_eq!(b.bucket, BucketKey::Untextured);
+        assert!(b.uv.is_none());
     }
 
     #[test]
     fn untextured_when_atlas_does_not_know_texture() {
-        let atlas = stub_atlas(&[]); // empty, but source installed
+        let atlas = stub_atlas(&[]);
         let textures = BlockTextures::all(TextureRef::named("ns:missing"));
         let b = resolve_face_bucket(Some(&textures), Face::Top, &atlas);
-        assert_eq!(b, BucketKey::Untextured);
+        assert_eq!(b.bucket, BucketKey::Untextured);
     }
 
     #[test]
@@ -233,13 +259,14 @@ mod tests {
         let textures = BlockTextures::all(TextureRef::named("ns:stone"));
         let b = resolve_face_bucket(Some(&textures), Face::Top, &atlas);
         assert_eq!(
-            b,
+            b.bucket,
             BucketKey::Static {
                 atlas_id: AtlasId(0),
                 atlas_layer: 7,
                 render_layer: RenderLayer::Opaque,
             }
         );
+        assert!(b.uv.is_some());
     }
 
     #[test]
@@ -254,9 +281,9 @@ mod tests {
             TextureRef::named("ns:dirt"),
             TextureRef::named("ns:grass_side"),
         );
-        let top = resolve_face_bucket(Some(&textures), Face::Top, &atlas);
-        let bot = resolve_face_bucket(Some(&textures), Face::Bottom, &atlas);
-        let side = resolve_face_bucket(Some(&textures), Face::North, &atlas);
+        let top = resolve_face_bucket(Some(&textures), Face::Top, &atlas).bucket;
+        let bot = resolve_face_bucket(Some(&textures), Face::Bottom, &atlas).bucket;
+        let side = resolve_face_bucket(Some(&textures), Face::North, &atlas).bucket;
         assert_ne!(top, bot);
         assert_ne!(top, side);
         assert_ne!(bot, side);
@@ -279,12 +306,11 @@ mod tests {
                 frame_indices: vec![0, 1, 2, 3],
             }),
         };
-        assert_eq!(bucket_from_resolved(&r), BucketKey::Untextured);
+        assert_eq!(info_from_resolved(&r).bucket, BucketKey::Untextured);
     }
 
     #[test]
     fn face_dir_to_face_round_trips_for_all_six() {
-        // The six FaceDirs must map to six *distinct* Faces.
         let faces: Vec<Face> = FaceDir::ALL.iter().copied().map(face_dir_to_face).collect();
         let mut sorted = faces.clone();
         sorted.sort_by_key(|f| face_index(*f));

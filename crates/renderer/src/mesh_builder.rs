@@ -202,7 +202,7 @@ impl MeshBuilder {
 /// | NegY | −Y          | y = layer        | X      | Z      |
 /// | PosZ | +Z          | z = layer + 1    | X      | Y      |
 /// | NegZ | −Z          | z = layer        | X      | Y      |
-fn quad_corners(quad: &MergedQuad, ox: f32, oz: f32) -> [[f32; 3]; 4] {
+pub(crate) fn quad_corners(quad: &MergedQuad, ox: f32, oz: f32) -> [[f32; 3]; 4] {
     let layer = quad.layer as f32;
     let u0 = quad.u_start as f32;
     let v0 = quad.v_start as f32;

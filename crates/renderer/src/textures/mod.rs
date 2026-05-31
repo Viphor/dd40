@@ -7,11 +7,13 @@
 
 pub mod bucket;
 pub mod material;
+pub mod textured_mesh;
 
-pub use bucket::{BucketKey, FaceBuckets, compute_face_buckets};
+pub use bucket::{BucketKey, FaceBuckets, FaceTextureInfo, compute_face_buckets, face_dir_to_face};
 pub use material::{
     BLOCK_ATLAS_SHADER_HANDLE, BlockAtlasMaterial, BlockAtlasMaterialPlugin, BlockAtlasParams,
 };
+pub use textured_mesh::{BucketMesh, build_chunk_bucket_meshes, collect_color_map};
 
 /// Returns `true` once the bucket-split mesh code is wired into the
 /// renderer's task pipeline.  Bucket precomputation alone (`bucket.rs`)
