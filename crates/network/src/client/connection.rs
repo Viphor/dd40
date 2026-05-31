@@ -116,6 +116,7 @@ pub fn on_server_connected(
         MessageSender::<NetSlotInteraction>::default(),
         MessageReceiver::<ChunkSnapshot>::default(),
         MessageReceiver::<ChunkUpdate>::default(),
+        MessageReceiver::<ChunkRejection>::default(),
         MessageReceiver::<PlayerSpawnLocation>::default(),
         Name::new("ServerConnection"),
     ));

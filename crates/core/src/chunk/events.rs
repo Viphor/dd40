@@ -82,13 +82,25 @@ pub struct ChunkPredicted {
     pub change: ChunkChange,
 }
 
-/// Local Bevy message fired on a client when a locally-predicted change is
-/// rejected by the server (i.e. the server's authoritative `ChunkUpdate`
-/// did not contain a matching change).
+/// Local Bevy message fired when a locally-predicted change is rejected.
 ///
-/// The change is also logged at `warn!` level — listeners are optional and
-/// exist for UI hooks (e.g. flashing the held-tool icon, replaying a
-/// "block won't go there" sound).
+/// Two emitters today:
+///
+/// - **Client** — fired by the network reconciler when an arriving
+///   `ChunkUpdate` does not contain a matching change (i.e. the server
+///   committed something different at the same version).
+/// - **Server** — fired by [`commit_predicted_changes`][crate::chunk::commit_predicted_changes]
+///   when a validator rejects a predicted change. Server-side
+///   network forwarders observe this to advertise the rejection to the
+///   originating client, so the client can roll its own prediction back
+///   without waiting for an unrelated `ChunkUpdate`.
+///
+/// In both cases the change is also logged at `warn!`. Listeners are
+/// optional and exist for UI hooks (e.g. flashing the held-tool icon,
+/// replaying a "block won't go there" sound) and for cleanup of
+/// per-actor pending-placement queues.
+///
+/// [`commit_predicted_changes`]: crate::chunk::commit_predicted_changes
 #[derive(Message, Clone, Debug)]
 pub struct PredictionRejected {
     /// Chunk the rejected prediction targeted.

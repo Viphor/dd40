@@ -6,7 +6,9 @@ use lightyear::prelude::client::ClientPlugins;
 use crate::{
     client::{
         character::ClientCharacterPlugin,
-        chunk_provider::{apply_chunk_updates, receive_chunk_data, send_chunk_requests},
+        chunk_provider::{
+            apply_chunk_rejections, apply_chunk_updates, receive_chunk_data, send_chunk_requests,
+        },
         connection::{DDClient, connect, on_server_connected},
         loading::register_connection_loading_item,
         loose_items::{ensure_loose_item_transform, sync_loose_item_position_to_transform},
@@ -73,7 +75,14 @@ impl Plugin for ClientNetworkPlugin {
 
         // Communication systems.
         app.add_systems(PreUpdate, send_chunk_requests);
-        app.add_systems(PostUpdate, (receive_chunk_data, apply_chunk_updates));
+        app.add_systems(
+            PostUpdate,
+            (
+                receive_chunk_data,
+                apply_chunk_updates,
+                apply_chunk_rejections,
+            ),
+        );
 
         // Bridge replicated loose items into the client transform stack so
         // renderers (e.g. `dd40_loose_item_render`) can hang visuals off

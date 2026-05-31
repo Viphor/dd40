@@ -199,6 +199,30 @@ pub struct ChunkUpdate {
     pub new_version: u64,
 }
 
+/// Server-sent notification that a client's predicted [`ChunkChange`] was
+/// rejected by the server's chunk-authority commit pass.
+///
+/// Broadcast on the reliable [`BlockChannel`] alongside [`ChunkUpdate`].
+/// Clients without a matching predicted entry no-op; clients that
+/// predicted the change roll back the affected cell to its
+/// pre-prediction value and fire a local
+/// [`PredictionRejected`][dd40_core::chunk::events::PredictionRejected]
+/// so renderers re-mesh and gameplay listeners (pending-placement
+/// queues, UI hooks) can react.
+///
+/// Reliability matters here: a dropped rejection leaves the client
+/// rendering a block the server doesn't think exists until the chunk
+/// is re-fetched or evicted. Use the same reliable channel as
+/// [`ChunkUpdate`] so commit ordering on the wire mirrors the server's
+/// commit pass.
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct ChunkRejection {
+    /// Chunk the rejected prediction targeted.
+    pub pos: ChunkPos,
+    /// The predicted change that was rejected.
+    pub change: SerializableChunkChange,
+}
+
 /// Server-sent full snapshot of a chunk.
 ///
 /// Sent in response to a [`RequestChunk`] when the server cannot satisfy
@@ -439,6 +463,9 @@ impl Plugin for ProtocolPlugin {
             .add_direction(NetworkDirection::ServerToClient);
 
         app.register_message::<ChunkUpdate>()
+            .add_direction(NetworkDirection::ServerToClient);
+
+        app.register_message::<ChunkRejection>()
             .add_direction(NetworkDirection::ServerToClient);
 
         app.register_message::<ChunkSnapshot>()

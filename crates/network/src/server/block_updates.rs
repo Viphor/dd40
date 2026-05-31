@@ -18,7 +18,7 @@ use dd40_core::prelude::*;
 use dd40_physics_core::prelude::PhysicsPosition;
 use lightyear::prelude::{ControlledBy, MessageSender};
 
-use crate::protocol::{BlockChannel, ChunkUpdate};
+use crate::protocol::{BlockChannel, ChunkRejection, ChunkUpdate};
 
 /// Default Chebyshev radius (in chunks) used when
 /// `DD40_NETWORK__RENDER_DISTANCE` is unset or unparseable.
@@ -128,6 +128,58 @@ pub(crate) fn broadcast_chunk_updates(
                 changes: block_changes,
                 cell_data_changes,
                 new_version: update.new_version,
+            });
+        }
+    }
+}
+
+/// Reads local [`PredictionRejected`] events fired by the
+/// chunk-authority commit pass and forwards each one to every connected
+/// client whose character sits within [`NetworkRenderDistance`] chunks
+/// of the rejected change.
+///
+/// Clients without a matching predicted entry simply no-op on receipt;
+/// the client that actually predicted the change rolls its cell back
+/// and fires its own local [`PredictionRejected`], so renderers
+/// re-mesh and gameplay listeners (pending-placement queues, UI hooks)
+/// react the same way they do for an `apply_chunk_updates` rollback.
+///
+/// Broadcast (rather than targeting only the predicting client) because
+/// the server does not track which connection authored a given
+/// prediction. The wire cost is one small message per rejection per
+/// in-range client.
+///
+/// [`PredictionRejected`]: dd40_core::chunk::events::PredictionRejected
+pub(crate) fn broadcast_chunk_rejections(
+    mut reader: MessageReader<dd40_core::chunk::events::PredictionRejected>,
+    render_distance: Res<NetworkRenderDistance>,
+    characters: Query<(&PhysicsPosition, &ControlledBy), With<Character>>,
+    mut senders: Query<(Entity, &mut MessageSender<ChunkRejection>)>,
+) {
+    let rejections: Vec<dd40_core::chunk::events::PredictionRejected> =
+        reader.read().cloned().collect();
+    if rejections.is_empty() {
+        return;
+    }
+
+    let mut conn_chunks: HashMap<Entity, ChunkPos> = HashMap::new();
+    for (pos, controlled) in &characters {
+        conn_chunks.insert(controlled.owner, ChunkPos::from(&pos.0));
+    }
+
+    let radius = render_distance.0;
+
+    for (conn_entity, mut sender) in &mut senders {
+        let Some(player_chunk) = conn_chunks.get(&conn_entity).copied() else {
+            continue;
+        };
+        for rejection in &rejections {
+            if chebyshev(player_chunk, rejection.pos) > radius {
+                continue;
+            }
+            sender.send::<BlockChannel>(ChunkRejection {
+                pos: rejection.pos,
+                change: rejection.change.into(),
             });
         }
     }

@@ -387,6 +387,7 @@ pub fn commit_predicted_changes(
     mut pending: ResMut<PendingChunkRejections>,
     mut pending_cell_data: ResMut<PendingCellDataRejections>,
     mut writer: MessageWriter<ChunkChanged>,
+    mut rejected_writer: MessageWriter<crate::chunk::events::PredictionRejected>,
 ) {
     let dirty: Vec<ChunkPos> = cache.drain_dirty().collect();
     if dirty.is_empty() {
@@ -449,6 +450,14 @@ pub fn commit_predicted_changes(
                     reason,
                 );
                 chunk.rollback_to(entry.change.local(), entry.prior);
+                // Advertise the rejection so network forwarders can
+                // tell the originating client to roll back its own
+                // prediction. On a non-networked instance no one
+                // subscribes and the event is a cheap no-op.
+                rejected_writer.write(crate::chunk::events::PredictionRejected {
+                    pos,
+                    change: entry.change,
+                });
             } else {
                 accepted.push(entry.change);
             }
@@ -548,6 +557,7 @@ impl Plugin for ChunkAuthorityPlugin {
         app.init_resource::<PendingChunkRejections>();
         app.init_resource::<PendingCellDataRejections>();
         app.init_resource::<crate::block::BlockDataTypeRegistry>();
+        app.add_message::<crate::chunk::events::PredictionRejected>();
         app.configure_sets(
             PostUpdate,
             ChunkAuthoritySet::Validate.before(ChunkAuthoritySet::Commit),

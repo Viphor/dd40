@@ -539,6 +539,29 @@ impl Chunk {
         self.set_local(local, prior);
     }
 
+    /// Client-side rollback for a single predicted change.
+    ///
+    /// Finds the **oldest** entry in [`Self::predicted`] whose `change`
+    /// equals `change`, rolls the affected cell back to that entry's
+    /// `prior`, removes the entry from the queue, and returns `true`.
+    /// Returns `false` if no matching entry exists.
+    ///
+    /// Used by the network client when the server advertises that a
+    /// predicted change was rejected by its commit pass — see
+    /// [`PredictionRejected`][crate::chunk::events::PredictionRejected].
+    /// Unlike the full reconciliation in `apply_confirmed_changes`, this
+    /// touches only one entry and leaves `version` / `confirmed_history`
+    /// alone (a rejection does not advance the chunk's authoritative
+    /// version).
+    pub fn drop_predicted(&mut self, change: &ChunkChange) -> bool {
+        let Some(idx) = self.predicted.iter().position(|p| &p.change == change) else {
+            return false;
+        };
+        let entry = self.predicted.remove(idx).expect("position came from iter");
+        self.set_local(entry.change.local(), entry.prior);
+        true
+    }
+
     /// Client-side: apply a batch of confirmed changes coming from the
     /// server.
     ///
@@ -887,6 +910,29 @@ mod tests {
         let cp = ChunkPos::new(3, 0, 5);
         let bp = cp.block_pos(BlockLocal::new(0, 0, 0));
         assert_eq!(bp, BlockPos::new(48, 0, 80));
+    }
+
+    #[test]
+    fn drop_predicted_rolls_back_matching_entry() {
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
+        let target = lp(2, 3, 4);
+        let change = ChunkChange::new_place(target, BlockId(9));
+        c.push_predicted(change);
+        assert_eq!(c.get_local(target).block_id, BlockId(9));
+        assert_eq!(c.predicted().len(), 1);
+
+        assert!(c.drop_predicted(&change));
+        assert_eq!(c.get_local(target).block_id, BlockId(0));
+        assert!(c.predicted().is_empty());
+        assert_eq!(c.version(), 0);
+    }
+
+    #[test]
+    fn drop_predicted_returns_false_without_match() {
+        let mut c = Chunk::new(ChunkPos::new(0, 0, 0));
+        let change = ChunkChange::new_place(lp(0, 0, 0), BlockId(1));
+        assert!(!c.drop_predicted(&change));
+        assert!(c.predicted().is_empty());
     }
 
     #[test]

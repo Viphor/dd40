@@ -5,7 +5,7 @@ use dd40_core::chunk::events::{ChunkChanged, PredictionRejected};
 use dd40_core::prelude::*;
 use lightyear::prelude::{MessageReceiver, MessageSender};
 
-use crate::protocol::{ChunkChannel, ChunkSnapshot, ChunkUpdate};
+use crate::protocol::{ChunkChannel, ChunkRejection, ChunkSnapshot, ChunkUpdate};
 
 pub(crate) fn send_chunk_requests(
     mut requests: MessageReader<RequestChunk>,
@@ -196,6 +196,53 @@ pub(crate) fn apply_chunk_updates(
             changes: outcome.applied_changes,
             cell_data_changes: outcome.applied_cell_data,
             new_version: update.new_version,
+        });
+    }
+}
+
+/// Receives [`ChunkRejection`] messages from the server and rolls back
+/// the matching predicted entry on the local chunk.
+///
+/// For each rejection: looks up the chunk in [`ChunkCache`], calls
+/// [`Chunk::drop_predicted`] with the rejected change. If a matching
+/// predicted entry existed, marks the chunk dirty so renderers re-mesh,
+/// emits a local [`PredictionRejected`] so gameplay listeners can
+/// react, and emits a [`ChunkChanged`] (with no `changes`) so any
+/// system tracking `ChunkChanged` notices the cell flipped back.
+///
+/// Rejections for chunks that are not currently cached, or that carry
+/// no matching predicted entry, are silently ignored: a chunk we no
+/// longer cache cannot show a phantom block, and a missing prediction
+/// usually means another reconciliation path already rolled it back.
+pub(crate) fn apply_chunk_rejections(
+    mut receiver: Single<&mut MessageReceiver<ChunkRejection>>,
+    mut cache: ResMut<ChunkCache>,
+    mut changed: MessageWriter<ChunkChanged>,
+    mut rejected: MessageWriter<PredictionRejected>,
+) {
+    for rejection in receiver.receive() {
+        let change: ChunkChange = rejection.change.into();
+        let Some(chunk) = cache.get_mut(&rejection.pos) else {
+            continue;
+        };
+        if !chunk.drop_predicted(&change) {
+            continue;
+        }
+        let version = chunk.version();
+        warn!(
+            "Server rejected predicted change at {} (cell {:?}); rolled back",
+            rejection.pos,
+            change.local()
+        );
+        rejected.write(PredictionRejected {
+            pos: rejection.pos,
+            change,
+        });
+        changed.write(ChunkChanged {
+            pos: rejection.pos,
+            changes: Vec::new(),
+            cell_data_changes: Vec::new(),
+            new_version: version,
         });
     }
 }

@@ -7,7 +7,9 @@ use lightyear::prelude::server::ServerPlugins;
 use crate::{
     protocol::*,
     server::{
-        block_updates::{NetworkRenderDistance, broadcast_chunk_updates},
+        block_updates::{
+            NetworkRenderDistance, broadcast_chunk_rejections, broadcast_chunk_updates,
+        },
         character::ServerCharacterPlugin,
         chunk_provider::{receive_chunk_requests, send_chunk_data},
         chunk_requests::{ChunkRequests, add_message_handlers},
@@ -64,6 +66,7 @@ impl Plugin for ServerNetworkPlugin {
             .add_systems(Update, receive_chunk_requests)
             .add_systems(Update, send_chunk_data)
             .add_systems(Update, broadcast_chunk_updates)
+            .add_systems(Update, broadcast_chunk_rejections)
             .add_systems(
                 PostUpdate,
                 (

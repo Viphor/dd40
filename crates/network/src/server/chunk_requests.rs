@@ -7,7 +7,8 @@ use lightyear::prelude::{
 };
 
 use crate::protocol::{
-    ChunkSnapshot, ChunkUpdate, NetSlotInteraction, PlayerSpawnLocation, RequestSpawn,
+    ChunkRejection, ChunkSnapshot, ChunkUpdate, NetSlotInteraction, PlayerSpawnLocation,
+    RequestSpawn,
 };
 
 /// Tracks which chunk positions have already been requested for a given client
@@ -40,6 +41,7 @@ pub(crate) fn add_message_handlers(trigger: On<Add, LinkOf>, mut commands: Comma
         ),
         MessageSender::<ChunkSnapshot>::default(),
         MessageSender::<ChunkUpdate>::default(),
+        MessageSender::<ChunkRejection>::default(),
         MessageSender::<PlayerSpawnLocation>::default(),
         MessageReceiver::<RequestSpawn>::default(),
         MessageReceiver::<RequestChunk>::default(),
