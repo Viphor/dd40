@@ -13,10 +13,11 @@
 
 use bevy::prelude::*;
 use dd40_character_core::components::Character;
+use dd40_inventory_core::set_active_slot::SetActiveSlot;
 use dd40_inventory_core::slot_interaction::SlotInteraction;
 use lightyear::prelude::{ControlledBy, MessageReceiver};
 
-use crate::protocol::NetSlotInteraction;
+use crate::protocol::{NetSetActiveSlot, NetSlotInteraction};
 
 /// Drains [`NetSlotInteraction`] from every connection, resolves the
 /// owning [`Character`] via [`ControlledBy`], and re-emits a local
@@ -53,17 +54,49 @@ pub fn forward_slot_interactions(
     }
 }
 
-/// Plugin that adds [`forward_slot_interactions`] to `Update`.
+/// Drains [`NetSetActiveSlot`] from every connection, resolves the
+/// owning [`Character`] via [`ControlledBy`], and re-emits a local
+/// [`SetActiveSlot`] for the authoritative apply system to consume.
 ///
-/// Add this on the server *after* `VanillaInventoryPlugin` (from
+/// Same ownership-resolution contract as [`forward_slot_interactions`].
+pub fn forward_set_active_slot(
+    mut connections: Query<(Entity, &mut MessageReceiver<NetSetActiveSlot>)>,
+    characters: Query<(Entity, &ControlledBy), With<Character>>,
+    mut writer: MessageWriter<SetActiveSlot>,
+) {
+    for (conn, mut receiver) in connections.iter_mut() {
+        let messages: Vec<NetSetActiveSlot> = receiver.receive().collect();
+        if messages.is_empty() {
+            continue;
+        }
+        let Some((character, _)) = characters.iter().find(|(_, cb)| cb.owner == conn) else {
+            warn!(
+                "Dropping {} NetSetActiveSlot(s) from connection {:?} — no controlled Character yet",
+                messages.len(),
+                conn
+            );
+            continue;
+        };
+        for msg in messages {
+            writer.write(SetActiveSlot {
+                character,
+                slot: msg.slot,
+            });
+        }
+    }
+}
+
+/// Plugin that adds [`forward_slot_interactions`] and
+/// [`forward_set_active_slot`] to `Update`.
+///
+/// Add this on the server *after* `VanillaInventoryRulesPlugin` (from
 /// `dd40_vanilla_inventory`); that plugin owns the [`SlotInteraction`]
-/// message registration, the apply system, and the per-character
-/// bookkeeping.
+/// / [`SetActiveSlot`] message registrations and the apply systems.
 #[derive(Default)]
 pub struct ServerInventoryNetworkPlugin;
 
 impl Plugin for ServerInventoryNetworkPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, forward_slot_interactions);
+        app.add_systems(Update, (forward_slot_interactions, forward_set_active_slot));
     }
 }

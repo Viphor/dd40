@@ -17,10 +17,11 @@
 //! [`ServerInventoryNetworkPlugin`]: crate::ServerInventoryNetworkPlugin
 
 use bevy::prelude::*;
+use dd40_inventory_core::set_active_slot::SetActiveSlot;
 use dd40_inventory_core::slot_interaction::SlotInteraction;
 use lightyear::prelude::MessageSender;
 
-use crate::protocol::{InventoryChannel, NetSlotInteraction};
+use crate::protocol::{InventoryChannel, NetSetActiveSlot, NetSlotInteraction};
 
 /// Forwards every local [`SlotInteraction`] to the server.
 ///
@@ -42,11 +43,34 @@ pub fn forward_slot_interactions(
     }
 }
 
-/// Plugin that adds [`forward_slot_interactions`] to `Update`.
+/// Forwards every local [`SetActiveSlot`] to the server.
 ///
-/// Add this on the client alongside [`ClientNetworkPlugin`].  The GUI
-/// crate continues to publish [`SlotInteraction`] on the local bus;
-/// this system is what actually delivers the click to the server.
+/// The `character` field is ignored on the server (same reasoning as
+/// [`forward_slot_interactions`]): the server resolves the controlling
+/// character via `ControlledBy`.  The server's authoritative apply
+/// system then mutates `InventoryComponent.active_slot`, and the
+/// updated component replicates back to the client — which is what the
+/// hotbar GUI's selection-sync system observes.
+pub fn forward_set_active_slot(
+    mut reader: MessageReader<SetActiveSlot>,
+    sender: Option<Single<&mut MessageSender<NetSetActiveSlot>>>,
+) {
+    let Some(mut sender) = sender else {
+        reader.read().for_each(|_| {});
+        return;
+    };
+    for msg in reader.read() {
+        sender.send::<InventoryChannel>(NetSetActiveSlot { slot: msg.slot });
+    }
+}
+
+/// Plugin that adds [`forward_slot_interactions`] and
+/// [`forward_set_active_slot`] to `Update`.
+///
+/// Add this on the client alongside [`ClientNetworkPlugin`].  The
+/// vanilla inventory crate continues to publish [`SlotInteraction`] and
+/// [`SetActiveSlot`] on the local bus; these systems are what actually
+/// deliver each intent to the server.
 ///
 /// [`ClientNetworkPlugin`]: crate::client::plugin::ClientNetworkPlugin
 #[derive(Default)]
@@ -54,6 +78,6 @@ pub struct ClientInventoryNetworkPlugin;
 
 impl Plugin for ClientInventoryNetworkPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, forward_slot_interactions);
+        app.add_systems(Update, (forward_slot_interactions, forward_set_active_slot));
     }
 }

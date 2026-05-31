@@ -151,6 +151,21 @@ pub struct NetSlotInteraction {
     pub kind: dd40_inventory_core::slot_interaction::SlotInteractionKind,
 }
 
+/// Wire-form request to change the active hotbar slot for the
+/// controlling character.
+///
+/// The local Bevy [`SetActiveSlot`] message carries an `Entity` that is
+/// the client's local id and meaningless on the server; the server
+/// resolves the owning character via `ControlledBy` and re-emits a
+/// local [`SetActiveSlot`] for the apply system to consume.
+///
+/// [`SetActiveSlot`]: dd40_inventory_core::set_active_slot::SetActiveSlot
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct NetSetActiveSlot {
+    /// Requested hotbar index. The server clamps out-of-range values.
+    pub slot: u8,
+}
+
 /// Server-broadcast delta of authoritatively-committed changes to a chunk.
 ///
 /// Sent from the server to every client that already has the chunk loaded,
@@ -414,6 +429,9 @@ impl Plugin for ProtocolPlugin {
             .add_direction(NetworkDirection::ClientToServer);
 
         app.register_message::<NetSlotInteraction>()
+            .add_direction(NetworkDirection::ClientToServer);
+
+        app.register_message::<NetSetActiveSlot>()
             .add_direction(NetworkDirection::ClientToServer);
 
         // Server -> Client
