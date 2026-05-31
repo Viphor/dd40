@@ -156,7 +156,10 @@ impl Plugin for RendererPlugin {
         dd40_core::ensure_plugins!(app, CorePlugin, PhysicsCorePlugin);
 
         #[cfg(feature = "textures")]
-        dd40_core::ensure_plugins!(app, dd40_texture_core::TextureCorePlugin);
+        {
+            dd40_core::ensure_plugins!(app, dd40_texture_core::TextureCorePlugin);
+            app.add_plugins(textures::BlockAtlasMaterialPlugin);
+        }
 
         // Insert resources only if they haven't been added already so the
         // caller can override them before adding the plugin.
