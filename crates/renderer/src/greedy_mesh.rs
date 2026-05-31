@@ -163,7 +163,7 @@ mod tests {
     const DIRT: BlockId = BlockId(2);
 
     // Helper: run greedy meshing on a small mask and return the quads.
-    fn run(mask: &mut Vec<Vec<Option<BlockId>>>) -> Vec<MergedQuad> {
+    fn run(mask: &mut [Vec<Option<BlockId>>]) -> Vec<MergedQuad> {
         let u = mask.len();
         let v = if u > 0 { mask[0].len() } else { 0 };
         let mut out = Vec::new();
@@ -338,10 +338,10 @@ mod tests {
     fn mask_with_hole_does_not_cover_hole() {
         // Ring of STONE around a None in the centre.
         let mut mask = empty_mask(3, 3);
-        for u in 0..3 {
-            for v in 0..3 {
+        for (u, row) in mask.iter_mut().enumerate() {
+            for (v, cell) in row.iter_mut().enumerate() {
                 if !(u == 1 && v == 1) {
-                    mask[u][v] = Some(STONE);
+                    *cell = Some(STONE);
                 }
             }
         }

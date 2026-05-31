@@ -64,6 +64,7 @@ impl GameRng {
     /// Consumers should bring [`rand::Rng`] into scope and call its
     /// methods (`random`, `random_range`, `gen_bool`, …) through the
     /// returned reference.
+    #[allow(clippy::should_implement_trait)]
     pub fn as_mut(&mut self) -> &mut (dyn RngCore + Send + Sync) {
         &mut *self.0
     }
