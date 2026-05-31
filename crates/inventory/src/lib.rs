@@ -74,6 +74,4 @@ pub mod plugin;
 pub mod rules;
 pub mod selection;
 
-pub use plugin::{
-    InventoryActiveItemPlugin, InventoryPlugin, InventoryRulesPlugin,
-};
+pub use plugin::{InventoryActiveItemPlugin, InventoryPlugin, InventoryRulesPlugin};

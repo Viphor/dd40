@@ -6,6 +6,7 @@ use dd40_core::{
 };
 use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
 use dd40_integration_loose_item_pickup::LooseItemPickupPlugin;
+use dd40_inventory::{InventoryActiveItemPlugin, InventoryRulesPlugin};
 use dd40_loose_items::LooseItemsPlugin;
 use dd40_loot::LootPlugin;
 use dd40_network::{
@@ -14,7 +15,6 @@ use dd40_network::{
     shared::connection::SHARED_SETTINGS,
 };
 use dd40_physics::PhysicsPlugin;
-use dd40_inventory::{InventoryActiveItemPlugin, InventoryRulesPlugin};
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
 use dd40_world::{
     WorldPlugin,

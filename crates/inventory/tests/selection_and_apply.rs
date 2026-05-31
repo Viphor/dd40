@@ -9,15 +9,13 @@ use std::num::NonZero;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use dd40_character_core::components::Player;
+use dd40_inventory::{InventoryActiveItemPlugin, InventoryPlugin, InventoryRulesPlugin};
 use dd40_inventory_core::prelude::{
     DropItems, HOTBAR_SIZE, HeldStackComponent, InventoryComponent, SlotInteraction,
     SlotInteractionKind,
 };
 use dd40_item_core::active_item::{ActiveItem, ItemStack};
 use dd40_item_core::registry::{ItemDefinition, ItemId, ItemRegistry};
-use dd40_inventory::{
-    InventoryActiveItemPlugin, InventoryPlugin, InventoryRulesPlugin,
-};
 
 fn make_app() -> App {
     let mut app = App::new();
