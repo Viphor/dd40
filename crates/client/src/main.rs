@@ -12,6 +12,7 @@ use dd40_network::{ClientInventoryNetworkPlugin, ClientNetworkPlugin};
 use dd40_physics::PhysicsPlugin;
 use dd40_player_input::PlayerInputPlugin;
 use dd40_renderer::RendererPlugin;
+use dd40_texture_pack::{TexturePackConfig, TexturePackPlugin};
 use dd40_vanilla_palette::VanillaPalettePlugin;
 
 fn main() {
@@ -45,6 +46,10 @@ fn main() {
         InventoryPlugin,
     ))
     .add_plugins((InventoryActiveItemPlugin, InventoryGuiPlugin))
+    .insert_resource(TexturePackConfig::with_search_path(
+        "assets/resourcepacks/default",
+    ))
+    .add_plugins(TexturePackPlugin)
     .add_systems(Startup, setup);
 
     #[cfg(feature = "debug_network")]

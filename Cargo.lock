@@ -2809,6 +2809,7 @@ dependencies = [
  "dd40_physics",
  "dd40_player_input",
  "dd40_renderer",
+ "dd40_texture_pack",
  "dd40_vanilla_palette",
  "dd40_world",
  "lightyear_ui",

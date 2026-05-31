@@ -23,13 +23,14 @@ dd40_integration_character_physics = { workspace = true }
 dd40_world = { workspace = true }
 dd40_debug_ui = { workspace = true }
 dd40_network = { workspace = true, features = ["client"] }
-dd40_renderer = { workspace = true }
-dd40_loose_item_render = { workspace = true }
+dd40_renderer = { workspace = true, features = ["textures"] }
+dd40_loose_item_render = { workspace = true, features = ["textures"] }
 dd40_gui = { workspace = true }
 dd40_character_gui = { workspace = true }
-dd40_vanilla_palette = { workspace = true }
+dd40_vanilla_palette = { workspace = true, features = ["textures"] }
 dd40_inventory = { workspace = true }
-dd40_inventory_gui = { workspace = true }
+dd40_inventory_gui = { workspace = true, features = ["textures"] }
+dd40_texture_pack = { workspace = true }
 lightyear_ui = { version = "0.26", optional = true }
 bevy-inspector-egui = "0.36.0"
 
