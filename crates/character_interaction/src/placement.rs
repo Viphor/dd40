@@ -133,7 +133,7 @@ pub(crate) fn try_place_block(
     mut cache: ResMut<ChunkCache>,
     registry: Res<BlockRegistry>,
     items: Res<ItemRegistry>,
-    mut pending: ResMut<PendingPlacements>,
+    mut pending: Option<ResMut<PendingPlacements>>,
 ) {
     for (entity, mut input, targeted, active) in &mut character_query {
         if !input.place {
@@ -161,12 +161,14 @@ pub(crate) fn try_place_block(
                 block_id, place_pos, chunk_pos, local
             );
             if cache.push_predicted(chunk_pos, change) {
-                pending.0.push_back(PendingPlacement {
-                    actor: entity,
-                    chunk_pos,
-                    change,
-                    age: 0,
-                });
+                if let Some(pending) = pending.as_deref_mut() {
+                    pending.0.push_back(PendingPlacement {
+                        actor: entity,
+                        chunk_pos,
+                        change,
+                        age: 0,
+                    });
+                }
             } else {
                 debug!(
                     "Placement dropped — chunk {} not present in cache",

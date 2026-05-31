@@ -9,8 +9,7 @@ use crate::face_drive::drive_face_from_input;
 use crate::interact::try_interact;
 use crate::mining::update_mining;
 use crate::pending_placements::{
-    PendingPlacements, consume_committed_placements, drop_rejected_placements,
-    gc_pending_placements,
+    PendingPlacements, consume_committed_placements, gc_pending_placements,
 };
 use crate::placement::try_place_block;
 use crate::targeting::{
@@ -94,11 +93,20 @@ impl Plugin for CharacterInteractionPlugin {
         // MiningState and TargetedBlock are per-character Components, attached
         // via CharacterBundle in dd40_character_core; do not insert as resources.
         app.insert_resource(BlockInteractionConfig::default())
-            .register_type::<BlockInteractionConfig>()
-            .init_resource::<PendingPlacements>();
+            .register_type::<BlockInteractionConfig>();
 
         // ── Startup ───────────────────────────────────────────────────────
         app.add_systems(Startup, spawn_debug_entity);
+        // PendingPlacements is the authority-side scratch queue: only
+        // init it on instances that own the chunk-authority commit pass.
+        // Clients have a server-replicated InventoryComponent and must
+        // never mutate it locally, so they never push onto the queue
+        // and never run the consume/GC systems below.
+        app.add_systems(
+            Startup,
+            init_pending_placements
+                .run_if(resource_exists::<dd40_core::chunk::PendingChunkRejections>),
+        );
 
         // ── Per-frame gameplay systems ────────────────────────────────────
         let playing_running = in_state(AppState::Playing).and(in_state(GameState::Running));
@@ -119,25 +127,19 @@ impl Plugin for CharacterInteractionPlugin {
 
         // ── PendingPlacements lifecycle ───────────────────────────────────
         //
-        // `consume_committed_placements` mutates inventories and so must
-        // only run where authority lives (server in a networked build,
-        // both sides in single-player). Gating on
-        // `PendingChunkRejections` matches the rest of this crate.
-        //
-        // `drop_rejected_placements` runs everywhere `PredictionRejected`
-        // can fire — currently clients only — but the system is a cheap
-        // no-op on the server. `gc_pending_placements` runs everywhere as
-        // the safety net that keeps the queue bounded.
+        // Server-only: `consume_committed_placements` mutates inventories
+        // (decrements one item from the placer's active slot per
+        // committed Place); `gc_pending_placements` ages out entries
+        // that never matched a commit (chunk eviction, silent
+        // validator rejection). Gated on `PendingChunkRejections` —
+        // the same "authority lives here" marker the rest of this
+        // crate uses.
         app.add_systems(
             PostUpdate,
-            (
-                consume_committed_placements
-                    .run_if(resource_exists::<dd40_core::chunk::PendingChunkRejections>),
-                drop_rejected_placements,
-                gc_pending_placements,
-            )
+            (consume_committed_placements, gc_pending_placements)
                 .chain()
-                .after(ChunkAuthoritySet::Commit),
+                .after(ChunkAuthoritySet::Commit)
+                .run_if(resource_exists::<dd40_core::chunk::PendingChunkRejections>),
         );
 
         // Gated on PendingChunkRejections so the registration is harmless
@@ -147,6 +149,16 @@ impl Plugin for CharacterInteractionPlugin {
                 .run_if(resource_exists::<dd40_core::chunk::PendingChunkRejections>),
         );
     }
+}
+
+/// Inserts an empty [`PendingPlacements`] resource on the authority.
+///
+/// Gated by the caller on `resource_exists::<PendingChunkRejections>`,
+/// so clients never see the resource and `try_place_block`'s
+/// `Option<ResMut<PendingPlacements>>` is `None` there — the queue is
+/// truly server-only.
+fn init_pending_placements(mut commands: Commands) {
+    commands.init_resource::<PendingPlacements>();
 }
 
 #[cfg(test)]
