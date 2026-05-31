@@ -24,15 +24,16 @@ pub struct HotbarFor(pub Entity);
 /// Spawns the hotbar root for every newly-added [`Player`].
 pub fn ensure_hotbar_root(
     mut commands: Commands,
-    players: Query<Entity, Added<Player>>,
+    players: Query<(Entity, Option<&InventoryComponent>), Added<Player>>,
     existing: Query<&HotbarFor>,
 ) {
     let already: bevy::platform::collections::HashSet<Entity> =
         existing.iter().map(|h| h.0).collect();
-    for player in &players {
+    for (player, inv) in &players {
         if already.contains(&player) {
             continue;
         }
+        let active = inv.map(|i| i.inventory().active_slot()).unwrap_or(0);
         commands
             .spawn((
                 Name::new("HotbarRoot"),
@@ -54,7 +55,7 @@ pub fn ensure_hotbar_root(
             ))
             .with_children(|root| {
                 for slot in 0..HOTBAR_SIZE {
-                    spawn_slot_widget(
+                    let entity = spawn_slot_widget(
                         root,
                         SlotKey {
                             character: player,
@@ -62,6 +63,9 @@ pub fn ensure_hotbar_root(
                         },
                         SLOT_SIZE,
                     );
+                    if slot == active {
+                        root.commands().entity(entity).insert(SelectedMarker);
+                    }
                 }
             });
     }
