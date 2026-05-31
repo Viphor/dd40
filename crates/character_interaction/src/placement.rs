@@ -60,6 +60,8 @@ use dd40_core::prelude::*;
 use dd40_item_core::active_item::ActiveItem;
 use dd40_item_core::registry::{ItemDefinition, ItemRegistry};
 
+use crate::pending_placements::{PendingPlacement, PendingPlacements};
+
 /// Outcome of one placement step.
 ///
 /// Returned by [`step_placement`]. The world-space `pos` and `block_id`
@@ -120,14 +122,20 @@ pub(crate) fn step_placement(
 /// (see "decision D" in the module docs).
 pub(crate) fn try_place_block(
     mut character_query: Query<
-        (&mut CharacterInput, &TargetedBlock, Option<&ActiveItem>),
+        (
+            Entity,
+            &mut CharacterInput,
+            &TargetedBlock,
+            Option<&ActiveItem>,
+        ),
         With<Character>,
     >,
     mut cache: ResMut<ChunkCache>,
     registry: Res<BlockRegistry>,
     items: Res<ItemRegistry>,
+    mut pending: ResMut<PendingPlacements>,
 ) {
-    for (mut input, targeted, active) in &mut character_query {
+    for (entity, mut input, targeted, active) in &mut character_query {
         if !input.place {
             continue;
         }
@@ -147,11 +155,19 @@ pub(crate) fn try_place_block(
         if let Some((place_pos, block_id)) = step.place {
             let chunk_pos = place_pos.chunk_pos();
             let local = place_pos.to_local();
+            let change = ChunkChange::new_place(local, block_id);
             debug!(
                 "Predicting placement of {:?} at {} (chunk {} local {:?})",
                 block_id, place_pos, chunk_pos, local
             );
-            if !cache.push_predicted(chunk_pos, ChunkChange::new_place(local, block_id)) {
+            if cache.push_predicted(chunk_pos, change) {
+                pending.0.push_back(PendingPlacement {
+                    actor: entity,
+                    chunk_pos,
+                    change,
+                    age: 0,
+                });
+            } else {
                 debug!(
                     "Placement dropped — chunk {} not present in cache",
                     chunk_pos

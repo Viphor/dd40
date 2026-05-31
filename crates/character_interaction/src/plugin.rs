@@ -8,6 +8,10 @@ use dd40_item_core::plugin::ItemCorePlugin;
 use crate::face_drive::drive_face_from_input;
 use crate::interact::try_interact;
 use crate::mining::update_mining;
+use crate::pending_placements::{
+    PendingPlacements, consume_committed_placements, drop_rejected_placements,
+    gc_pending_placements,
+};
 use crate::placement::try_place_block;
 use crate::targeting::{
     BlockInteractionConfig, spawn_debug_entity, update_debug_info, update_targeted_block,
@@ -15,7 +19,7 @@ use crate::targeting::{
 use crate::validators::character_collision_validator;
 pub use dd40_character_core::mining_state::MiningState;
 pub use dd40_character_core::targeted_block::{BlockFace, TargetedBlock};
-use dd40_core::chunk::ChunkAuthorityAppExt;
+use dd40_core::chunk::{ChunkAuthorityAppExt, ChunkAuthoritySet};
 
 /// Plugin that adds block-targeting, highlight rendering, placement, and
 /// mining for any entity with a [`Character`] marker.
@@ -90,7 +94,8 @@ impl Plugin for CharacterInteractionPlugin {
         // MiningState and TargetedBlock are per-character Components, attached
         // via CharacterBundle in dd40_character_core; do not insert as resources.
         app.insert_resource(BlockInteractionConfig::default())
-            .register_type::<BlockInteractionConfig>();
+            .register_type::<BlockInteractionConfig>()
+            .init_resource::<PendingPlacements>();
 
         // ── Startup ───────────────────────────────────────────────────────
         app.add_systems(Startup, spawn_debug_entity);
@@ -110,6 +115,29 @@ impl Plugin for CharacterInteractionPlugin {
             )
                 .chain()
                 .run_if(playing_running),
+        );
+
+        // ── PendingPlacements lifecycle ───────────────────────────────────
+        //
+        // `consume_committed_placements` mutates inventories and so must
+        // only run where authority lives (server in a networked build,
+        // both sides in single-player). Gating on
+        // `PendingChunkRejections` matches the rest of this crate.
+        //
+        // `drop_rejected_placements` runs everywhere `PredictionRejected`
+        // can fire — currently clients only — but the system is a cheap
+        // no-op on the server. `gc_pending_placements` runs everywhere as
+        // the safety net that keeps the queue bounded.
+        app.add_systems(
+            PostUpdate,
+            (
+                consume_committed_placements
+                    .run_if(resource_exists::<dd40_core::chunk::PendingChunkRejections>),
+                drop_rejected_placements,
+                gc_pending_placements,
+            )
+                .chain()
+                .after(ChunkAuthoritySet::Commit),
         );
 
         // Gated on PendingChunkRejections so the registration is harmless

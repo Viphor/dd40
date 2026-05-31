@@ -13,6 +13,7 @@
 pub mod face_drive;
 pub mod interact;
 pub mod mining;
+pub(crate) mod pending_placements;
 pub mod placement;
 pub mod plugin;
 pub mod targeting;
