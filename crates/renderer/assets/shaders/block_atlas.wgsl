@@ -25,15 +25,23 @@ struct BlockAtlasParams {
     // Alpha cutoff for the cutout render layer; opaque/translucent
     // passes pass 0.0 so nothing is discarded.
     alpha_cutoff: f32,
+    // Non-zero to multiply the per-vertex colour into the sampled
+    // texel (grass / leaves / water style tinting); zero to show
+    // the texture as authored.
+    tinted: u32,
     _pad0: f32,
-    _pad1: f32,
 }
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let layer = i32(params.layer);
     let sampled = textureSample(atlas, atlas_sampler, in.uv, layer);
-    let rgba = sampled * in.color;
+    // `select(a, b, cond)` returns `b` when `cond` is true.  When
+    // `params.tinted` is non-zero we multiply by the per-vertex tint;
+    // otherwise the tint factor is white and the texture passes
+    // through unmodified.
+    let tint = select(vec4<f32>(1.0, 1.0, 1.0, 1.0), in.color, params.tinted != 0u);
+    let rgba = sampled * tint;
     if (rgba.a < params.alpha_cutoff) {
         discard;
     }

@@ -94,6 +94,19 @@ pub struct BlockTextures {
     pub east: Option<TextureRef>,
     /// `-X`
     pub west: Option<TextureRef>,
+    /// Whether the renderer should multiply the per-block colour
+    /// (`BlockDefinition::color`) into the sampled texel.
+    ///
+    /// `false` (default): the texture is shown exactly as authored,
+    /// matching how stone, dirt, sand, etc. behave in Minecraft.
+    /// `true`: the texture is tinted by the block colour — used in
+    /// Minecraft for grass, leaves, and water where the underlying
+    /// greyscale texture is multiplied by a biome-driven RGB tint.
+    ///
+    /// `#[serde(default)]` so older serialised data without this field
+    /// deserialises with `tinted = false`.
+    #[serde(default)]
+    pub tinted: bool,
 }
 
 impl BlockTextures {
@@ -112,6 +125,7 @@ impl BlockTextures {
             south: Some(t.clone()),
             east: Some(t.clone()),
             west: Some(t),
+            tinted: false,
         }
     }
 
@@ -125,6 +139,7 @@ impl BlockTextures {
             south: Some(sides.clone()),
             east: Some(sides.clone()),
             west: Some(sides),
+            tinted: false,
         }
     }
 
@@ -145,6 +160,7 @@ impl BlockTextures {
             south,
             east,
             west,
+            tinted: false,
         }
     }
 
@@ -168,6 +184,21 @@ impl BlockTextures {
     /// Returns `true` if no face has a texture assigned.
     pub fn is_empty(&self) -> bool {
         Face::ALL.iter().all(|&f| self.get(f).is_none())
+    }
+
+    /// Builder-style setter for [`Self::tinted`].  Returns `self` so
+    /// it chains naturally with the other constructors:
+    ///
+    /// ```
+    /// # use dd40_texture_core::{BlockTextures, TextureRef};
+    /// let grass = BlockTextures::all(TextureRef::named("minecraft:block/grass_block_top"))
+    ///     .with_tint(true);
+    /// assert!(grass.tinted);
+    /// ```
+    #[must_use]
+    pub fn with_tint(mut self, tinted: bool) -> Self {
+        self.tinted = tinted;
+        self
     }
 }
 

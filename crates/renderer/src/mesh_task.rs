@@ -48,6 +48,8 @@ pub enum ChunkMaterialKind {
         atlas_layer: u32,
         /// Composition pass.
         render_layer: dd40_texture_core::RenderLayer,
+        /// Whether the per-vertex colour tints the sampled texel.
+        tinted: bool,
     },
 }
 

@@ -63,6 +63,12 @@ pub enum BucketKey {
         atlas_layer: u32,
         /// Composition pass this bucket renders in.
         render_layer: RenderLayer,
+        /// Whether the per-block colour is multiplied into the
+        /// sampled texel.  Kept in the bucket key so tinted and
+        /// untinted faces of the same atlas layer never share a
+        /// [`BlockAtlasMaterial`] instance — the multiply is a
+        /// per-material decision.
+        tinted: bool,
     },
 }
 
@@ -140,14 +146,14 @@ pub fn resolve_face_bucket(
     let Some(resolved) = atlas.resolve(texture_ref) else {
         return FaceTextureInfo::UNTEXTURED;
     };
-    info_from_resolved(&resolved)
+    info_from_resolved(&resolved, textures.tinted)
 }
 
 /// Builds a [`FaceTextureInfo`] from a fully-resolved atlas entry.
 ///
 /// Animated textures currently fall back to [`BucketKey::Untextured`];
 /// the animated-bucket variant lands in a follow-up commit.
-fn info_from_resolved(r: &ResolvedTexture) -> FaceTextureInfo {
+fn info_from_resolved(r: &ResolvedTexture, tinted: bool) -> FaceTextureInfo {
     if r.animation.is_some() {
         return FaceTextureInfo::UNTEXTURED;
     }
@@ -156,6 +162,7 @@ fn info_from_resolved(r: &ResolvedTexture) -> FaceTextureInfo {
             atlas_id: r.atlas,
             atlas_layer: r.uv.base_layer,
             render_layer: r.render_layer,
+            tinted,
         },
         uv: Some(r.uv),
     }
@@ -267,6 +274,7 @@ mod tests {
                 atlas_id: AtlasId(0),
                 atlas_layer: 7,
                 render_layer: RenderLayer::Opaque,
+                tinted: false,
             }
         );
         assert!(b.uv.is_some());
@@ -309,7 +317,39 @@ mod tests {
                 frame_indices: vec![0, 1, 2, 3],
             }),
         };
-        assert_eq!(info_from_resolved(&r).bucket, BucketKey::Untextured);
+        assert_eq!(info_from_resolved(&r, false).bucket, BucketKey::Untextured);
+    }
+
+    #[test]
+    fn tinted_propagates_into_bucket_key() {
+        let atlas = stub_atlas(&[("ns:grass_top", 2, RenderLayer::Opaque)]);
+        let untinted = BlockTextures::all(TextureRef::named("ns:grass_top"));
+        let tinted = untinted.clone().with_tint(true);
+
+        let b_untinted = resolve_face_bucket(Some(&untinted), Face::Top, &atlas).bucket;
+        let b_tinted = resolve_face_bucket(Some(&tinted), Face::Top, &atlas).bucket;
+
+        assert_eq!(
+            b_untinted,
+            BucketKey::Static {
+                atlas_id: AtlasId(0),
+                atlas_layer: 2,
+                render_layer: RenderLayer::Opaque,
+                tinted: false,
+            }
+        );
+        assert_eq!(
+            b_tinted,
+            BucketKey::Static {
+                atlas_id: AtlasId(0),
+                atlas_layer: 2,
+                render_layer: RenderLayer::Opaque,
+                tinted: true,
+            }
+        );
+        // Tinted/untinted faces of the same atlas layer never share a
+        // material instance — the bucket key separates them.
+        assert_ne!(b_untinted, b_tinted);
     }
 
     #[test]

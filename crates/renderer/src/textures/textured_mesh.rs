@@ -277,6 +277,7 @@ mod tests {
                 atlas_id: AtlasId(0),
                 atlas_layer: 3,
                 render_layer: dd40_texture_core::RenderLayer::Opaque,
+                tinted: false,
             },
             uv: Some(uv),
         };
@@ -303,6 +304,7 @@ mod tests {
                 atlas_id: AtlasId(0),
                 atlas_layer: 0,
                 render_layer: dd40_texture_core::RenderLayer::Opaque,
+                tinted: false,
             },
             uv: Some(uv),
         };

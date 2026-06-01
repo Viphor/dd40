@@ -42,7 +42,8 @@ pub const BLOCK_ATLAS_SHADER_HANDLE: Handle<bevy::shader::Shader> =
 /// GPU-side parameters for [`BlockAtlasMaterial`].
 ///
 /// Mirrored exactly in `block_atlas.wgsl::BlockAtlasParams` — keep the
-/// field order, types, and padding in sync.
+/// field order, types, and padding in sync.  The struct is 16 bytes
+/// (one std140 vec4 slot).
 #[derive(Debug, Clone, Copy, ShaderType)]
 #[repr(C)]
 pub struct BlockAtlasParams {
@@ -51,10 +52,13 @@ pub struct BlockAtlasParams {
     /// Alpha cutoff for the cutout pass; 0.0 for opaque/translucent so
     /// the shader's `discard` branch never fires.
     pub alpha_cutoff: f32,
+    /// Non-zero if the per-vertex colour should be multiplied into
+    /// the sampled texel (used by grass / leaves / water);
+    /// zero to show the texture as authored.  `u32` rather than
+    /// `bool` because WGSL has no `bool` uniform type.
+    pub tinted: u32,
     /// Padding to align the uniform to 16 bytes.
     pub _pad0: f32,
-    /// Padding to align the uniform to 16 bytes.
-    pub _pad1: f32,
 }
 
 impl Default for BlockAtlasParams {
@@ -62,8 +66,8 @@ impl Default for BlockAtlasParams {
         Self {
             layer: 0,
             alpha_cutoff: 0.0,
+            tinted: 0,
             _pad0: 0.0,
-            _pad1: 0.0,
         }
     }
 }
@@ -102,7 +106,12 @@ impl Material for BlockAtlasMaterial {
 impl BlockAtlasMaterial {
     /// Convenience constructor that picks the right `AlphaMode` and
     /// `alpha_cutoff` for the given [`RenderLayer`].
-    pub fn for_layer(atlas: Handle<Image>, atlas_layer: u32, render_layer: RenderLayer) -> Self {
+    pub fn for_layer(
+        atlas: Handle<Image>,
+        atlas_layer: u32,
+        render_layer: RenderLayer,
+        tinted: bool,
+    ) -> Self {
         let (alpha_mode, alpha_cutoff) = match render_layer {
             RenderLayer::Opaque => (AlphaMode::Opaque, 0.0),
             RenderLayer::Cutout => (AlphaMode::Mask(0.5), 0.5),
@@ -113,8 +122,8 @@ impl BlockAtlasMaterial {
             params: BlockAtlasParams {
                 layer: atlas_layer,
                 alpha_cutoff,
+                tinted: u32::from(tinted),
                 _pad0: 0.0,
-                _pad1: 0.0,
             },
             alpha_mode,
         }
@@ -151,24 +160,35 @@ mod tests {
 
     #[test]
     fn for_layer_opaque_sets_opaque_alpha_mode() {
-        let m = BlockAtlasMaterial::for_layer(Handle::default(), 5, RenderLayer::Opaque);
+        let m = BlockAtlasMaterial::for_layer(Handle::default(), 5, RenderLayer::Opaque, false);
         assert!(matches!(m.alpha_mode, AlphaMode::Opaque));
         assert_eq!(m.params.layer, 5);
         assert_eq!(m.params.alpha_cutoff, 0.0);
+        assert_eq!(m.params.tinted, 0);
     }
 
     #[test]
     fn for_layer_cutout_sets_mask_alpha_mode_with_cutoff() {
-        let m = BlockAtlasMaterial::for_layer(Handle::default(), 3, RenderLayer::Cutout);
+        let m = BlockAtlasMaterial::for_layer(Handle::default(), 3, RenderLayer::Cutout, false);
         assert!(matches!(m.alpha_mode, AlphaMode::Mask(c) if (c - 0.5).abs() < 1e-6));
         assert_eq!(m.params.alpha_cutoff, 0.5);
     }
 
     #[test]
     fn for_layer_translucent_sets_blend_alpha_mode() {
-        let m = BlockAtlasMaterial::for_layer(Handle::default(), 7, RenderLayer::Translucent);
+        let m =
+            BlockAtlasMaterial::for_layer(Handle::default(), 7, RenderLayer::Translucent, false);
         assert!(matches!(m.alpha_mode, AlphaMode::Blend));
         assert_eq!(m.params.layer, 7);
         assert_eq!(m.params.alpha_cutoff, 0.0);
+    }
+
+    #[test]
+    fn for_layer_tinted_true_packs_into_params() {
+        let untinted =
+            BlockAtlasMaterial::for_layer(Handle::default(), 0, RenderLayer::Opaque, false);
+        let tinted = BlockAtlasMaterial::for_layer(Handle::default(), 0, RenderLayer::Opaque, true);
+        assert_eq!(untinted.params.tinted, 0);
+        assert_eq!(tinted.params.tinted, 1);
     }
 }

@@ -86,38 +86,65 @@ impl VanillaBlocks {
 trait BlockDefinitionTextureExt: Sized {
     /// Attach a single texture name to all six faces (or no-op without
     /// `textures`).
-    fn with_vanilla_texture(self, name: &str) -> Self;
+    ///
+    /// `tinted` controls whether the renderer multiplies the per-block
+    /// colour into the sampled texel.  Use `true` for foliage-style
+    /// blocks (grass, leaves, water) and `false` for everything else.
+    fn with_vanilla_texture(self, name: &str, tinted: bool) -> Self;
 
     /// Attach distinct top, bottom and side textures (or no-op without
-    /// `textures`).
-    fn with_vanilla_pillar_texture(self, top: &str, bottom: &str, sides: &str) -> Self;
+    /// `textures`).  `tinted` has the same meaning as on
+    /// [`Self::with_vanilla_texture`].
+    fn with_vanilla_pillar_texture(
+        self,
+        top: &str,
+        bottom: &str,
+        sides: &str,
+        tinted: bool,
+    ) -> Self;
 }
 
 #[cfg(feature = "textures")]
 impl BlockDefinitionTextureExt for BlockDefinition {
-    fn with_vanilla_texture(self, name: &str) -> Self {
+    fn with_vanilla_texture(self, name: &str, tinted: bool) -> Self {
         use dd40_texture_core::{BlockTextures, TextureRef};
-        self.with_data(BlockTextures::all(TextureRef::named(format!(
-            "minecraft:block/{name}"
-        ))))
+        self.with_data(
+            BlockTextures::all(TextureRef::named(format!("minecraft:block/{name}")))
+                .with_tint(tinted),
+        )
     }
 
-    fn with_vanilla_pillar_texture(self, top: &str, bottom: &str, sides: &str) -> Self {
+    fn with_vanilla_pillar_texture(
+        self,
+        top: &str,
+        bottom: &str,
+        sides: &str,
+        tinted: bool,
+    ) -> Self {
         use dd40_texture_core::{BlockTextures, TextureRef};
-        self.with_data(BlockTextures::top_bottom_sides(
-            TextureRef::named(format!("minecraft:block/{top}")),
-            TextureRef::named(format!("minecraft:block/{bottom}")),
-            TextureRef::named(format!("minecraft:block/{sides}")),
-        ))
+        self.with_data(
+            BlockTextures::top_bottom_sides(
+                TextureRef::named(format!("minecraft:block/{top}")),
+                TextureRef::named(format!("minecraft:block/{bottom}")),
+                TextureRef::named(format!("minecraft:block/{sides}")),
+            )
+            .with_tint(tinted),
+        )
     }
 }
 
 #[cfg(not(feature = "textures"))]
 impl BlockDefinitionTextureExt for BlockDefinition {
-    fn with_vanilla_texture(self, _name: &str) -> Self {
+    fn with_vanilla_texture(self, _name: &str, _tinted: bool) -> Self {
         self
     }
-    fn with_vanilla_pillar_texture(self, _top: &str, _bottom: &str, _sides: &str) -> Self {
+    fn with_vanilla_pillar_texture(
+        self,
+        _top: &str,
+        _bottom: &str,
+        _sides: &str,
+        _tinted: bool,
+    ) -> Self {
         self
     }
 }
@@ -134,7 +161,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(1.5)
             .with_preferred_tool(VanillaToolKinds::PICKAXE)
-            .with_vanilla_texture("stone")
+            .with_vanilla_texture("stone", false)
             .with_data(LootTable::with_entries(vec![LootEntry::Fixed {
                 item: VanillaItems::COBBLESTONE,
                 count: 1,
@@ -149,7 +176,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(0.5)
             .with_preferred_tool(VanillaToolKinds::SHOVEL)
-            .with_vanilla_texture("dirt"),
+            .with_vanilla_texture("dirt", false),
         &mut commands,
     );
 
@@ -160,7 +187,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(0.6)
             .with_preferred_tool(VanillaToolKinds::SHOVEL)
-            .with_vanilla_pillar_texture("grass_block_top", "dirt", "grass_block_side"),
+            .with_vanilla_pillar_texture("grass_block_top", "dirt", "grass_block_side", true),
         &mut commands,
     );
 
@@ -171,7 +198,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(0.5)
             .with_preferred_tool(VanillaToolKinds::SHOVEL)
-            .with_vanilla_texture("sand"),
+            .with_vanilla_texture("sand", false),
         &mut commands,
     );
 
@@ -182,7 +209,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(2.0)
             .with_preferred_tool(VanillaToolKinds::AXE)
-            .with_vanilla_pillar_texture("oak_log_top", "oak_log_top", "oak_log"),
+            .with_vanilla_pillar_texture("oak_log_top", "oak_log_top", "oak_log", false),
         &mut commands,
     );
 
@@ -193,7 +220,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(0.2)
             .with_preferred_tool(VanillaToolKinds::SHEARS)
-            .with_vanilla_texture("oak_leaves"),
+            .with_vanilla_texture("oak_leaves", true),
         &mut commands,
     );
 
@@ -204,7 +231,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(2.0)
             .with_preferred_tool(VanillaToolKinds::PICKAXE)
-            .with_vanilla_texture("cobblestone"),
+            .with_vanilla_texture("cobblestone", false),
         &mut commands,
     );
 }
