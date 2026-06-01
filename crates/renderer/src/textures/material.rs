@@ -42,23 +42,33 @@ pub const BLOCK_ATLAS_SHADER_HANDLE: Handle<bevy::shader::Shader> =
 /// GPU-side parameters for [`BlockAtlasMaterial`].
 ///
 /// Mirrored exactly in `block_atlas.wgsl::BlockAtlasParams` — keep the
-/// field order, types, and padding in sync.  The struct is 16 bytes
-/// (one std140 vec4 slot).
+/// field order, types, and padding in sync.  The struct is 32 bytes
+/// (two std140 vec4 slots).
 #[derive(Debug, Clone, Copy, ShaderType)]
 #[repr(C)]
 pub struct BlockAtlasParams {
-    /// Array layer this material samples from.
+    /// Array layer for the base texture.
     pub layer: u32,
     /// Alpha cutoff for the cutout pass; 0.0 for opaque/translucent so
     /// the shader's `discard` branch never fires.
     pub alpha_cutoff: f32,
     /// Non-zero if the per-vertex colour should be multiplied into
-    /// the sampled texel (used by grass / leaves / water);
+    /// the sampled texel (used by leaves / water);
     /// zero to show the texture as authored.  `u32` rather than
     /// `bool` because WGSL has no `bool` uniform type.
     pub tinted: u32,
-    /// Padding to align the uniform to 16 bytes.
-    pub _pad0: f32,
+    /// Non-zero if the material should sample the overlay layer and
+    /// composite it on top of the base.  Mirrors
+    /// `BucketKey::Static::overlay_layer.is_some()`.
+    pub has_overlay: u32,
+    /// Array layer for the overlay texture; ignored when
+    /// `has_overlay == 0`.
+    pub overlay_layer: u32,
+    /// Padding to the next 16-byte boundary.  Three `u32`s of slack
+    /// for future flags (animation frame, frame count, …).
+    pub _pad0: u32,
+    pub _pad1: u32,
+    pub _pad2: u32,
 }
 
 impl Default for BlockAtlasParams {
@@ -67,7 +77,11 @@ impl Default for BlockAtlasParams {
             layer: 0,
             alpha_cutoff: 0.0,
             tinted: 0,
-            _pad0: 0.0,
+            has_overlay: 0,
+            overlay_layer: 0,
+            _pad0: 0,
+            _pad1: 0,
+            _pad2: 0,
         }
     }
 }
@@ -106,11 +120,15 @@ impl Material for BlockAtlasMaterial {
 impl BlockAtlasMaterial {
     /// Convenience constructor that picks the right `AlphaMode` and
     /// `alpha_cutoff` for the given [`RenderLayer`].
+    ///
+    /// `overlay_layer = Some(_)` activates the overlay-compositing
+    /// branch in the shader; `None` disables it.
     pub fn for_layer(
         atlas: Handle<Image>,
         atlas_layer: u32,
         render_layer: RenderLayer,
         tinted: bool,
+        overlay_layer: Option<u32>,
     ) -> Self {
         let (alpha_mode, alpha_cutoff) = match render_layer {
             RenderLayer::Opaque => (AlphaMode::Opaque, 0.0),
@@ -123,7 +141,11 @@ impl BlockAtlasMaterial {
                 layer: atlas_layer,
                 alpha_cutoff,
                 tinted: u32::from(tinted),
-                _pad0: 0.0,
+                has_overlay: u32::from(overlay_layer.is_some()),
+                overlay_layer: overlay_layer.unwrap_or(0),
+                _pad0: 0,
+                _pad1: 0,
+                _pad2: 0,
             },
             alpha_mode,
         }
@@ -160,24 +182,32 @@ mod tests {
 
     #[test]
     fn for_layer_opaque_sets_opaque_alpha_mode() {
-        let m = BlockAtlasMaterial::for_layer(Handle::default(), 5, RenderLayer::Opaque, false);
+        let m =
+            BlockAtlasMaterial::for_layer(Handle::default(), 5, RenderLayer::Opaque, false, None);
         assert!(matches!(m.alpha_mode, AlphaMode::Opaque));
         assert_eq!(m.params.layer, 5);
         assert_eq!(m.params.alpha_cutoff, 0.0);
         assert_eq!(m.params.tinted, 0);
+        assert_eq!(m.params.has_overlay, 0);
     }
 
     #[test]
     fn for_layer_cutout_sets_mask_alpha_mode_with_cutoff() {
-        let m = BlockAtlasMaterial::for_layer(Handle::default(), 3, RenderLayer::Cutout, false);
+        let m =
+            BlockAtlasMaterial::for_layer(Handle::default(), 3, RenderLayer::Cutout, false, None);
         assert!(matches!(m.alpha_mode, AlphaMode::Mask(c) if (c - 0.5).abs() < 1e-6));
         assert_eq!(m.params.alpha_cutoff, 0.5);
     }
 
     #[test]
     fn for_layer_translucent_sets_blend_alpha_mode() {
-        let m =
-            BlockAtlasMaterial::for_layer(Handle::default(), 7, RenderLayer::Translucent, false);
+        let m = BlockAtlasMaterial::for_layer(
+            Handle::default(),
+            7,
+            RenderLayer::Translucent,
+            false,
+            None,
+        );
         assert!(matches!(m.alpha_mode, AlphaMode::Blend));
         assert_eq!(m.params.layer, 7);
         assert_eq!(m.params.alpha_cutoff, 0.0);
@@ -186,9 +216,27 @@ mod tests {
     #[test]
     fn for_layer_tinted_true_packs_into_params() {
         let untinted =
-            BlockAtlasMaterial::for_layer(Handle::default(), 0, RenderLayer::Opaque, false);
-        let tinted = BlockAtlasMaterial::for_layer(Handle::default(), 0, RenderLayer::Opaque, true);
+            BlockAtlasMaterial::for_layer(Handle::default(), 0, RenderLayer::Opaque, false, None);
+        let tinted =
+            BlockAtlasMaterial::for_layer(Handle::default(), 0, RenderLayer::Opaque, true, None);
         assert_eq!(untinted.params.tinted, 0);
         assert_eq!(tinted.params.tinted, 1);
+    }
+
+    #[test]
+    fn for_layer_overlay_some_packs_layer_and_flag() {
+        let no_overlay =
+            BlockAtlasMaterial::for_layer(Handle::default(), 1, RenderLayer::Opaque, false, None);
+        let with_overlay = BlockAtlasMaterial::for_layer(
+            Handle::default(),
+            1,
+            RenderLayer::Opaque,
+            false,
+            Some(7),
+        );
+        assert_eq!(no_overlay.params.has_overlay, 0);
+        assert_eq!(no_overlay.params.overlay_layer, 0);
+        assert_eq!(with_overlay.params.has_overlay, 1);
+        assert_eq!(with_overlay.params.overlay_layer, 7);
     }
 }

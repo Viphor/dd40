@@ -69,6 +69,12 @@ pub enum BucketKey {
         /// [`BlockAtlasMaterial`] instance — the multiply is a
         /// per-material decision.
         tinted: bool,
+        /// Atlas array layer for the overlay texture, when this face
+        /// has one.  `Some` faces alpha-composite the overlay on top
+        /// of the base; the overlay's RGB is multiplied by the
+        /// per-block colour.  Included in the bucket key so faces with
+        /// different overlays — or with vs without — never merge.
+        overlay_layer: Option<u32>,
     },
 }
 
@@ -78,11 +84,14 @@ pub enum BucketKey {
 pub struct FaceTextureInfo {
     /// Mesh / material grouping.
     pub bucket: BucketKey,
-    /// UV sub-rectangle within the atlas layer; `None` for
+    /// UV sub-rectangle within the base atlas layer; `None` for
     /// [`BucketKey::Untextured`].  When `Some`, the mesh builder
     /// remaps the unit-square per-quad UV (`(0,0)..(1,1)`) into this
     /// rect so a single mesh + single material can carry many tiles.
     pub uv: Option<AtlasUv>,
+    /// UV sub-rectangle within the overlay atlas layer; `None` when
+    /// the face has no overlay (or is untextured).
+    pub overlay_uv: Option<AtlasUv>,
 }
 
 impl FaceTextureInfo {
@@ -91,6 +100,7 @@ impl FaceTextureInfo {
     pub const UNTEXTURED: Self = Self {
         bucket: BucketKey::Untextured,
         uv: None,
+        overlay_uv: None,
     };
 }
 
@@ -146,25 +156,40 @@ pub fn resolve_face_bucket(
     let Some(resolved) = atlas.resolve(texture_ref) else {
         return FaceTextureInfo::UNTEXTURED;
     };
-    info_from_resolved(&resolved, textures.tinted)
+    // Overlay is optional — if the block declares one but the atlas
+    // can't resolve it, we render the base only and log nothing
+    // (resolve failures are already surfaced by texture_pack at load
+    // time).  An overlay that itself resolves to an animated texture
+    // is treated as "no overlay" until animation lands.
+    let overlay = textures
+        .overlay(face)
+        .and_then(|r| atlas.resolve(r))
+        .filter(|r| r.animation.is_none());
+    info_from_resolved(&resolved, overlay.as_ref(), textures.tinted_for(face))
 }
 
 /// Builds a [`FaceTextureInfo`] from a fully-resolved atlas entry.
 ///
 /// Animated textures currently fall back to [`BucketKey::Untextured`];
 /// the animated-bucket variant lands in a follow-up commit.
-fn info_from_resolved(r: &ResolvedTexture, tinted: bool) -> FaceTextureInfo {
-    if r.animation.is_some() {
+fn info_from_resolved(
+    base: &ResolvedTexture,
+    overlay: Option<&ResolvedTexture>,
+    tinted: bool,
+) -> FaceTextureInfo {
+    if base.animation.is_some() {
         return FaceTextureInfo::UNTEXTURED;
     }
     FaceTextureInfo {
         bucket: BucketKey::Static {
-            atlas_id: r.atlas,
-            atlas_layer: r.uv.base_layer,
-            render_layer: r.render_layer,
+            atlas_id: base.atlas,
+            atlas_layer: base.uv.base_layer,
+            render_layer: base.render_layer,
             tinted,
+            overlay_layer: overlay.map(|o| o.uv.base_layer),
         },
-        uv: Some(r.uv),
+        uv: Some(base.uv),
+        overlay_uv: overlay.map(|o| o.uv),
     }
 }
 
@@ -275,9 +300,11 @@ mod tests {
                 atlas_layer: 7,
                 render_layer: RenderLayer::Opaque,
                 tinted: false,
+                overlay_layer: None,
             }
         );
         assert!(b.uv.is_some());
+        assert!(b.overlay_uv.is_none());
     }
 
     #[test]
@@ -317,7 +344,10 @@ mod tests {
                 frame_indices: vec![0, 1, 2, 3],
             }),
         };
-        assert_eq!(info_from_resolved(&r, false).bucket, BucketKey::Untextured);
+        assert_eq!(
+            info_from_resolved(&r, None, false).bucket,
+            BucketKey::Untextured
+        );
     }
 
     #[test]
@@ -336,6 +366,7 @@ mod tests {
                 atlas_layer: 2,
                 render_layer: RenderLayer::Opaque,
                 tinted: false,
+                overlay_layer: None,
             }
         );
         assert_eq!(
@@ -345,11 +376,46 @@ mod tests {
                 atlas_layer: 2,
                 render_layer: RenderLayer::Opaque,
                 tinted: true,
+                overlay_layer: None,
             }
         );
         // Tinted/untinted faces of the same atlas layer never share a
         // material instance — the bucket key separates them.
         assert_ne!(b_untinted, b_tinted);
+    }
+
+    #[test]
+    fn overlay_propagates_layer_and_uv_into_bucket() {
+        let atlas = stub_atlas(&[
+            ("ns:grass_side", 1, RenderLayer::Opaque),
+            ("ns:grass_side_overlay", 5, RenderLayer::Opaque),
+        ]);
+        let textures = BlockTextures::all(TextureRef::named("ns:grass_side"))
+            .with_side_overlay(TextureRef::named("ns:grass_side_overlay"));
+
+        let with_overlay = resolve_face_bucket(Some(&textures), Face::North, &atlas);
+        let without_overlay = resolve_face_bucket(Some(&textures), Face::Top, &atlas);
+
+        match with_overlay.bucket {
+            BucketKey::Static {
+                overlay_layer: Some(5),
+                atlas_layer: 1,
+                ..
+            } => {}
+            other => panic!("unexpected bucket for overlay face: {other:?}"),
+        }
+        assert!(with_overlay.overlay_uv.is_some());
+        // Top face has no overlay configured.
+        match without_overlay.bucket {
+            BucketKey::Static {
+                overlay_layer: None,
+                ..
+            } => {}
+            other => panic!("unexpected bucket for non-overlay face: {other:?}"),
+        }
+        assert!(without_overlay.overlay_uv.is_none());
+        // With/without overlay must land in different bucket keys.
+        assert_ne!(with_overlay.bucket, without_overlay.bucket);
     }
 
     #[test]

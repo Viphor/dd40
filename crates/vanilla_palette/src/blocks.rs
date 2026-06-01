@@ -102,6 +102,25 @@ trait BlockDefinitionTextureExt: Sized {
         sides: &str,
         tinted: bool,
     ) -> Self;
+
+    /// Attach the grass-block texture set: a tinted overlay on the
+    /// four side faces and a tinted top, with an untinted bottom.
+    ///
+    /// `top` is sampled and multiplied by the per-block tint (matches
+    /// Minecraft's biome-coloured `grass_block_top`).  Each side face
+    /// uses `sides` as the base (shown as-authored) and
+    /// `sides_overlay` as an alpha-masked overlay whose RGB is
+    /// multiplied by the per-block tint before being composited on top.
+    /// `bottom` is shown untinted.
+    ///
+    /// Without the `textures` feature: returns `self` unchanged.
+    fn with_vanilla_grass_textures(
+        self,
+        top: &str,
+        bottom: &str,
+        sides: &str,
+        sides_overlay: &str,
+    ) -> Self;
 }
 
 #[cfg(feature = "textures")]
@@ -131,6 +150,36 @@ impl BlockDefinitionTextureExt for BlockDefinition {
             .with_tint(tinted),
         )
     }
+
+    fn with_vanilla_grass_textures(
+        self,
+        top: &str,
+        bottom: &str,
+        sides: &str,
+        sides_overlay: &str,
+    ) -> Self {
+        use dd40_texture_core::{BlockTextures, Face, TextureRef};
+        // Per-face tint model for grass:
+        // - Top is greyscale `grass_block_top` and must be tinted by
+        //   the biome colour (whole-output tint).
+        // - Sides have a base (`grass_block_side`, shown as-authored)
+        //   plus a greyscale overlay (`grass_block_side_overlay`)
+        //   whose RGB is multiplied by the biome colour and composited
+        //   on top.  The whole-output side tint must therefore be off.
+        // - Bottom is plain `dirt`, untinted.
+        self.with_data(
+            BlockTextures::top_bottom_sides(
+                TextureRef::named(format!("minecraft:block/{top}")),
+                TextureRef::named(format!("minecraft:block/{bottom}")),
+                TextureRef::named(format!("minecraft:block/{sides}")),
+            )
+            .with_side_overlay(TextureRef::named(format!(
+                "minecraft:block/{sides_overlay}"
+            )))
+            .with_tint(false)
+            .with_tint_for(Face::Top, Some(true)),
+        )
+    }
 }
 
 #[cfg(not(feature = "textures"))]
@@ -144,6 +193,15 @@ impl BlockDefinitionTextureExt for BlockDefinition {
         _bottom: &str,
         _sides: &str,
         _tinted: bool,
+    ) -> Self {
+        self
+    }
+    fn with_vanilla_grass_textures(
+        self,
+        _top: &str,
+        _bottom: &str,
+        _sides: &str,
+        _sides_overlay: &str,
     ) -> Self {
         self
     }
@@ -187,7 +245,12 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(0.6)
             .with_preferred_tool(VanillaToolKinds::SHOVEL)
-            .with_vanilla_pillar_texture("grass_block_top", "dirt", "grass_block_side", false),
+            .with_vanilla_grass_textures(
+                "grass_block_top",
+                "dirt",
+                "grass_block_side",
+                "grass_block_side_overlay",
+            ),
         &mut commands,
     );
 
@@ -359,6 +422,19 @@ mod tests {
             grass_tex.get(Face::North),
             Some(&TextureRef::named("minecraft:block/grass_block_side"))
         );
+        // Grass uses the overlay-compositing model: side faces have an
+        // overlay texture, the top face is whole-output tinted (greyscale
+        // greenery), and sides+bottom are NOT whole-output tinted (the
+        // overlay handles biome tinting for sides; bottom is plain dirt).
+        assert_eq!(
+            grass_tex.overlay(Face::North),
+            Some(&TextureRef::named(
+                "minecraft:block/grass_block_side_overlay"
+            ))
+        );
+        assert!(grass_tex.tinted_for(Face::Top));
+        assert!(!grass_tex.tinted_for(Face::Bottom));
+        assert!(!grass_tex.tinted_for(Face::North));
     }
 
     #[test]

@@ -50,6 +50,9 @@ pub enum ChunkMaterialKind {
         render_layer: dd40_texture_core::RenderLayer,
         /// Whether the per-vertex colour tints the sampled texel.
         tinted: bool,
+        /// Atlas layer for the overlay texture, when this bucket has
+        /// one.  `None` disables overlay sampling in the shader.
+        overlay_layer: Option<u32>,
     },
 }
 

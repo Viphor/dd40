@@ -94,19 +94,61 @@ pub struct BlockTextures {
     pub east: Option<TextureRef>,
     /// `-X`
     pub west: Option<TextureRef>,
+    /// Optional overlay textures, one per face.  When present, the
+    /// renderer alpha-composites the overlay on top of the base and
+    /// multiplies the overlay's RGB by the per-block colour — matching
+    /// Minecraft's grass-side / grass-top behaviour where a separate
+    /// greyscale overlay carries the biome tint.
+    ///
+    /// All six fields default to `None` and are `#[serde(default)]` so
+    /// older serialised data deserialises with no overlays.
+    #[serde(default)]
+    pub top_overlay: Option<TextureRef>,
+    #[serde(default)]
+    pub bottom_overlay: Option<TextureRef>,
+    #[serde(default)]
+    pub north_overlay: Option<TextureRef>,
+    #[serde(default)]
+    pub south_overlay: Option<TextureRef>,
+    #[serde(default)]
+    pub east_overlay: Option<TextureRef>,
+    #[serde(default)]
+    pub west_overlay: Option<TextureRef>,
     /// Whether the renderer should multiply the per-block colour
     /// (`BlockDefinition::color`) into the sampled texel.
     ///
     /// `false` (default): the texture is shown exactly as authored,
     /// matching how stone, dirt, sand, etc. behave in Minecraft.
     /// `true`: the texture is tinted by the block colour — used in
-    /// Minecraft for grass, leaves, and water where the underlying
-    /// greyscale texture is multiplied by a biome-driven RGB tint.
+    /// Minecraft for leaves and water where the underlying greyscale
+    /// texture is multiplied by a biome-driven RGB tint.  Note that
+    /// `tinted` and overlays are independent — grass uses overlays
+    /// (and `tinted = false`) while leaves use `tinted = true` with
+    /// no overlay.
     ///
     /// `#[serde(default)]` so older serialised data without this field
     /// deserialises with `tinted = false`.
     #[serde(default)]
     pub tinted: bool,
+    /// Per-face overrides for [`Self::tinted`].  `Some(b)` overrides
+    /// the global flag for that face; `None` (default) falls back to
+    /// the global flag.
+    ///
+    /// Used by Minecraft's grass block, whose top face is a tinted
+    /// greyscale, sides use an overlay (so the base must NOT be
+    /// tinted), and bottom is plain dirt (also not tinted).
+    #[serde(default)]
+    pub top_tinted: Option<bool>,
+    #[serde(default)]
+    pub bottom_tinted: Option<bool>,
+    #[serde(default)]
+    pub north_tinted: Option<bool>,
+    #[serde(default)]
+    pub south_tinted: Option<bool>,
+    #[serde(default)]
+    pub east_tinted: Option<bool>,
+    #[serde(default)]
+    pub west_tinted: Option<bool>,
 }
 
 impl BlockTextures {
@@ -125,7 +167,7 @@ impl BlockTextures {
             south: Some(t.clone()),
             east: Some(t.clone()),
             west: Some(t),
-            tinted: false,
+            ..Self::default()
         }
     }
 
@@ -139,7 +181,7 @@ impl BlockTextures {
             south: Some(sides.clone()),
             east: Some(sides.clone()),
             west: Some(sides),
-            tinted: false,
+            ..Self::default()
         }
     }
 
@@ -160,11 +202,11 @@ impl BlockTextures {
             south,
             east,
             west,
-            tinted: false,
+            ..Self::default()
         }
     }
 
-    /// Looks up the texture for a specific face.
+    /// Looks up the base texture for a specific face.
     pub fn get(&self, face: Face) -> Option<&TextureRef> {
         match face {
             Face::Top => self.top.as_ref(),
@@ -174,6 +216,49 @@ impl BlockTextures {
             Face::East => self.east.as_ref(),
             Face::West => self.west.as_ref(),
         }
+    }
+
+    /// Looks up the overlay texture for a specific face, if one is
+    /// configured.  The overlay is composited on top of the base by
+    /// the renderer and its RGB is multiplied by the per-block colour.
+    pub fn overlay(&self, face: Face) -> Option<&TextureRef> {
+        match face {
+            Face::Top => self.top_overlay.as_ref(),
+            Face::Bottom => self.bottom_overlay.as_ref(),
+            Face::North => self.north_overlay.as_ref(),
+            Face::South => self.south_overlay.as_ref(),
+            Face::East => self.east_overlay.as_ref(),
+            Face::West => self.west_overlay.as_ref(),
+        }
+    }
+
+    /// Whether the renderer should whole-output-tint this specific
+    /// face.  Falls back to [`Self::tinted`] when no per-face override
+    /// has been set.
+    pub fn tinted_for(&self, face: Face) -> bool {
+        let override_ = match face {
+            Face::Top => self.top_tinted,
+            Face::Bottom => self.bottom_tinted,
+            Face::North => self.north_tinted,
+            Face::South => self.south_tinted,
+            Face::East => self.east_tinted,
+            Face::West => self.west_tinted,
+        };
+        override_.unwrap_or(self.tinted)
+    }
+
+    /// Sets the per-face tint override for a single face.  `Some(b)`
+    /// overrides the global flag; `None` clears the override.
+    pub fn with_tint_for(mut self, face: Face, tinted: Option<bool>) -> Self {
+        match face {
+            Face::Top => self.top_tinted = tinted,
+            Face::Bottom => self.bottom_tinted = tinted,
+            Face::North => self.north_tinted = tinted,
+            Face::South => self.south_tinted = tinted,
+            Face::East => self.east_tinted = tinted,
+            Face::West => self.west_tinted = tinted,
+        }
+        self
     }
 
     /// Returns `true` if every face has a texture assigned.
@@ -191,13 +276,50 @@ impl BlockTextures {
     ///
     /// ```
     /// # use dd40_texture_core::{BlockTextures, TextureRef};
-    /// let grass = BlockTextures::all(TextureRef::named("minecraft:block/grass_block_top"))
+    /// let leaves = BlockTextures::all(TextureRef::named("minecraft:block/oak_leaves"))
     ///     .with_tint(true);
-    /// assert!(grass.tinted);
+    /// assert!(leaves.tinted);
     /// ```
     #[must_use]
     pub fn with_tint(mut self, tinted: bool) -> Self {
         self.tinted = tinted;
+        self
+    }
+
+    /// Assigns the same overlay texture to all four side faces (the
+    /// common "grass-side" pattern).
+    ///
+    /// ```
+    /// # use dd40_texture_core::{BlockTextures, Face, TextureRef};
+    /// let grass = BlockTextures::top_bottom_sides(
+    ///     TextureRef::named("minecraft:block/grass_block_top"),
+    ///     TextureRef::named("minecraft:block/dirt"),
+    ///     TextureRef::named("minecraft:block/grass_block_side"),
+    /// )
+    /// .with_side_overlay(TextureRef::named(
+    ///     "minecraft:block/grass_block_side_overlay",
+    /// ));
+    /// assert!(grass.overlay(Face::North).is_some());
+    /// assert!(grass.overlay(Face::Top).is_none());
+    /// ```
+    #[must_use]
+    pub fn with_side_overlay(mut self, t: TextureRef) -> Self {
+        self.north_overlay = Some(t.clone());
+        self.south_overlay = Some(t.clone());
+        self.east_overlay = Some(t.clone());
+        self.west_overlay = Some(t);
+        self
+    }
+
+    /// Assigns the same overlay texture to every face.
+    #[must_use]
+    pub fn with_overlay_all(mut self, t: TextureRef) -> Self {
+        self.top_overlay = Some(t.clone());
+        self.bottom_overlay = Some(t.clone());
+        self.north_overlay = Some(t.clone());
+        self.south_overlay = Some(t.clone());
+        self.east_overlay = Some(t.clone());
+        self.west_overlay = Some(t);
         self
     }
 }
@@ -277,5 +399,31 @@ mod tests {
         let boxed = BlockData::clone_box(&t);
         let back = boxed.as_any().downcast_ref::<BlockTextures>().cloned();
         assert_eq!(back, Some(t));
+    }
+
+    #[test]
+    fn with_side_overlay_assigns_only_to_side_faces() {
+        let t = BlockTextures::top_bottom_sides(
+            TextureRef::named("top"),
+            TextureRef::named("bot"),
+            TextureRef::named("side"),
+        )
+        .with_side_overlay(TextureRef::named("side_overlay"));
+        for f in [Face::North, Face::South, Face::East, Face::West] {
+            assert_eq!(t.overlay(f), Some(&TextureRef::named("side_overlay")));
+        }
+        assert_eq!(t.overlay(Face::Top), None);
+        assert_eq!(t.overlay(Face::Bottom), None);
+    }
+
+    #[test]
+    fn default_has_no_overlays() {
+        let t = BlockTextures::all(TextureRef::named("x"));
+        for f in Face::ALL {
+            assert!(
+                t.overlay(f).is_none(),
+                "face {f:?} unexpectedly has overlay"
+            );
+        }
     }
 }

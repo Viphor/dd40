@@ -313,11 +313,13 @@ pub fn spawn_mesh_tasks(
                                 atlas_layer,
                                 render_layer,
                                 tinted,
+                                overlay_layer,
                             } => crate::mesh_task::ChunkMaterialKind::AtlasStatic {
                                 atlas_id,
                                 atlas_layer,
                                 render_layer,
                                 tinted,
+                                overlay_layer,
                             },
                         },
                         mesh: bm.mesh,
@@ -487,6 +489,7 @@ fn spawn_part_child(
             atlas_layer,
             render_layer,
             tinted,
+            overlay_layer,
         } => {
             // If the atlas resource is missing (shouldn't happen — we only
             // produce AtlasStatic when the atlas is ready), or the texture
@@ -501,6 +504,7 @@ fn spawn_part_child(
                         atlas_layer,
                         render_layer,
                         tinted,
+                        overlay_layer,
                     );
                     let handle = atlas_materials.add(mat);
                     commands.spawn((

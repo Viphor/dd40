@@ -77,7 +77,8 @@ pub fn build_chunk_bucket_meshes(
     face_buckets: &HashMap<BlockId, FaceBuckets>,
     color_map: &HashMap<BlockId, [f32; 4]>,
 ) -> Vec<BucketMesh> {
-    let mut by_bucket: HashMap<BucketKey, Vec<(MergedQuad, AtlasUv)>> = HashMap::new();
+    let mut by_bucket: HashMap<BucketKey, Vec<(MergedQuad, AtlasUv, Option<AtlasUv>)>> =
+        HashMap::new();
     let mut untextured: Vec<MergedQuad> = Vec::new();
 
     for quad in quads {
@@ -95,15 +96,17 @@ pub fn build_chunk_bucket_meshes(
             FaceTextureInfo {
                 bucket,
                 uv: Some(uv),
+                overlay_uv,
             } => {
                 by_bucket
                     .entry(bucket)
                     .or_default()
-                    .push((quad.clone(), uv));
+                    .push((quad.clone(), uv, overlay_uv));
             }
             FaceTextureInfo {
                 bucket: _,
                 uv: None,
+                ..
             } => {
                 // Should never happen: any non-Untextured bucket has a UV
                 // by construction in `info_from_resolved`.  Fail safe to
@@ -152,7 +155,7 @@ pub fn build_chunk_bucket_meshes(
 fn build_textured_mesh(
     chunk_origin_x: f32,
     chunk_origin_z: f32,
-    items: &[(MergedQuad, AtlasUv)],
+    items: &[(MergedQuad, AtlasUv, Option<AtlasUv>)],
     color_map: &HashMap<BlockId, [f32; 4]>,
 ) -> Option<Mesh> {
     if items.is_empty() {
@@ -162,10 +165,11 @@ fn build_textured_mesh(
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(items.len() * 4);
     let mut normals: Vec<[f32; 3]> = Vec::with_capacity(items.len() * 4);
     let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(items.len() * 4);
+    let mut uvs1: Vec<[f32; 2]> = Vec::with_capacity(items.len() * 4);
     let mut colors: Vec<[f32; 4]> = Vec::with_capacity(items.len() * 4);
     let mut indices: Vec<u32> = Vec::with_capacity(items.len() * 6);
 
-    for (quad, uv_rect) in items {
+    for (quad, uv_rect, overlay_rect) in items {
         let normal = quad.dir.normal();
         let color = color_map
             .get(&quad.block_id)
@@ -180,16 +184,18 @@ fn build_textured_mesh(
             colors.push(color);
         }
 
-        // Per-face UV pattern.  The corner orderings in `quad_corners`
-        // differ between face directions, so a single shared pattern
-        // applies the texture rotated 180° on side faces — visible as
-        // upside-down grass on the grass-block sides, etc.  Each face's
-        // pattern is chosen so that the source texture's top-left
-        // (UV (0,0)) appears at the visual top-left of the rendered face
-        // when viewed from outside the block.
         let pattern = uv_pattern_for(quad.dir);
         for uv in pattern {
             uvs.push(remap_uv(uv, uv_rect));
+            // Mirror the same unit-square pattern into the overlay sub-rect
+            // so the overlay aligns face-for-face with the base.  When the
+            // bucket has no overlay, we still emit UV1 (zero-filled) so
+            // the mesh layout is uniform across all textured buckets — the
+            // shader gates overlay sampling on `params.has_overlay`.
+            uvs1.push(match overlay_rect {
+                Some(rect) => remap_uv(uv, rect),
+                None => [0.0, 0.0],
+            });
         }
 
         indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
@@ -202,6 +208,7 @@ fn build_textured_mesh(
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, uvs1);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_indices(Indices::U32(indices));
     Some(mesh)
@@ -311,8 +318,10 @@ mod tests {
                 atlas_layer: 3,
                 render_layer: dd40_texture_core::RenderLayer::Opaque,
                 tinted: false,
+                overlay_layer: None,
             },
             uv: Some(uv),
+            overlay_uv: None,
         };
         let face_buckets = buckets_for(id, info);
         let mut color_map = HashMap::new();
@@ -338,8 +347,10 @@ mod tests {
                 atlas_layer: 0,
                 render_layer: dd40_texture_core::RenderLayer::Opaque,
                 tinted: false,
+                overlay_layer: None,
             },
             uv: Some(uv),
+            overlay_uv: None,
         };
         let face_buckets = buckets_for(tex, info);
         let mut color_map = HashMap::new();
