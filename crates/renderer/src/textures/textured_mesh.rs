@@ -180,9 +180,14 @@ fn build_textured_mesh(
             colors.push(color);
         }
 
-        // Same per-quad UV pattern as `MeshBuilder` — (0,0) (1,0) (1,1)
-        // (0,1) — remapped into the atlas tile rect.
-        let pattern = [[0.0_f32, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        // Per-face UV pattern.  The corner orderings in `quad_corners`
+        // differ between face directions, so a single shared pattern
+        // applies the texture rotated 180° on side faces — visible as
+        // upside-down grass on the grass-block sides, etc.  Each face's
+        // pattern is chosen so that the source texture's top-left
+        // (UV (0,0)) appears at the visual top-left of the rendered face
+        // when viewed from outside the block.
+        let pattern = uv_pattern_for(quad.dir);
         for uv in pattern {
             uvs.push(remap_uv(uv, uv_rect));
         }
@@ -208,6 +213,34 @@ fn remap_uv(unit: [f32; 2], rect: &AtlasUv) -> [f32; 2] {
         rect.min.x + unit[0] * (rect.max.x - rect.min.x),
         rect.min.y + unit[1] * (rect.max.y - rect.min.y),
     ]
+}
+
+/// Returns the four-corner UV pattern for a given face direction,
+/// in the same vertex order as [`crate::mesh_builder::quad_corners`].
+///
+/// The pattern is chosen so that the source texture's `(0,0)`
+/// (top-left in image space) appears at the **visual** top-left of
+/// the rendered face when viewed from outside the block.  Without
+/// this, side faces show the texture rotated 180° — most visibly
+/// the grass-block sides render upside-down (green at the bottom).
+fn uv_pattern_for(dir: FaceDir) -> [[f32; 2]; 4] {
+    match dir {
+        // All four side faces (X- and Z-aligned) share the same pattern.
+        // `quad_corners` orders them bottom-then-top in world Y, so we
+        // map the bottom two corners to the texture's bottom edge
+        // (V = 1) and the top two corners to V = 0.
+        FaceDir::PosX | FaceDir::NegX | FaceDir::PosZ | FaceDir::NegZ => {
+            [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
+        }
+        // Top face: viewed from +Y looking down, `quad_corners` puts
+        // the high-Z corners first (FL/FR) and the low-Z corners last
+        // (BR/BL).  Map high-Z → texture bottom edge (V = 1).
+        FaceDir::PosY => [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
+        // Bottom face: rarely seen, no asymmetric bottom textures in
+        // the vanilla palette.  Keep the historical pattern so existing
+        // colour-only tests stay reproducible.
+        FaceDir::NegY => [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+    }
 }
 
 /// Re-used color extraction for callers that need to pre-collect the
@@ -331,5 +364,31 @@ mod tests {
         assert_eq!(remap_uv([1.0, 0.0], &rect), [0.5, 0.5]);
         assert_eq!(remap_uv([1.0, 1.0], &rect), [0.5, 0.75]);
         assert_eq!(remap_uv([0.0, 1.0], &rect), [0.25, 0.75]);
+    }
+
+    #[test]
+    fn side_face_uv_patterns_put_texture_top_at_quad_top() {
+        // `quad_corners` orders side faces bottom-then-top in world Y
+        // (indices 0,1 are at the bottom; 2,3 at the top).  V = 0 is
+        // the top of the texture, so the top corners must get V = 0.
+        for dir in [FaceDir::PosX, FaceDir::NegX, FaceDir::PosZ, FaceDir::NegZ] {
+            let p = uv_pattern_for(dir);
+            assert_eq!(p[0][1], 1.0, "{dir:?} corner 0 (bottom) V");
+            assert_eq!(p[1][1], 1.0, "{dir:?} corner 1 (bottom) V");
+            assert_eq!(p[2][1], 0.0, "{dir:?} corner 2 (top) V");
+            assert_eq!(p[3][1], 0.0, "{dir:?} corner 3 (top) V");
+        }
+    }
+
+    #[test]
+    fn top_face_uv_pattern_aligns_high_z_with_texture_bottom() {
+        // `quad_corners` for PosY puts high-Z (front) corners first
+        // (indices 0,1) and low-Z (back) corners last (2,3).
+        // Texture's V = 1 is its bottom edge.
+        let p = uv_pattern_for(FaceDir::PosY);
+        assert_eq!(p[0][1], 1.0);
+        assert_eq!(p[1][1], 1.0);
+        assert_eq!(p[2][1], 0.0);
+        assert_eq!(p[3][1], 0.0);
     }
 }

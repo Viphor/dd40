@@ -187,7 +187,7 @@ fn register_vanilla_blocks(mut registry: ResMut<BlockRegistry>, mut commands: Co
             .with_renderable(true)
             .with_toughness(0.6)
             .with_preferred_tool(VanillaToolKinds::SHOVEL)
-            .with_vanilla_pillar_texture("grass_block_top", "dirt", "grass_block_side", true),
+            .with_vanilla_pillar_texture("grass_block_top", "dirt", "grass_block_side", false),
         &mut commands,
     );
 
