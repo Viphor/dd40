@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bevy::asset::{Assets, Handle, RenderAssetUsages};
-use bevy::image::Image;
+use bevy::image::{Image, ImageSampler};
 use bevy::render::render_resource::{
     Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension,
 };
@@ -111,6 +111,10 @@ pub fn build_image(atlas: &BuiltAtlas) -> Image {
         dimension: Some(TextureViewDimension::D2Array),
         ..Default::default()
     });
+    // Sample with nearest-neighbour filtering so the pixel-art look is
+    // preserved — Minecraft-style textures rely on hard edges between
+    // texels rather than the linear interpolation Bevy uses by default.
+    image.sampler = ImageSampler::nearest();
     image
 }
 
@@ -205,6 +209,7 @@ fn blit_tile(
 mod tests {
     use super::*;
     use crate::pack::compute_layout;
+    use bevy::image::ImageSamplerDescriptor;
     use dd40_texture_core::{AnimationSpec, AtlasUv, RenderLayer};
 
     fn solid(key: &str, tile: u32, fill: [u8; 4], frames: usize) -> DecodedTexture {
@@ -218,6 +223,25 @@ mod tests {
             frames: vec![frame; frames],
             render_layer: RenderLayer::Opaque,
             animation: None,
+        }
+    }
+
+    #[test]
+    fn build_image_uses_nearest_filtering() {
+        // Pixel-art textures must not be blurred — assert the sampler
+        // descriptor we ship requests nearest filtering.
+        let inputs = vec![solid("ns:block/x", 2, [10, 20, 30, 255], 1)];
+        let (id, layout) = compute_layout(&inputs);
+        let built = build_pixels(id, layout, &inputs);
+        let image = build_image(&built);
+        match &image.sampler {
+            ImageSampler::Descriptor(desc) => {
+                let nearest = ImageSamplerDescriptor::nearest();
+                assert_eq!(desc.mag_filter, nearest.mag_filter);
+                assert_eq!(desc.min_filter, nearest.min_filter);
+                assert_eq!(desc.mipmap_filter, nearest.mipmap_filter);
+            }
+            other => panic!("expected nearest sampler descriptor, got {other:?}"),
         }
     }
 
