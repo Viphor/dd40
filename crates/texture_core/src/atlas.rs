@@ -62,6 +62,15 @@ impl AtlasUv {
     }
 }
 
+impl Default for AtlasUv {
+    /// Layer 0, full rect — a neutral value useful as a placeholder
+    /// for the untextured bucket (where the rect is ignored by the
+    /// shader anyway).
+    fn default() -> Self {
+        Self::full_layer(0)
+    }
+}
+
 /// Fully-resolved description of a texture inside a known atlas.
 ///
 /// Returned by [`BlockAtlas::resolve`].  Everything the renderer needs

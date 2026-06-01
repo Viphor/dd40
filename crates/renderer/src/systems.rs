@@ -320,6 +320,8 @@ pub fn spawn_mesh_tasks(
                                 render_layer,
                                 tinted,
                                 overlay_layer,
+                                uv_rect: bm.uv_rect,
+                                overlay_uv_rect: bm.overlay_uv_rect,
                             },
                         },
                         mesh: bm.mesh,
@@ -490,6 +492,8 @@ fn spawn_part_child(
             render_layer,
             tinted,
             overlay_layer,
+            uv_rect,
+            overlay_uv_rect,
         } => {
             // If the atlas resource is missing (shouldn't happen — we only
             // produce AtlasStatic when the atlas is ready), or the texture
@@ -499,12 +503,21 @@ fn spawn_part_child(
             let atlas_materials = atlas_materials;
             match (texture, atlas_materials) {
                 (Some(tex), Some(atlas_materials)) => {
+                    let uv_size = uv_rect.max - uv_rect.min;
+                    let (overlay_min, overlay_size) = match overlay_uv_rect {
+                        Some(r) => (r.min, r.max - r.min),
+                        None => (bevy::math::Vec2::ZERO, bevy::math::Vec2::ONE),
+                    };
                     let mat = crate::textures::BlockAtlasMaterial::for_layer(
                         tex,
                         atlas_layer,
                         render_layer,
                         tinted,
                         overlay_layer,
+                        uv_rect.min,
+                        uv_size,
+                        overlay_min,
+                        overlay_size,
                     );
                     let handle = atlas_materials.add(mat);
                     commands.spawn((

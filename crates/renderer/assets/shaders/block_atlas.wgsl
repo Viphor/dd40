@@ -40,17 +40,29 @@ struct BlockAtlasParams {
     _pad0: u32,
     _pad1: u32,
     _pad2: u32,
+    // Atlas sub-rect for the base texture (within its array layer).
+    // The vertex UV is in tile-space — one unit per block — so the
+    // shader wraps with fract() and remaps into this rect.  This is
+    // what makes greedy-merged quads tile per block.
+    uv_min: vec2<f32>,
+    uv_size: vec2<f32>,
+    // Atlas sub-rect for the overlay texture.
+    overlay_uv_min: vec2<f32>,
+    overlay_uv_size: vec2<f32>,
 }
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    let base = textureSample(atlas, atlas_sampler, in.uv, i32(params.layer));
+    let tiled_uv = params.uv_min + fract(in.uv) * params.uv_size;
+    let base = textureSample(atlas, atlas_sampler, tiled_uv, i32(params.layer));
 
     // Default: no overlay (mask alpha = 0 → mix returns base unchanged).
     var overlay_rgba = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 #ifdef VERTEX_UVS_B
     if (params.has_overlay != 0u) {
-        let o = textureSample(atlas, atlas_sampler, in.uv_b, i32(params.overlay_layer));
+        let tiled_overlay_uv =
+            params.overlay_uv_min + fract(in.uv_b) * params.overlay_uv_size;
+        let o = textureSample(atlas, atlas_sampler, tiled_overlay_uv, i32(params.overlay_layer));
         // Multiply overlay RGB by the per-vertex tint so grass-style
         // greyscale overlays acquire their biome colour.  Preserve the
         // overlay's own alpha as the compositing mask.

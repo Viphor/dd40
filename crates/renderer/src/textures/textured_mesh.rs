@@ -53,6 +53,14 @@ fn face_dir_index(dir: FaceDir) -> usize {
 pub struct BucketMesh {
     /// Which bucket produced this mesh.
     pub bucket: BucketKey,
+    /// Atlas sub-rect for the base texture of this bucket.  Passed to
+    /// the material so the fragment shader can wrap tile-space UVs
+    /// into the rect.  Always [`AtlasUv::default`]-like (zeros) for
+    /// untextured buckets, where it is ignored.
+    pub uv_rect: AtlasUv,
+    /// Atlas sub-rect for the overlay texture, when this bucket has
+    /// one.  `None` mirrors `BucketKey::Static::overlay_layer == None`.
+    pub overlay_uv_rect: Option<AtlasUv>,
     /// The actual mesh asset.  Always non-empty (empty buckets are
     /// filtered out before this struct is constructed).
     pub mesh: Mesh,
@@ -130,28 +138,43 @@ pub fn build_chunk_bucket_meshes(
         if let Some(mesh) = builder.build() {
             out.push(BucketMesh {
                 bucket: BucketKey::Untextured,
+                uv_rect: AtlasUv::default(),
+                overlay_uv_rect: None,
                 mesh,
             });
         }
     }
 
     for (bucket, items) in by_bucket {
+        // All items in a bucket share the same atlas (base + overlay)
+        // sub-rect by construction of the bucket key: the key includes
+        // `atlas_layer` (and `overlay_layer`), and within an atlas
+        // every layer corresponds to a single texture / rect.
+        let uv_rect = items[0].1;
+        let overlay_uv_rect = items[0].2;
         let mesh = build_textured_mesh(chunk_origin_x, chunk_origin_z, &items, color_map);
         if let Some(mesh) = mesh {
-            out.push(BucketMesh { bucket, mesh });
+            out.push(BucketMesh {
+                bucket,
+                uv_rect,
+                overlay_uv_rect,
+                mesh,
+            });
         }
     }
 
     out
 }
 
-/// Builds a single textured mesh from a slice of `(quad, atlas_uv)`
-/// pairs that all belong to the same bucket.
+/// Builds a single textured mesh from a slice of `(quad, atlas_uv,
+/// overlay_uv)` tuples that all belong to the same bucket.
 ///
-/// The atlas UV rect is baked into vertex UVs by remapping the
-/// per-quad unit-square corners `(0,0)..(1,1)` into `uv.min..uv.max`.
-/// This means the fragment shader only ever samples within the tile —
-/// no per-fragment rect math required.
+/// Vertex UVs are written in **tile space** — one unit per block —
+/// rather than baked into the atlas sub-rect.  The fragment shader
+/// wraps with `fract()` and maps back into the sub-rect supplied via
+/// [`BlockAtlasParams`](super::material::BlockAtlasParams), which is
+/// what lets greedy-merged quads *tile* the texture per block instead
+/// of stretching it across the merged extent.
 fn build_textured_mesh(
     chunk_origin_x: f32,
     chunk_origin_z: f32,
@@ -169,7 +192,7 @@ fn build_textured_mesh(
     let mut colors: Vec<[f32; 4]> = Vec::with_capacity(items.len() * 4);
     let mut indices: Vec<u32> = Vec::with_capacity(items.len() * 6);
 
-    for (quad, uv_rect, overlay_rect) in items {
+    for (quad, _uv_rect, _overlay_rect) in items {
         let normal = quad.dir.normal();
         let color = color_map
             .get(&quad.block_id)
@@ -184,18 +207,20 @@ fn build_textured_mesh(
             colors.push(color);
         }
 
+        // Tile-space UV: the canonical per-face unit-square pattern
+        // scaled by the merged extent.  A 1×1 quad emits [0..1] (same
+        // as before merging); a 3×2 quad emits [0..3]×[0..2], and the
+        // shader's `fract` wraps each block to its own copy of the
+        // texture.  UV1 (overlay) mirrors UV0 — they index the same
+        // per-block tile and the shader applies independent sub-rect
+        // remaps for base vs overlay.
         let pattern = uv_pattern_for(quad.dir);
-        for uv in pattern {
-            uvs.push(remap_uv(uv, uv_rect));
-            // Mirror the same unit-square pattern into the overlay sub-rect
-            // so the overlay aligns face-for-face with the base.  When the
-            // bucket has no overlay, we still emit UV1 (zero-filled) so
-            // the mesh layout is uniform across all textured buckets — the
-            // shader gates overlay sampling on `params.has_overlay`.
-            uvs1.push(match overlay_rect {
-                Some(rect) => remap_uv(uv, rect),
-                None => [0.0, 0.0],
-            });
+        let u_len = quad.u_len as f32;
+        let v_len = quad.v_len as f32;
+        for unit in pattern {
+            let tile = [unit[0] * u_len, unit[1] * v_len];
+            uvs.push(tile);
+            uvs1.push(tile);
         }
 
         indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
@@ -212,14 +237,6 @@ fn build_textured_mesh(
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_indices(Indices::U32(indices));
     Some(mesh)
-}
-
-/// Lerps a unit-square corner into the atlas tile rect.
-fn remap_uv(unit: [f32; 2], rect: &AtlasUv) -> [f32; 2] {
-    [
-        rect.min.x + unit[0] * (rect.max.x - rect.min.x),
-        rect.min.y + unit[1] * (rect.max.y - rect.min.y),
-    ]
 }
 
 /// Returns the four-corner UV pattern for a given face direction,
@@ -365,16 +382,46 @@ mod tests {
     }
 
     #[test]
-    fn remap_uv_endpoints_match_rect_corners() {
+    fn merged_quad_emits_tile_space_uvs() {
+        // Build a 3x2 merged quad on the +Y face and verify the UVs
+        // span [0..3]×[0..2] in tile space rather than being baked
+        // into the atlas sub-rect.  The shader-side `fract` is what
+        // turns this into per-block tiling.
+        use crate::greedy_mesh::MergedQuad;
+        let id = BlockId(99);
         let rect = AtlasUv {
-            min: Vec2::new(0.25, 0.5),
-            max: Vec2::new(0.5, 0.75),
+            min: Vec2::new(0.25, 0.0),
+            max: Vec2::new(0.5, 0.25),
             base_layer: 0,
         };
-        assert_eq!(remap_uv([0.0, 0.0], &rect), [0.25, 0.5]);
-        assert_eq!(remap_uv([1.0, 0.0], &rect), [0.5, 0.5]);
-        assert_eq!(remap_uv([1.0, 1.0], &rect), [0.5, 0.75]);
-        assert_eq!(remap_uv([0.0, 1.0], &rect), [0.25, 0.75]);
+        let q = MergedQuad {
+            block_id: id,
+            dir: FaceDir::PosY,
+            layer: 0,
+            u_start: 0,
+            v_start: 0,
+            u_len: 3,
+            v_len: 2,
+        };
+        let mut color_map = HashMap::new();
+        color_map.insert(id, [1.0, 1.0, 1.0, 1.0]);
+        let mesh =
+            build_textured_mesh(0.0, 0.0, &[(q, rect, None)], &color_map).expect("mesh built");
+        let uvs = mesh
+            .attribute(Mesh::ATTRIBUTE_UV_0)
+            .and_then(|a| match a {
+                bevy::mesh::VertexAttributeValues::Float32x2(v) => Some(v.clone()),
+                _ => None,
+            })
+            .expect("UV0");
+        // PosY pattern is [0,1],[1,1],[1,0],[0,0]; scaled by (3, 2):
+        let expected = [[0.0, 2.0], [3.0, 2.0], [3.0, 0.0], [0.0, 0.0]];
+        for (got, want) in uvs.iter().zip(expected.iter()) {
+            assert!(
+                (got[0] - want[0]).abs() < 1e-6 && (got[1] - want[1]).abs() < 1e-6,
+                "got {got:?}, want {want:?}"
+            );
+        }
     }
 
     #[test]

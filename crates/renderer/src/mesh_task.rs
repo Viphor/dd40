@@ -33,7 +33,7 @@ use crate::lod::LodLevel;
 /// the data the apply pass needs to construct the right
 /// [`BlockAtlasMaterial`](crate::textures::material::BlockAtlasMaterial)
 /// instance.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy)]
 pub enum ChunkMaterialKind {
     /// Use a shared colour-only `StandardMaterial::default()`.  Vertex
     /// colour drives the appearance.
@@ -53,6 +53,12 @@ pub enum ChunkMaterialKind {
         /// Atlas layer for the overlay texture, when this bucket has
         /// one.  `None` disables overlay sampling in the shader.
         overlay_layer: Option<u32>,
+        /// Base texture's atlas sub-rect (passed to the material so
+        /// the shader can wrap tile-space UVs into it).
+        uv_rect: dd40_texture_core::AtlasUv,
+        /// Overlay texture's atlas sub-rect (only meaningful when
+        /// `overlay_layer` is `Some`).
+        overlay_uv_rect: Option<dd40_texture_core::AtlasUv>,
     },
 }
 
