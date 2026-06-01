@@ -14,7 +14,12 @@
 // additionally multiplies the whole composited result by the tint —
 // used for blocks like leaves whose entire texture is greyscale.
 
-#import bevy_pbr::forward_io::VertexOutput
+#import bevy_pbr::{
+    forward_io::VertexOutput,
+    pbr_fragment::pbr_input_from_vertex_output,
+    pbr_functions,
+    pbr_types,
+}
 
 // Bevy 0.18 reserves @group(2) for mesh data; custom material bindings
 // live at the index exposed via the `MATERIAL_BIND_GROUP` shader-def
@@ -52,7 +57,10 @@ struct BlockAtlasParams {
 }
 
 @fragment
-fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment(
+    in: VertexOutput,
+    @builtin(front_facing) is_front: bool,
+) -> @location(0) vec4<f32> {
     let tiled_uv = params.uv_min + fract(in.uv) * params.uv_size;
     let base = textureSample(atlas, atlas_sampler, tiled_uv, i32(params.layer));
 
@@ -83,5 +91,20 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if (rgba.a < params.alpha_cutoff) {
         discard;
     }
-    return rgba;
+
+    // Hand the computed base colour off to Bevy's PBR pipeline so
+    // directional / ambient light and shadows apply.  Blocks are matte
+    // and non-metallic, so we keep the default `pbr_input_new` material
+    // values (metallic = 0, perceptual_roughness = 0.5) and only
+    // override the base colour.
+    var pbr_input = pbr_input_from_vertex_output(in, is_front, false);
+    pbr_input.material.base_color = rgba;
+    // Keep the alpha channel intact on the material so the blend
+    // pipeline gets the right transparency.
+    pbr_input.material.perceptual_roughness = 1.0;
+    pbr_input.material.metallic = 0.0;
+    pbr_input.material.reflectance = vec3<f32>(0.0);
+
+    let lit = pbr_functions::apply_pbr_lighting(pbr_input);
+    return pbr_functions::main_pass_post_lighting_processing(pbr_input, lit);
 }
