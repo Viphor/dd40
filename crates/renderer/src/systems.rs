@@ -74,6 +74,11 @@ pub struct ChunkMeshMarker {
 /// Reads incoming [`ChunkReady`] messages and marks the corresponding chunks
 /// dirty in [`ChunkRenderState`].
 ///
+/// Also marks all six neighboring chunks dirty, because their boundary faces
+/// may have changed visibility: faces that were treated as air (outside world
+/// boundary or unloaded chunk) might now be solid (occluded by the newly-loaded
+/// chunk).
+///
 /// Runs in `PreUpdate` so dirty flags are set before the `Update` rebuild pass.
 pub fn mark_dirty_on_chunk_ready(
     mut reader: MessageReader<ChunkReady>,
@@ -82,8 +87,24 @@ pub fn mark_dirty_on_chunk_ready(
     for msg in reader.read() {
         let pos = msg.chunk.position();
         render_state.mark_dirty(pos);
+        
+        // Also mark the six adjacent chunks dirty so their boundary faces
+        // are recalculated. Faces on the boundary that were visible (neighbor
+        // was air/unloaded) may now be hidden (neighbor is solid).
+        let neighbors = [
+            ChunkPos { x: pos.x - 1, y: pos.y, z: pos.z }, // -X
+            ChunkPos { x: pos.x + 1, y: pos.y, z: pos.z }, // +X
+            ChunkPos { x: pos.x, y: pos.y - 1, z: pos.z }, // -Y
+            ChunkPos { x: pos.x, y: pos.y + 1, z: pos.z }, // +Y
+            ChunkPos { x: pos.x, y: pos.y, z: pos.z - 1 }, // -Z
+            ChunkPos { x: pos.x, y: pos.y, z: pos.z + 1 }, // +Z
+        ];
+        for neighbor_pos in neighbors {
+            render_state.mark_dirty(neighbor_pos);
+        }
+        
         trace!(
-            "Renderer: marked chunk {:?} dirty (ChunkReady received)",
+            "Renderer: marked chunk {:?} and 6 neighbors dirty (ChunkReady received)",
             pos
         );
     }
