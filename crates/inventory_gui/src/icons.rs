@@ -41,16 +41,16 @@ impl BlockIconAssets {
 
     /// Builds (or rebuilds) icons for every block in `blocks`.
     ///
-    /// When `atlas` is ready and the atlas image is available in `images`,
-    /// blocks with [`dd40_texture_core::BlockTextures`] are rendered using
-    /// their actual texture tiles (top / west / east faces).  All other
-    /// blocks fall back to the procedural flat-colour cube.
+    /// When `atlas_image` is `Some`, blocks with
+    /// [`dd40_texture_core::BlockTextures`] are rendered using their actual
+    /// texture tiles (top / west / east faces).  All other blocks fall back
+    /// to the procedural flat-colour cube.
     pub fn rebuild(
         &mut self,
         blocks: &BlockRegistry,
         images_assets: &mut Assets<Image>,
         #[cfg(feature = "textures")] atlas: &dd40_texture_core::BlockAtlas,
-        #[cfg(feature = "textures")] images: &Assets<Image>,
+        #[cfg(feature = "textures")] atlas_image: Option<&Image>,
     ) {
         self.map.clear();
         for def in blocks.iter() {
@@ -59,7 +59,7 @@ impl BlockIconAssets {
                 #[cfg(feature = "textures")]
                 atlas,
                 #[cfg(feature = "textures")]
-                images,
+                atlas_image,
             ));
             self.map.insert(def.id, handle);
         }
@@ -71,10 +71,10 @@ impl BlockIconAssets {
 fn build_icon_for_block(
     def: &dd40_core::block::BlockDefinition,
     #[cfg(feature = "textures")] atlas: &dd40_texture_core::BlockAtlas,
-    #[cfg(feature = "textures")] images: &Assets<Image>,
+    #[cfg(feature = "textures")] atlas_image: Option<&Image>,
 ) -> Image {
     #[cfg(feature = "textures")]
-    if let Some(image) = try_build_textured_icon(def, atlas, images) {
+    if let Some(image) = try_build_textured_icon(def, atlas, atlas_image) {
         return image;
     }
     build_block_icon(def.color)
@@ -89,16 +89,11 @@ fn build_icon_for_block(
 fn try_build_textured_icon(
     def: &dd40_core::block::BlockDefinition,
     atlas: &dd40_texture_core::BlockAtlas,
-    images: &Assets<Image>,
+    atlas_image: Option<&Image>,
 ) -> Option<Image> {
     use dd40_texture_core::{BlockTextures, Face};
 
-    if !atlas.is_ready() {
-        return None;
-    }
-    let atlas_handle = atlas.texture(dd40_texture_core::AtlasId(0))?;
-    let atlas_image = images.get(&atlas_handle)?;
-
+    let atlas_image = atlas_image?;
     let textures = def.data::<BlockTextures>()?;
 
     // Extract top, west (left in isometric view), east (right) face tiles.
@@ -150,13 +145,18 @@ impl DerefWithSize for Option<(Vec<u8>, u32, u32)> {
 /// Re-runs automatically when the [`BlockRegistry`] changes.  With the
 /// `textures` feature enabled it also re-runs when the [`BlockAtlas`]
 /// changes (i.e. after the texture pack finishes loading).
+///
+/// Uses a single `ResMut<Assets<Image>>` for both reading (the atlas
+/// image is cloned into a local before the rebuild loop) and writing
+/// (new icon images are added).  This avoids the Bevy B0002 conflict
+/// that would arise from holding both `Res` and `ResMut` of the same
+/// asset collection simultaneously.
 pub fn prerender_block_icons(
     blocks: Res<BlockRegistry>,
     mut assets: ResMut<BlockIconAssets>,
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<ItemIconCache>,
     #[cfg(feature = "textures")] atlas: Res<dd40_texture_core::BlockAtlas>,
-    #[cfg(feature = "textures")] images_ro: Res<Assets<Image>>,
 ) {
     #[cfg(feature = "textures")]
     let needs_rebuild = blocks.is_changed() || atlas.is_changed() || assets.map.is_empty();
@@ -167,13 +167,20 @@ pub fn prerender_block_icons(
         return;
     }
 
+    // Clone the atlas image out of `images` before the mutable rebuild loop
+    // so we don't hold a `&Image` reference at the same time as `&mut Assets<Image>`.
+    #[cfg(feature = "textures")]
+    let atlas_image_owned: Option<Image> = atlas
+        .texture(dd40_texture_core::AtlasId(0))
+        .and_then(|h| images.get(&h).cloned());
+
     assets.rebuild(
         &blocks,
         &mut images,
         #[cfg(feature = "textures")]
         &atlas,
         #[cfg(feature = "textures")]
-        &images_ro,
+        atlas_image_owned.as_ref(),
     );
     debug!(
         "prerender_block_icons: built {} block icons",
