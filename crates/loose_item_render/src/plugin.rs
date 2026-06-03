@@ -75,6 +75,10 @@ fn attach_visuals(
 /// Spawns a child visual, using a texture tile extracted from the
 /// [`BlockAtlas`] when one is available.  Falls back to colour when
 /// the atlas is not yet ready or the block has no texture data.
+///
+/// Uses a single `ResMut<Assets<Image>>`: atlas pixels are extracted
+/// into an owned buffer (borrow dropped) before adding the new tile
+/// image, avoiding Bevy B0002.
 #[cfg(feature = "textures")]
 fn attach_visuals(
     mut commands: Commands,
@@ -84,7 +88,6 @@ fn attach_visuals(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
     atlas: Res<dd40_texture_core::BlockAtlas>,
-    atlas_images: Res<Assets<Image>>,
     new: Query<(Entity, &LooseItem), (Without<VisualAttached>, With<Transform>)>,
 ) {
     for (parent, loose) in &new {
@@ -93,7 +96,6 @@ fn attach_visuals(
             &item_registry,
             &block_registry,
             &atlas,
-            &atlas_images,
             &mut images,
         )
         .unwrap_or_else(|| {
@@ -122,13 +124,16 @@ fn attach_visuals(
 ///
 /// Returns `None` when the atlas isn't ready, the item isn't a
 /// placeable block, or the block has no `BlockTextures`.
+///
+/// A single `&mut Assets<Image>` is used for both reading (atlas
+/// pixels are cloned into an owned buffer before the borrow is
+/// released) and writing (adding the new tile image).
 #[cfg(feature = "textures")]
 fn try_build_textured_material(
     loose: &LooseItem,
     item_registry: &ItemRegistry,
     block_registry: &BlockRegistry,
     atlas: &dd40_texture_core::BlockAtlas,
-    atlas_images: &Assets<Image>,
     images: &mut Assets<Image>,
 ) -> Option<StandardMaterial> {
     use dd40_texture_core::{BlockTextures, Face};
@@ -151,13 +156,19 @@ fn try_build_textured_material(
 
     let resolved = atlas.resolve(tex_ref)?;
     let atlas_handle = atlas.texture(dd40_texture_core::AtlasId(0))?;
-    let atlas_image = atlas_images.get(&atlas_handle)?;
 
-    let pixels = resolved.uv.extract_tile_pixels(atlas_image)?;
-    let tile_w = ((resolved.uv.max.x - resolved.uv.min.x) * atlas_image.width() as f32)
-        .round() as u32;
-    let tile_h = ((resolved.uv.max.y - resolved.uv.min.y) * atlas_image.height() as f32)
-        .round() as u32;
+    // Extract pixels into an owned buffer while holding a shared borrow of
+    // the atlas image, then drop the borrow before calling images.add().
+    let (pixels, tile_w, tile_h) = {
+        let atlas_image = images.get(&atlas_handle)?;
+        let pixels = resolved.uv.extract_tile_pixels(atlas_image)?;
+        let tile_w = ((resolved.uv.max.x - resolved.uv.min.x) * atlas_image.width() as f32)
+            .round() as u32;
+        let tile_h = ((resolved.uv.max.y - resolved.uv.min.y) * atlas_image.height() as f32)
+            .round() as u32;
+        (pixels, tile_w, tile_h)
+    };
+
     if tile_w == 0 || tile_h == 0 {
         return None;
     }
