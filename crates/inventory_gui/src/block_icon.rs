@@ -92,6 +92,115 @@ pub fn build_block_icon(base: Color) -> Image {
     )
 }
 
+/// Generates an isometric block icon from actual texture tiles.
+///
+/// `top`, `left`, and `right` are RGBA8 pixel buffers each of
+/// `tile_w × tile_h × 4` bytes.  When `None` the face falls back to
+/// a flat colour derived from `base`.  The tile pixels are sampled with
+/// nearest-neighbour filtering and shaded at the same brightness factors
+/// as [`build_block_icon`].
+///
+/// Returns an `ICON_SIZE × ICON_SIZE` RGBA8-sRGB image suitable for use
+/// as a UI [`ImageNode`] texture.
+pub fn build_block_icon_textured(
+    top: Option<(&[u8], u32, u32)>,
+    left: Option<(&[u8], u32, u32)>,
+    right: Option<(&[u8], u32, u32)>,
+    base: Color,
+) -> Image {
+    let size = ICON_SIZE;
+    let w = size as f32;
+    let mut data = vec![0u8; (size * size * 4) as usize];
+
+    let top_apex = (w * 0.5, 0.0);
+    let upper_right = (w, w * 0.25);
+    let right_pt = (w, w * 0.75);
+    let left_pt = (0.0, w * 0.75);
+    let upper_left = (0.0, w * 0.25);
+    let center = (w * 0.5, w * 0.5);
+
+    // Top face.
+    match top {
+        Some((pixels, tw, th)) => fill_parallelogram_textured(
+            &mut data,
+            size,
+            top_apex,
+            sub(upper_right, top_apex),
+            sub(upper_left, top_apex),
+            pixels,
+            tw,
+            th,
+            TOP_BRIGHTNESS,
+        ),
+        None => fill_parallelogram(
+            &mut data,
+            size,
+            top_apex,
+            sub(upper_right, top_apex),
+            sub(upper_left, top_apex),
+            shade(base, TOP_BRIGHTNESS),
+        ),
+    }
+
+    // Left face (west).
+    match left {
+        Some((pixels, tw, th)) => fill_parallelogram_textured(
+            &mut data,
+            size,
+            upper_left,
+            sub(center, upper_left),
+            sub(left_pt, upper_left),
+            pixels,
+            tw,
+            th,
+            LEFT_BRIGHTNESS,
+        ),
+        None => fill_parallelogram(
+            &mut data,
+            size,
+            upper_left,
+            sub(center, upper_left),
+            sub(left_pt, upper_left),
+            shade(base, LEFT_BRIGHTNESS),
+        ),
+    }
+
+    // Right face (east).
+    match right {
+        Some((pixels, tw, th)) => fill_parallelogram_textured(
+            &mut data,
+            size,
+            upper_right,
+            sub(right_pt, upper_right),
+            sub(center, upper_right),
+            pixels,
+            tw,
+            th,
+            RIGHT_BRIGHTNESS,
+        ),
+        None => fill_parallelogram(
+            &mut data,
+            size,
+            upper_right,
+            sub(right_pt, upper_right),
+            sub(center, upper_right),
+            shade(base, RIGHT_BRIGHTNESS),
+        ),
+    }
+
+    Image::new(
+        Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    )
+}
+
 fn sub(a: (f32, f32), b: (f32, f32)) -> (f32, f32) {
     (a.0 - b.0, a.1 - b.1)
 }
@@ -105,6 +214,17 @@ fn shade(base: Color, factor: f32) -> [u8; 4] {
         to_byte(srgba.blue * factor),
         to_byte(srgba.alpha),
     ]
+}
+
+/// Nearest-neighbour samples a flat RGBA8 tile.
+fn sample_tile(pixels: &[u8], tile_w: u32, tile_h: u32, u: f32, v: f32) -> [u8; 4] {
+    let x = ((u * tile_w as f32) as u32).min(tile_w - 1) as usize;
+    let y = ((v * tile_h as f32) as u32).min(tile_h - 1) as usize;
+    let idx = (y * tile_w as usize + x) * 4;
+    if idx + 4 > pixels.len() {
+        return [255, 0, 255, 255];
+    }
+    [pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3]]
 }
 
 fn fill_parallelogram(
@@ -133,6 +253,49 @@ fn fill_parallelogram(
         }
     }
 }
+
+/// Like [`fill_parallelogram`] but samples pixels from `tile` at `(u, v)`.
+///
+/// Each sampled pixel is shaded by `brightness` to produce the three-face
+/// depth illusion.
+fn fill_parallelogram_textured(
+    data: &mut [u8],
+    size: u32,
+    origin: (f32, f32),
+    edge_u: (f32, f32),
+    edge_v: (f32, f32),
+    tile: &[u8],
+    tile_w: u32,
+    tile_h: u32,
+    brightness: f32,
+) {
+    let det = edge_u.0 * edge_v.1 - edge_u.1 * edge_v.0;
+    if det.abs() < 1e-6 {
+        return;
+    }
+    let inv = 1.0 / det;
+    for py in 0..size {
+        for px in 0..size {
+            let dx = px as f32 + 0.5 - origin.0;
+            let dy = py as f32 + 0.5 - origin.1;
+            let u = (dx * edge_v.1 - dy * edge_v.0) * inv;
+            let v = (edge_u.0 * dy - edge_u.1 * dx) * inv;
+            if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
+                let [r, g, b, a] = sample_tile(tile, tile_w, tile_h, u, v);
+                if a == 0 {
+                    continue;
+                }
+                let apply = |c: u8| (c as f32 * brightness).clamp(0.0, 255.0) as u8;
+                let idx = ((py * size + px) * 4) as usize;
+                data[idx] = apply(r);
+                data[idx + 1] = apply(g);
+                data[idx + 2] = apply(b);
+                data[idx + 3] = a;
+            }
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -19,6 +19,8 @@ use dd40_core::block::{BlockDefinition, BlockId, BlockRegistry};
 use dd40_item_core::registry::{ItemId, ItemRegistry};
 
 use crate::block_icon::build_block_icon;
+#[cfg(feature = "textures")]
+use crate::block_icon::build_block_icon_textured;
 
 /// Pre-rendered isometric icons for every known [`BlockId`].
 ///
@@ -38,26 +40,141 @@ impl BlockIconAssets {
     }
 
     /// Builds (or rebuilds) icons for every block in `blocks`.
-    pub fn rebuild(&mut self, blocks: &BlockRegistry, images: &mut Assets<Image>) {
+    ///
+    /// When `atlas` is ready and the atlas image is available in `images`,
+    /// blocks with [`dd40_texture_core::BlockTextures`] are rendered using
+    /// their actual texture tiles (top / west / east faces).  All other
+    /// blocks fall back to the procedural flat-colour cube.
+    pub fn rebuild(
+        &mut self,
+        blocks: &BlockRegistry,
+        images_assets: &mut Assets<Image>,
+        #[cfg(feature = "textures")] atlas: &dd40_texture_core::BlockAtlas,
+        #[cfg(feature = "textures")] images: &Assets<Image>,
+    ) {
         self.map.clear();
         for def in blocks.iter() {
-            let handle = images.add(build_block_icon(def.color));
+            let handle = images_assets.add(build_icon_for_block(
+                def,
+                #[cfg(feature = "textures")]
+                atlas,
+                #[cfg(feature = "textures")]
+                images,
+            ));
             self.map.insert(def.id, handle);
         }
     }
 }
 
+/// Builds the best available icon for a single block definition.
+#[allow(unused_variables)]
+fn build_icon_for_block(
+    def: &dd40_core::block::BlockDefinition,
+    #[cfg(feature = "textures")] atlas: &dd40_texture_core::BlockAtlas,
+    #[cfg(feature = "textures")] images: &Assets<Image>,
+) -> Image {
+    #[cfg(feature = "textures")]
+    if let Some(image) = try_build_textured_icon(def, atlas, images) {
+        return image;
+    }
+    build_block_icon(def.color)
+}
+
+/// Attempts to build a textured isometric icon by sampling from the atlas.
+///
+/// Returns `None` when the atlas is not ready, the block has no
+/// [`dd40_texture_core::BlockTextures`], or any required tile cannot be
+/// extracted.
+#[cfg(feature = "textures")]
+fn try_build_textured_icon(
+    def: &dd40_core::block::BlockDefinition,
+    atlas: &dd40_texture_core::BlockAtlas,
+    images: &Assets<Image>,
+) -> Option<Image> {
+    use dd40_texture_core::{BlockTextures, Face};
+
+    if !atlas.is_ready() {
+        return None;
+    }
+    let atlas_handle = atlas.texture(dd40_texture_core::AtlasId(0))?;
+    let atlas_image = images.get(&atlas_handle)?;
+
+    let textures = def.data::<BlockTextures>()?;
+
+    // Extract top, west (left in isometric view), east (right) face tiles.
+    let resolve_tile = |face: Face| -> Option<(Vec<u8>, u32, u32)> {
+        let tex_ref = textures.get(face)?;
+        let resolved = atlas.resolve(tex_ref)?;
+        let pixels = resolved.uv.extract_tile_pixels(atlas_image)?;
+        let tile_w = ((resolved.uv.max.x - resolved.uv.min.x) * atlas_image.width() as f32)
+            .round() as u32;
+        let tile_h = ((resolved.uv.max.y - resolved.uv.min.y) * atlas_image.height() as f32)
+            .round() as u32;
+        if tile_w == 0 || tile_h == 0 {
+            return None;
+        }
+        Some((pixels, tile_w, tile_h))
+    };
+
+    let top = resolve_tile(Face::Top);
+    let left = resolve_tile(Face::West);
+    let right = resolve_tile(Face::East);
+
+    // Only proceed if at least one face has a texture.
+    if top.is_none() && left.is_none() && right.is_none() {
+        return None;
+    }
+
+    Some(build_block_icon_textured(
+        top.as_deref_with_size(),
+        left.as_deref_with_size(),
+        right.as_deref_with_size(),
+        def.color,
+    ))
+}
+
+#[cfg(feature = "textures")]
+trait DerefWithSize {
+    fn as_deref_with_size(&self) -> Option<(&[u8], u32, u32)>;
+}
+
+#[cfg(feature = "textures")]
+impl DerefWithSize for Option<(Vec<u8>, u32, u32)> {
+    fn as_deref_with_size(&self) -> Option<(&[u8], u32, u32)> {
+        self.as_ref().map(|(p, w, h)| (p.as_slice(), *w, *h))
+    }
+}
+
 /// Startup / change-driven system that fills [`BlockIconAssets`].
+///
+/// Re-runs automatically when the [`BlockRegistry`] changes.  With the
+/// `textures` feature enabled it also re-runs when the [`BlockAtlas`]
+/// changes (i.e. after the texture pack finishes loading).
 pub fn prerender_block_icons(
     blocks: Res<BlockRegistry>,
     mut assets: ResMut<BlockIconAssets>,
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<ItemIconCache>,
+    #[cfg(feature = "textures")] atlas: Res<dd40_texture_core::BlockAtlas>,
+    #[cfg(feature = "textures")] images_ro: Res<Assets<Image>>,
 ) {
-    if !blocks.is_changed() && !assets.map.is_empty() {
+    #[cfg(feature = "textures")]
+    let needs_rebuild = blocks.is_changed() || atlas.is_changed() || assets.map.is_empty();
+    #[cfg(not(feature = "textures"))]
+    let needs_rebuild = blocks.is_changed() || assets.map.is_empty();
+
+    if !needs_rebuild {
         return;
     }
-    assets.rebuild(&blocks, &mut images);
+
+    assets.rebuild(
+        &blocks,
+        &mut images,
+        #[cfg(feature = "textures")]
+        &atlas,
+        #[cfg(feature = "textures")]
+        &images_ro,
+    );
     debug!(
         "prerender_block_icons: built {} block icons",
         assets.map.len()

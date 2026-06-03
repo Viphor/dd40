@@ -44,6 +44,7 @@ fn setup_assets(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 /// Spawns a child visual for every newly-seen [`LooseItem`] that
 /// already has a [`Transform`] (i.e. is the interpolated network copy
 /// — the confirmed copy is invisible and not in the transform stack).
+#[cfg(not(feature = "textures"))]
 fn attach_visuals(
     mut commands: Commands,
     assets: Res<LooseItemAssets>,
@@ -69,6 +70,117 @@ fn attach_visuals(
             LooseItemVisual { phase },
         ));
     }
+}
+
+/// Spawns a child visual, using a texture tile extracted from the
+/// [`BlockAtlas`] when one is available.  Falls back to colour when
+/// the atlas is not yet ready or the block has no texture data.
+#[cfg(feature = "textures")]
+fn attach_visuals(
+    mut commands: Commands,
+    assets: Res<LooseItemAssets>,
+    item_registry: Res<ItemRegistry>,
+    block_registry: Res<BlockRegistry>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+    atlas: Res<dd40_texture_core::BlockAtlas>,
+    atlas_images: Res<Assets<Image>>,
+    new: Query<(Entity, &LooseItem), (Without<VisualAttached>, With<Transform>)>,
+) {
+    for (parent, loose) in &new {
+        let material = try_build_textured_material(
+            loose,
+            &item_registry,
+            &block_registry,
+            &atlas,
+            &atlas_images,
+            &mut images,
+        )
+        .unwrap_or_else(|| {
+            let color = resolve_color(loose, &item_registry, &block_registry);
+            StandardMaterial {
+                base_color: color,
+                perceptual_roughness: 0.6,
+                ..default()
+            }
+        });
+        let material_handle = materials.add(material);
+        let phase = phase_for(parent);
+        commands.entity(parent).insert(VisualAttached);
+        commands.spawn((
+            ChildOf(parent),
+            Mesh3d(assets.mesh.clone()),
+            MeshMaterial3d(material_handle),
+            Transform::default(),
+            LooseItemVisual { phase },
+        ));
+    }
+}
+
+/// Tries to build a [`StandardMaterial`] with the block's top-face
+/// texture as the base colour texture.
+///
+/// Returns `None` when the atlas isn't ready, the item isn't a
+/// placeable block, or the block has no `BlockTextures`.
+#[cfg(feature = "textures")]
+fn try_build_textured_material(
+    loose: &LooseItem,
+    item_registry: &ItemRegistry,
+    block_registry: &BlockRegistry,
+    atlas: &dd40_texture_core::BlockAtlas,
+    atlas_images: &Assets<Image>,
+    images: &mut Assets<Image>,
+) -> Option<StandardMaterial> {
+    use dd40_texture_core::{BlockTextures, Face};
+    use bevy::asset::RenderAssetUsages;
+    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+
+    if !atlas.is_ready() {
+        return None;
+    }
+
+    let item_def = item_registry.get(loose.stack.item)?;
+    let block_id = item_def.placeable?;
+    let block_def = block_registry.get(block_id)?;
+    let textures = block_def.data::<BlockTextures>()?;
+
+    // Pick the top face; fall back through a priority list.
+    let tex_ref = textures.get(Face::Top)
+        .or_else(|| textures.get(Face::South))
+        .or_else(|| textures.get(Face::North))?;
+
+    let resolved = atlas.resolve(tex_ref)?;
+    let atlas_handle = atlas.texture(dd40_texture_core::AtlasId(0))?;
+    let atlas_image = atlas_images.get(&atlas_handle)?;
+
+    let pixels = resolved.uv.extract_tile_pixels(atlas_image)?;
+    let tile_w = ((resolved.uv.max.x - resolved.uv.min.x) * atlas_image.width() as f32)
+        .round() as u32;
+    let tile_h = ((resolved.uv.max.y - resolved.uv.min.y) * atlas_image.height() as f32)
+        .round() as u32;
+    if tile_w == 0 || tile_h == 0 {
+        return None;
+    }
+
+    let tile_image = bevy::image::Image::new(
+        Extent3d {
+            width: tile_w,
+            height: tile_h,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        pixels,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    );
+    let handle = images.add(tile_image);
+
+    Some(StandardMaterial {
+        base_color: Color::WHITE,
+        base_color_texture: Some(handle),
+        perceptual_roughness: 0.6,
+        ..default()
+    })
 }
 
 fn resolve_color(
@@ -119,3 +231,4 @@ impl Plugin for LooseItemRenderPlugin {
             .add_systems(Update, (attach_visuals, animate_visuals));
     }
 }
+
