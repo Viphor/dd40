@@ -60,6 +60,48 @@ impl AtlasUv {
             base_layer: layer,
         }
     }
+
+    /// Extracts the RGBA8 pixel region described by this UV rect from a
+    /// 2D-array atlas [`Image`].
+    ///
+    /// The atlas image layout must be `Rgba8UnormSrgb` with layers stored
+    /// sequentially in `image.data` (the layout produced by
+    /// `dd40_texture_pack`'s atlas builder).
+    ///
+    /// Returns a flat `RGBA8` buffer of size `tile_w × tile_h × 4` bytes,
+    /// where `tile_w` / `tile_h` are derived from the UV extents and the
+    /// image dimensions.  Returns `None` if the image has no CPU-side data
+    /// or the computed tile size is degenerate.
+    pub fn extract_tile_pixels(&self, image: &bevy::image::Image) -> Option<Vec<u8>> {
+        let data = image.data.as_deref()?;
+        let atlas_w = image.width() as usize;
+        let atlas_h = image.height() as usize;
+        let layer = self.base_layer as usize;
+
+        let x0 = (self.min.x * atlas_w as f32).round() as usize;
+        let y0 = (self.min.y * atlas_h as f32).round() as usize;
+        let x1 = (self.max.x * atlas_w as f32).round() as usize;
+        let y1 = (self.max.y * atlas_h as f32).round() as usize;
+        let tile_w = x1.saturating_sub(x0);
+        let tile_h = y1.saturating_sub(y0);
+        if tile_w == 0 || tile_h == 0 {
+            return None;
+        }
+
+        let layer_stride = atlas_w * atlas_h * 4;
+        let mut out = Vec::with_capacity(tile_w * tile_h * 4);
+        for row in y0..y1 {
+            for col in x0..x1 {
+                let idx = layer * layer_stride + row * atlas_w * 4 + col * 4;
+                let end = idx + 4;
+                if end > data.len() {
+                    return None;
+                }
+                out.extend_from_slice(&data[idx..end]);
+            }
+        }
+        Some(out)
+    }
 }
 
 impl Default for AtlasUv {

@@ -92,12 +92,14 @@ fn try_build_textured_icon(
     atlas_image: Option<&Image>,
 ) -> Option<Image> {
     use dd40_texture_core::{BlockTextures, Face};
+    use crate::block_icon::TileFace;
 
     let atlas_image = atlas_image?;
     let textures = def.data::<BlockTextures>()?;
 
-    // Extract top, west (left in isometric view), east (right) face tiles.
-    let resolve_tile = |face: Face| -> Option<(Vec<u8>, u32, u32)> {
+    let block_rgb = color_to_rgb(def.color);
+
+    let resolve_face = |face: Face| -> Option<TileFaceOwned> {
         let tex_ref = textures.get(face)?;
         let resolved = atlas.resolve(tex_ref)?;
         let pixels = resolved.uv.extract_tile_pixels(atlas_image)?;
@@ -105,39 +107,68 @@ fn try_build_textured_icon(
             .round() as u32;
         let tile_h = ((resolved.uv.max.y - resolved.uv.min.y) * atlas_image.height() as f32)
             .round() as u32;
-        if tile_w == 0 || tile_h == 0 {
-            return None;
-        }
-        Some((pixels, tile_w, tile_h))
+        if tile_w == 0 || tile_h == 0 { return None; }
+
+        let base_tint = textures.tinted_for(face).then_some(block_rgb);
+
+        let overlay = textures.overlay(face).and_then(|ov_ref| {
+            let ov = atlas.resolve(ov_ref)?;
+            let ov_pix = ov.uv.extract_tile_pixels(atlas_image)?;
+            let ov_w = ((ov.uv.max.x - ov.uv.min.x) * atlas_image.width() as f32).round() as u32;
+            let ov_h = ((ov.uv.max.y - ov.uv.min.y) * atlas_image.height() as f32).round() as u32;
+            if ov_w == 0 || ov_h == 0 { return None; }
+            Some((ov_pix, ov_w, ov_h))
+        });
+
+        Some(TileFaceOwned { pixels, w: tile_w, h: tile_h, base_tint, overlay })
     };
 
-    let top = resolve_tile(Face::Top);
-    let left = resolve_tile(Face::West);
-    let right = resolve_tile(Face::East);
+    let top = resolve_face(Face::Top);
+    let left = resolve_face(Face::West);
+    let right = resolve_face(Face::East);
 
-    // Only proceed if at least one face has a texture.
     if top.is_none() && left.is_none() && right.is_none() {
         return None;
     }
 
     Some(build_block_icon_textured(
-        top.as_deref_with_size(),
-        left.as_deref_with_size(),
-        right.as_deref_with_size(),
+        top.as_ref().map(|f| TileFace {
+            pixels: &f.pixels, w: f.w, h: f.h,
+            base_tint: f.base_tint,
+            overlay: f.overlay.as_ref().map(|(p, w, h)| (p.as_slice(), *w, *h)),
+            overlay_tint: f.overlay.as_ref().map(|_| block_rgb),
+        }),
+        left.as_ref().map(|f| TileFace {
+            pixels: &f.pixels, w: f.w, h: f.h,
+            base_tint: f.base_tint,
+            overlay: f.overlay.as_ref().map(|(p, w, h)| (p.as_slice(), *w, *h)),
+            overlay_tint: f.overlay.as_ref().map(|_| block_rgb),
+        }),
+        right.as_ref().map(|f| TileFace {
+            pixels: &f.pixels, w: f.w, h: f.h,
+            base_tint: f.base_tint,
+            overlay: f.overlay.as_ref().map(|(p, w, h)| (p.as_slice(), *w, *h)),
+            overlay_tint: f.overlay.as_ref().map(|_| block_rgb),
+        }),
         def.color,
     ))
 }
 
+/// Owned tile face data used as an intermediate while building icon faces.
 #[cfg(feature = "textures")]
-trait DerefWithSize {
-    fn as_deref_with_size(&self) -> Option<(&[u8], u32, u32)>;
+struct TileFaceOwned {
+    pixels: Vec<u8>,
+    w: u32,
+    h: u32,
+    base_tint: Option<[u8; 3]>,
+    overlay: Option<(Vec<u8>, u32, u32)>,
 }
 
 #[cfg(feature = "textures")]
-impl DerefWithSize for Option<(Vec<u8>, u32, u32)> {
-    fn as_deref_with_size(&self) -> Option<(&[u8], u32, u32)> {
-        self.as_ref().map(|(p, w, h)| (p.as_slice(), *w, *h))
-    }
+fn color_to_rgb(c: Color) -> [u8; 3] {
+    let s = c.to_srgba();
+    let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u8;
+    [b(s.red), b(s.green), b(s.blue)]
 }
 
 /// Startup / change-driven system that fills [`BlockIconAssets`].
