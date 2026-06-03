@@ -339,4 +339,55 @@ mod tests {
         assert_eq!(LodLevel::Lod1.step(), 2);
         assert_eq!(LodLevel::Lod2.step(), 4);
     }
+
+    // ── Cross-chunk boundary face culling ─────────────────────────────────────
+
+    /// Regression: a block at the +X edge of chunk A should NOT emit a +X face
+    /// when the block in chunk B at that boundary is solid.
+    ///
+    /// Without a populated neighbour cache the face was always treated as
+    /// visible (air), causing chunk seams with extra faces showing.
+    #[test]
+    fn boundary_face_culled_when_neighbour_chunk_is_solid() {
+        use dd40_core::block::{Block, BlockDefinition, BlockId};
+
+        let stone = BlockId(1);
+        let mut registry = BlockRegistry::new();
+        registry.register_without_event(
+            BlockDefinition::new(stone, "stone")
+                .with_solid(true)
+                .with_renderable(true)
+                .with_color(bevy::color::Color::WHITE),
+        );
+
+        // Chunk A: stone block at its +X boundary (lx = CHUNK_SIZE_X − 1).
+        let mut chunk_a = Chunk::new(ChunkPos::new(0, 0, 0));
+        chunk_a.set(CHUNK_SIZE_X - 1, 0, 0, Block::new(stone));
+
+        // Chunk B (neighbour in +X direction): solid block at its -X boundary (lx = 0).
+        let mut chunk_b = Chunk::new(ChunkPos::new(1, 0, 0));
+        for ly in 0..CHUNK_SIZE_Y {
+            for lz in 0..CHUNK_SIZE_Z {
+                chunk_b.set(0, ly, lz, Block::new(stone));
+            }
+        }
+
+        // With an empty neighbour cache the +X face MUST appear (conservative fallback).
+        let empty_cache = ChunkCache::default();
+        let quads_no_neighbour = build_chunk_quads(&chunk_a, LodLevel::Lod0, &registry, &empty_cache);
+        assert!(
+            quads_no_neighbour.iter().any(|q| q.dir == FaceDir::PosX),
+            "with empty neighbour cache +X boundary face should be visible (conservative)"
+        );
+
+        // With chunk B in the neighbour cache the +X face MUST be culled.
+        let mut neighbour_cache = ChunkCache::default();
+        neighbour_cache.insert(chunk_b);
+        let quads_with_neighbour =
+            build_chunk_quads(&chunk_a, LodLevel::Lod0, &registry, &neighbour_cache);
+        assert!(
+            !quads_with_neighbour.iter().any(|q| q.dir == FaceDir::PosX),
+            "+X boundary face must be culled when the neighbour chunk has a solid block there"
+        );
+    }
 }

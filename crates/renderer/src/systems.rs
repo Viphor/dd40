@@ -258,6 +258,24 @@ pub fn spawn_mesh_tasks(
         // Clone the chunk so the task owns its data.
         let chunk = chunk.clone();
 
+        // Snapshot the 6 neighbouring chunks for cross-boundary face culling.
+        // The task uses a ChunkCache that is not Send, so we pass only the
+        // relevant neighbour data. Any absent neighbour is treated as air
+        // (conservative: boundary face stays visible until the neighbour loads).
+        let mut neighbour_cache = ChunkCache::default();
+        for npos in [
+            ChunkPos { x: pos.x - 1, y: pos.y, z: pos.z },
+            ChunkPos { x: pos.x + 1, y: pos.y, z: pos.z },
+            ChunkPos { x: pos.x, y: pos.y - 1, z: pos.z },
+            ChunkPos { x: pos.x, y: pos.y + 1, z: pos.z },
+            ChunkPos { x: pos.x, y: pos.y, z: pos.z - 1 },
+            ChunkPos { x: pos.x, y: pos.y, z: pos.z + 1 },
+        ] {
+            if let Some(n) = chunk_cache.get(&npos) {
+                neighbour_cache.insert(n.clone());
+            }
+        }
+
         // Snapshot the LOD we are building at.
         let lod = render_state.current_lod(&pos);
 
@@ -283,13 +301,6 @@ pub fn spawn_mesh_tasks(
             // Note: vertices are baked into world space by MeshBuilder using
             // origin_x/origin_z, so the spawned entity must use an identity
             // Transform — translating it again would double-offset every chunk.
-
-            // build_chunk_quads needs a ChunkCache for cross-boundary face
-            // culling.  We pass an empty cache here; faces at chunk boundaries
-            // will be treated as visible (conservative, correct).  When the
-            // neighbouring chunk later loads it will trigger its own rebuild
-            // and correct any over-drawn faces.
-            let neighbour_cache = dd40_core::chunk::cache::ChunkCache::default();
 
             // Reconstruct a minimal registry inside the task so that
             // build_chunk_quads can perform is_renderable / is_solid checks.
