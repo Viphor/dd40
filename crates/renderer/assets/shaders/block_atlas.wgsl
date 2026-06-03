@@ -68,8 +68,7 @@ fn fragment(
     var overlay_rgba = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 #ifdef VERTEX_UVS_B
     if (params.has_overlay != 0u) {
-        let tiled_overlay_uv =
-            params.overlay_uv_min + fract(in.uv_b) * params.overlay_uv_size;
+        let tiled_overlay_uv = params.overlay_uv_min + fract(in.uv_b) * params.overlay_uv_size;
         let o = textureSample(atlas, atlas_sampler, tiled_overlay_uv, i32(params.overlay_layer));
         // Multiply overlay RGB by the per-vertex tint so grass-style
         // greyscale overlays acquire their biome colour.  Preserve the
@@ -88,7 +87,7 @@ fn fragment(
     let tint = select(vec4<f32>(1.0, 1.0, 1.0, 1.0), in.color, params.tinted != 0u);
     let rgba = composited * tint;
 
-    if (rgba.a < params.alpha_cutoff) {
+    if rgba.a < params.alpha_cutoff {
         discard;
     }
 
@@ -101,9 +100,9 @@ fn fragment(
     pbr_input.material.base_color = rgba;
     // Keep the alpha channel intact on the material so the blend
     // pipeline gets the right transparency.
-    pbr_input.material.perceptual_roughness = 1.0;
-    pbr_input.material.metallic = 0.0;
-    pbr_input.material.reflectance = vec3<f32>(0.0);
+    pbr_input.material.perceptual_roughness = 0.8;
+    pbr_input.material.metallic = 0.2;
+    pbr_input.material.reflectance = vec3<f32>(0.5);
 
     let lit = pbr_functions::apply_pbr_lighting(pbr_input);
     return pbr_functions::main_pass_post_lighting_processing(pbr_input, lit);
