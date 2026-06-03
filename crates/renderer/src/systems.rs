@@ -584,7 +584,57 @@ mod tests {
     use super::*;
     use bevy::tasks::TaskPool;
     use dd40_core::block::BlockRegistry;
-    use dd40_core::chunk::Chunk;
+    use dd40_core::chunk::{Chunk, events::ChunkReady};
+
+    /// Regression: when a new chunk loads (ChunkReady message), the adjacent
+    /// chunks' boundary faces must be recalculated because their faces that
+    /// were treated as visible (air/unloaded neighbor) may now be hidden
+    /// (solid neighbor block). This test verifies that `mark_dirty_on_chunk_ready`
+    /// marks all six neighbors in addition to the new chunk.
+    #[test]
+    fn mark_dirty_on_chunk_ready_marks_neighbors() {
+        let mut app = App::new();
+        app.init_resource::<ChunkRenderState>();
+        app.add_message::<ChunkReady>();
+
+        let new_chunk_pos = ChunkPos::new(5, 3, -2); // Test with non-zero coordinates
+        let new_chunk = Chunk::new(new_chunk_pos);
+
+        // Manually populate the message queue so the system will read it
+        app.world_mut().write_message(ChunkReady {
+            chunk: new_chunk.clone(),
+        });
+
+        app.add_systems(PreUpdate, mark_dirty_on_chunk_ready);
+        app.update();
+
+        // Verify the chunk and all six neighbors are marked dirty
+        let render_state = app.world().resource::<ChunkRenderState>();
+        let dirty: Vec<ChunkPos> = render_state.dirty_chunks().collect();
+
+        let expected_neighbors = vec![
+            new_chunk_pos,                                   // The new chunk itself
+            ChunkPos { x: new_chunk_pos.x - 1, y: new_chunk_pos.y, z: new_chunk_pos.z }, // -X
+            ChunkPos { x: new_chunk_pos.x + 1, y: new_chunk_pos.y, z: new_chunk_pos.z }, // +X
+            ChunkPos { x: new_chunk_pos.x, y: new_chunk_pos.y - 1, z: new_chunk_pos.z }, // -Y
+            ChunkPos { x: new_chunk_pos.x, y: new_chunk_pos.y + 1, z: new_chunk_pos.z }, // +Y
+            ChunkPos { x: new_chunk_pos.x, y: new_chunk_pos.y, z: new_chunk_pos.z - 1 }, // -Z
+            ChunkPos { x: new_chunk_pos.x, y: new_chunk_pos.y, z: new_chunk_pos.z + 1 }, // +Z
+        ];
+
+        assert_eq!(
+            dirty.len(),
+            7,
+            "should mark new chunk + 6 neighbors dirty (total 7)"
+        );
+        for pos in expected_neighbors {
+            assert!(
+                dirty.contains(&pos),
+                "expected neighbor {:?} to be marked dirty",
+                pos
+            );
+        }
+    }
 
     /// Regression: marking a chunk dirty while a previous mesh task for the
     /// same chunk is still in flight must not spawn a second task. Without
