@@ -45,7 +45,7 @@ use bevy::{
 use dd40_core::{
     block::{BlockId, BlockRegistry},
     chunk::events::{ChunkChanged, ChunkPredicted, ChunkReady},
-    chunk::{ChunkPos, cache::ChunkCache},
+    chunk::{BlockLocal, ChunkPos, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, cache::ChunkCache},
 };
 use dd40_physics_core::prelude::PhysicsPosition;
 
@@ -113,6 +113,10 @@ pub fn mark_dirty_on_chunk_ready(
 /// Reads incoming [`ChunkPredicted`] messages and marks the corresponding
 /// chunks dirty so the renderer remeshes them with the optimistic state.
 ///
+/// Also marks adjacent chunks dirty when the changed block sits on a chunk
+/// boundary, so boundary faces that are newly revealed or hidden appear
+/// correctly without waiting for the neighbour to receive its own change.
+///
 /// Runs in `PreUpdate` so dirty flags are set before the `Update` rebuild
 /// pass.
 pub fn mark_dirty_on_chunk_predicted(
@@ -121,6 +125,7 @@ pub fn mark_dirty_on_chunk_predicted(
 ) {
     for msg in reader.read() {
         render_state.mark_dirty(msg.pos);
+        mark_boundary_neighbours_dirty(&mut render_state, msg.pos, msg.change.local());
         trace!(
             "Renderer: marked chunk {:?} dirty (ChunkPredicted, change={:?})",
             msg.pos, msg.change,
@@ -131,6 +136,9 @@ pub fn mark_dirty_on_chunk_predicted(
 /// Reads incoming [`ChunkChanged`] messages and marks the corresponding
 /// chunks dirty so the renderer remeshes them with the authoritative state.
 ///
+/// Also marks adjacent chunks dirty for any change that sits on a chunk
+/// boundary, so boundary faces update correctly.
+///
 /// Runs in `PreUpdate` alongside [`mark_dirty_on_chunk_predicted`].
 pub fn mark_dirty_on_chunk_changed(
     mut reader: MessageReader<ChunkChanged>,
@@ -138,6 +146,9 @@ pub fn mark_dirty_on_chunk_changed(
 ) {
     for msg in reader.read() {
         render_state.mark_dirty(msg.pos);
+        for change in &msg.changes {
+            mark_boundary_neighbours_dirty(&mut render_state, msg.pos, change.local());
+        }
         trace!(
             "Renderer: marked chunk {:?} dirty (ChunkChanged, version={}, {} change(s))",
             msg.pos,
@@ -146,6 +157,40 @@ pub fn mark_dirty_on_chunk_changed(
         );
     }
 }
+
+/// Marks any chunk adjacent to `chunk_pos` that shares a face with the block
+/// at `local` as dirty.
+///
+/// A block is on a boundary when any of its chunk-local coordinates is at the
+/// minimum (`0`) or maximum (`CHUNK_SIZE_? − 1`) value for that axis.  When
+/// that face is affected by a block change (placement or removal), the
+/// neighbour across the boundary must re-mesh to reflect whether its own
+/// boundary faces are now visible or hidden.
+fn mark_boundary_neighbours_dirty(
+    render_state: &mut ChunkRenderState,
+    chunk_pos: ChunkPos,
+    local: BlockLocal,
+) {
+    if local.x == 0 {
+        render_state.mark_dirty(ChunkPos::new(chunk_pos.x - 1, chunk_pos.y, chunk_pos.z));
+    }
+    if local.x as usize == CHUNK_SIZE_X - 1 {
+        render_state.mark_dirty(ChunkPos::new(chunk_pos.x + 1, chunk_pos.y, chunk_pos.z));
+    }
+    if local.y == 0 {
+        render_state.mark_dirty(ChunkPos::new(chunk_pos.x, chunk_pos.y - 1, chunk_pos.z));
+    }
+    if local.y as usize == CHUNK_SIZE_Y - 1 {
+        render_state.mark_dirty(ChunkPos::new(chunk_pos.x, chunk_pos.y + 1, chunk_pos.z));
+    }
+    if local.z == 0 {
+        render_state.mark_dirty(ChunkPos::new(chunk_pos.x, chunk_pos.y, chunk_pos.z - 1));
+    }
+    if local.z as usize == CHUNK_SIZE_Z - 1 {
+        render_state.mark_dirty(ChunkPos::new(chunk_pos.x, chunk_pos.y, chunk_pos.z + 1));
+    }
+}
+
 
 /// Iterates over every chunk tracked by [`ChunkRenderState`] and updates its
 /// `LodLevel` based on the nearest physics body's current chunk position.
@@ -739,6 +784,82 @@ mod tests {
             render_state.mesh_entity(&pos),
             Some(placeholder),
             "spawn must preserve the existing mesh entity to avoid flicker"
+        );
+    }
+
+    /// When a predicted block change lands on a chunk boundary, the adjacent
+    /// chunk must also be marked dirty so its boundary faces re-mesh.
+    #[test]
+    fn mark_dirty_on_chunk_predicted_marks_boundary_neighbours() {
+        use dd40_core::chunk::{BlockLocal, ChunkChange, events::ChunkPredicted};
+
+        let mut app = App::new();
+        app.init_resource::<ChunkRenderState>();
+        app.add_message::<ChunkPredicted>();
+
+        let chunk_pos = ChunkPos::new(3, 0, -1);
+
+        // Remove a block at the -X boundary (lx = 0) of the chunk.
+        let local = BlockLocal::new(0, 5, 5);
+        app.world_mut().write_message(ChunkPredicted {
+            pos: chunk_pos,
+            change: ChunkChange::new_remove(local),
+        });
+
+        app.add_systems(PreUpdate, mark_dirty_on_chunk_predicted);
+        app.update();
+
+        let render_state = app.world().resource::<ChunkRenderState>();
+        let dirty: Vec<ChunkPos> = render_state.dirty_chunks().collect();
+
+        // The changed chunk and its -X neighbour must both be dirty.
+        assert!(dirty.contains(&chunk_pos), "changed chunk must be dirty");
+        assert!(
+            dirty.contains(&ChunkPos::new(chunk_pos.x - 1, chunk_pos.y, chunk_pos.z)),
+            "-X neighbour must be dirty when block is removed at lx=0"
+        );
+        // The opposite neighbour must NOT be marked dirty.
+        assert!(
+            !dirty.contains(&ChunkPos::new(chunk_pos.x + 1, chunk_pos.y, chunk_pos.z)),
+            "+X neighbour must not be dirtied for a -X boundary block"
+        );
+    }
+
+    /// When an authoritative ChunkChanged message contains a change on a chunk
+    /// boundary, the adjacent chunk must also be marked dirty.
+    #[test]
+    fn mark_dirty_on_chunk_changed_marks_boundary_neighbours() {
+        use dd40_core::chunk::{BlockLocal, ChunkChange, events::ChunkChanged};
+
+        let mut app = App::new();
+        app.init_resource::<ChunkRenderState>();
+        app.add_message::<ChunkChanged>();
+
+        let chunk_pos = ChunkPos::new(0, 2, 4);
+
+        // Remove a block at the +Z boundary (lz = CHUNK_SIZE_Z - 1).
+        let local = BlockLocal::new(3, 10, (CHUNK_SIZE_Z - 1) as u8);
+        app.world_mut().write_message(ChunkChanged {
+            pos: chunk_pos,
+            changes: vec![ChunkChange::new_remove(local)],
+            cell_data_changes: vec![],
+            new_version: 2,
+        });
+
+        app.add_systems(PreUpdate, mark_dirty_on_chunk_changed);
+        app.update();
+
+        let render_state = app.world().resource::<ChunkRenderState>();
+        let dirty: Vec<ChunkPos> = render_state.dirty_chunks().collect();
+
+        assert!(dirty.contains(&chunk_pos), "changed chunk must be dirty");
+        assert!(
+            dirty.contains(&ChunkPos::new(chunk_pos.x, chunk_pos.y, chunk_pos.z + 1)),
+            "+Z neighbour must be dirty when block is removed at lz=CHUNK_SIZE_Z-1"
+        );
+        assert!(
+            !dirty.contains(&ChunkPos::new(chunk_pos.x, chunk_pos.y, chunk_pos.z - 1)),
+            "-Z neighbour must not be dirtied for a +Z boundary block"
         );
     }
 }
