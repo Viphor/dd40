@@ -46,6 +46,39 @@ fn face_dir_index(dir: FaceDir) -> usize {
         .expect("Face::ALL contains every variant")
 }
 
+/// Hash/Eq-safe key for one UV sub-rectangle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct AtlasUvKey {
+    min_x: u32,
+    min_y: u32,
+    max_x: u32,
+    max_y: u32,
+    base_layer: u32,
+}
+
+impl From<AtlasUv> for AtlasUvKey {
+    fn from(uv: AtlasUv) -> Self {
+        Self {
+            min_x: uv.min.x.to_bits(),
+            min_y: uv.min.y.to_bits(),
+            max_x: uv.max.x.to_bits(),
+            max_y: uv.max.y.to_bits(),
+            base_layer: uv.base_layer,
+        }
+    }
+}
+
+/// Textured mesh split key: material bucket + base/overlay UV sub-rects.
+///
+/// Two faces must not share a mesh if either base or overlay UV rect differs,
+/// even when they sample the same atlas layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct TexturedBucketKey {
+    bucket: BucketKey,
+    uv: AtlasUvKey,
+    overlay_uv: Option<AtlasUvKey>,
+}
+
 /// One Bevy mesh + the bucket it belongs to, ready to be paired with
 /// the appropriate [`BlockAtlasMaterial`](super::material::BlockAtlasMaterial)
 /// or [`StandardMaterial`] by the apply pass.
@@ -85,7 +118,7 @@ pub fn build_chunk_bucket_meshes(
     face_buckets: &HashMap<BlockId, FaceBuckets>,
     color_map: &HashMap<BlockId, [f32; 4]>,
 ) -> Vec<BucketMesh> {
-    let mut by_bucket: HashMap<BucketKey, Vec<(MergedQuad, AtlasUv, Option<AtlasUv>)>> =
+    let mut by_bucket: HashMap<TexturedBucketKey, Vec<(MergedQuad, AtlasUv, Option<AtlasUv>)>> =
         HashMap::new();
     let mut untextured: Vec<MergedQuad> = Vec::new();
 
@@ -106,8 +139,13 @@ pub fn build_chunk_bucket_meshes(
                 uv: Some(uv),
                 overlay_uv,
             } => {
+                let key = TexturedBucketKey {
+                    bucket,
+                    uv: uv.into(),
+                    overlay_uv: overlay_uv.map(Into::into),
+                };
                 by_bucket
-                    .entry(bucket)
+                    .entry(key)
                     .or_default()
                     .push((quad.clone(), uv, overlay_uv));
             }
@@ -145,17 +183,15 @@ pub fn build_chunk_bucket_meshes(
         }
     }
 
-    for (bucket, items) in by_bucket {
-        // All items in a bucket share the same atlas (base + overlay)
-        // sub-rect by construction of the bucket key: the key includes
-        // `atlas_layer` (and `overlay_layer`), and within an atlas
-        // every layer corresponds to a single texture / rect.
+    for (bucket_key, items) in by_bucket {
+        // All items in this split bucket share both the material bucket and
+        // UV sub-rect(s) by construction of `TexturedBucketKey`.
         let uv_rect = items[0].1;
         let overlay_uv_rect = items[0].2;
         let mesh = build_textured_mesh(chunk_origin_x, chunk_origin_z, &items, color_map);
         if let Some(mesh) = mesh {
             out.push(BucketMesh {
-                bucket,
+                bucket: bucket_key.bucket,
                 uv_rect,
                 overlay_uv_rect,
                 mesh,
@@ -379,6 +415,63 @@ mod tests {
         let kinds: std::collections::HashSet<_> = out.iter().map(|b| b.bucket).collect();
         assert!(kinds.contains(&BucketKey::Untextured));
         assert!(kinds.contains(&info.bucket));
+    }
+
+    #[test]
+    fn same_bucket_different_uv_rects_split_into_separate_meshes() {
+        // Regression guard: multiple textures can share the same atlas layer
+        // and render layer but occupy different UV sub-rects in that layer.
+        // They must not be forced into one mesh/material pair, or one rect
+        // will overwrite the other and some faces show the wrong texture.
+        let a = BlockId(10);
+        let b = BlockId(11);
+        let shared_bucket = BucketKey::Static {
+            atlas_id: AtlasId(0),
+            atlas_layer: 0,
+            render_layer: dd40_texture_core::RenderLayer::Opaque,
+            tinted: false,
+            overlay_layer: None,
+        };
+        let info_a = FaceTextureInfo {
+            bucket: shared_bucket,
+            uv: Some(AtlasUv {
+                min: Vec2::new(0.0, 0.0),
+                max: Vec2::new(0.5, 0.5),
+                base_layer: 0,
+            }),
+            overlay_uv: None,
+        };
+        let info_b = FaceTextureInfo {
+            bucket: shared_bucket,
+            uv: Some(AtlasUv {
+                min: Vec2::new(0.5, 0.0),
+                max: Vec2::new(1.0, 0.5),
+                base_layer: 0,
+            }),
+            overlay_uv: None,
+        };
+        let mut face_buckets = HashMap::new();
+        face_buckets.insert(a, [info_a; 6]);
+        face_buckets.insert(b, [info_b; 6]);
+        let mut color_map = HashMap::new();
+        color_map.insert(a, [1.0, 1.0, 1.0, 1.0]);
+        color_map.insert(b, [1.0, 1.0, 1.0, 1.0]);
+
+        let q = [quad(a, FaceDir::NegY), quad(b, FaceDir::NegY)];
+        let out = build_chunk_bucket_meshes(0.0, 0.0, &q, &face_buckets, &color_map);
+        assert_eq!(
+            out.len(),
+            2,
+            "different UV sub-rects in same atlas layer must not share one mesh"
+        );
+        let has_rect = |min: Vec2, max: Vec2| {
+            out.iter().any(|m| {
+                (m.uv_rect.min - min).length_squared() < 1e-12
+                    && (m.uv_rect.max - max).length_squared() < 1e-12
+            })
+        };
+        assert!(has_rect(Vec2::new(0.0, 0.0), Vec2::new(0.5, 0.5)));
+        assert!(has_rect(Vec2::new(0.5, 0.0), Vec2::new(1.0, 0.5)));
     }
 
     #[test]
