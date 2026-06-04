@@ -43,6 +43,12 @@ impl TexturePackConfig {
         }
     }
 
+    /// Appends an additional search path to the end of the list, giving it higher priority than existing paths.
+    pub fn with_additional_search_path<P: Into<PathBuf>>(mut self, path: P) -> Self {
+        self.search_paths.push(path.into());
+        self
+    }
+
     /// Appends an override for one texture key.
     pub fn with_override<S: Into<String>>(mut self, key: S, layer: RenderLayer) -> Self {
         self.classification_overrides.insert(key.into(), layer);
