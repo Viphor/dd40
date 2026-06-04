@@ -34,6 +34,8 @@ use crate::decode::decode_all;
 use crate::discover::discover;
 use crate::pack::compute_layout;
 
+const OVERRIDE_PATH_KEY: &str = "DD40_TEXTURE_PACK__OVERRIDE_PATH";
+
 /// Loads Minecraft-style texture packs into a [`BlockAtlas`].
 ///
 /// See the module docs for the load pipeline.  Plugin behaviour:
@@ -61,12 +63,26 @@ fn build_and_install_atlas(
     mut images: ResMut<Assets<Image>>,
     mut atlas: ResMut<BlockAtlas>,
 ) {
-    let discovered = discover(&config.search_paths);
+    let search_paths = if let Ok(override_path) = std::env::var(OVERRIDE_PATH_KEY) {
+        debug!(
+            "dd40_texture_pack: using override search path from env var `{OVERRIDE_PATH_KEY}`: \
+             {override_path}"
+        );
+        config
+            .search_paths
+            .clone()
+            .into_iter()
+            .chain(std::iter::once(override_path.into()))
+            .collect()
+    } else {
+        config.search_paths.clone()
+    };
+    let discovered = discover(&search_paths);
     if discovered.is_empty() {
         debug!(
             "dd40_texture_pack: no textures discovered in {} search path(s); leaving \
              BlockAtlas empty (consumers will use colour fallback)",
-            config.search_paths.len()
+            search_paths.len()
         );
         return;
     }
