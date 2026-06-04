@@ -183,6 +183,45 @@ pub fn visible_faces(
     faces
 }
 
+/// Returns `true` when the face of block `(lx, ly, lz)` in direction `dir`
+/// is visible at LoD sampling step `step`.
+///
+/// Unlike [`visible_faces`], which always checks the block immediately
+/// adjacent (offset 1 in `dir`), this function checks the block `step`
+/// positions away.  At LoD > 0 this ensures the checked neighbour is the
+/// representative of the *adjacent LoD cell*, not an interior block that
+/// may be solid even while the LoD-cell boundary opens to empty space.
+///
+/// **Example — cliff at chunk boundary, LoD1 (step = 2):**
+///
+/// The last sampled +X cell sits at `lx = CHUNK_SIZE_X − 2`.  With a +1
+/// check the neighbour at `CHUNK_SIZE_X − 1` is solid (interior terrain),
+/// so the face is wrongly culled.  With a +step check the neighbour is at
+/// `CHUNK_SIZE_X`, which is in the adjacent chunk (air), so the cliff face
+/// correctly appears.
+///
+/// At `step = 1` the result is identical to
+/// `visible_faces(…).is_visible(dir)` for the same block.
+///
+/// The caller is responsible for verifying that `(lx, ly, lz)` holds a
+/// non-air, renderable block before calling this function.
+pub(crate) fn is_face_visible_lod(
+    chunk: &Chunk,
+    lx: usize,
+    ly: usize,
+    lz: usize,
+    dir: FaceDir,
+    step: usize,
+    registry: &BlockRegistry,
+    cache: &ChunkCache,
+) -> bool {
+    let (dx, dy, dz) = dir.offset();
+    let nx = lx as i32 + dx * step as i32;
+    let ny = ly as i32 + dy * step as i32;
+    let nz = lz as i32 + dz * step as i32;
+    neighbour_is_transparent(chunk, nx, ny, nz, registry, cache)
+}
+
 // ── Internals ─────────────────────────────────────────────────────────────────
 
 /// Returns `true` when the block at chunk-local neighbour position
