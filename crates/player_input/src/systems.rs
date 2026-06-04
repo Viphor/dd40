@@ -8,7 +8,7 @@
 //! systems only own client-local concerns.
 
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions};
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
 use bevy_enhanced_input::prelude::{Action, ActionOf, ContextActivity, Fire, TriggerState};
 use dd40_character_core::components::Player;
 use dd40_character_core::controller::CharacterInput;
@@ -54,6 +54,7 @@ pub(crate) fn setup_camera(mut commands: Commands) {
 pub(crate) fn reconcile_cursor_grab(
     game_state: Res<State<GameState>>,
     windows: Res<OpenUiWindows>,
+    mut game_window: Single<&mut Window, With<PrimaryWindow>>,
     mut cursor_options: Query<&mut CursorOptions>,
 ) {
     let Ok(mut opts) = cursor_options.single_mut() else {
@@ -69,6 +70,10 @@ pub(crate) fn reconcile_cursor_grab(
     let desired_visible = should_release;
     if opts.grab_mode != desired_grab {
         opts.grab_mode = desired_grab;
+        if desired_grab == CursorGrabMode::Locked {
+            let window_size = game_window.size();
+            game_window.set_cursor_position(Some(window_size / 2.0));
+        }
     }
     if opts.visible != desired_visible {
         opts.visible = desired_visible;
