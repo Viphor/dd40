@@ -1,0 +1,17 @@
+[package]
+name = "dd40_config"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+bevy = { workspace = true, default-features = false, features = ["bevy_log"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+dirs = "5"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true
