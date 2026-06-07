@@ -21,6 +21,9 @@ target
 #.idea/
 .DS_Store
 
+# Serena
+.serena
+
 # Server runtime data (chunks + entity sidecars).
 /crates/server/world_data/
 /world_data/
