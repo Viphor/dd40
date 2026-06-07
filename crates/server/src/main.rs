@@ -1,6 +1,7 @@
 use bevy::{diagnostic::DiagnosticsPlugin, prelude::*};
 use dd40_character_interaction::CharacterInteractionPlugin;
 use dd40_chunk_storage::plugin::DiskStoragePlugin;
+use dd40_config::{ConfigPlugin, RawConfig};
 use dd40_core::{
     common::log_plugin, graceful_shutdown::GracefulShutdownPlugin, plugin::CorePlugin,
 };
@@ -11,6 +12,7 @@ use dd40_loose_items::LooseItemsPlugin;
 use dd40_loot::LootPlugin;
 use dd40_network::{
     ServerInventoryNetworkPlugin, ServerNetworkPlugin,
+    server::config::ServerConfig,
     server::connection::{DDServer, LinkConditionerConfig, RecvLinkConditioner},
     shared::connection::SHARED_SETTINGS,
 };
@@ -22,7 +24,15 @@ use dd40_world::{
 };
 
 fn main() {
-    App::new()
+    let mut app = App::new();
+    app.add_plugins(ConfigPlugin);
+    let server_cfg = app
+        .world()
+        .get_resource::<RawConfig>()
+        .map(|r| r.section::<ServerConfig>())
+        .unwrap_or_default();
+
+    app
         // MinimalPlugins gives us ECS, scheduling, and time – but no window or rendering.
         .add_plugins(MinimalPlugins)
         .add_plugins(log_plugin())
@@ -92,7 +102,7 @@ fn main() {
                 conditioner: Some(RecvLinkConditioner::new(
                     LinkConditionerConfig::average_condition(),
                 )),
-                port: 6969,
+                port: server_cfg.port,
                 shared: SHARED_SETTINGS,
             }),
         ))

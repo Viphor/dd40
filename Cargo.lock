@@ -3072,6 +3072,7 @@ dependencies = [
  "bevy",
  "dd40_character_interaction",
  "dd40_chunk_storage",
+ "dd40_config",
  "dd40_core",
  "dd40_integration_character_physics",
  "dd40_integration_loose_item_pickup",
