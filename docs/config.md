@@ -41,7 +41,7 @@ save_history  = false
 save_entities = false
 
 [texture_pack]
-override_path = ""
+search_paths = []   # extra pack-root directories, appended after programmatic paths
 ```
 
 All keys are optional. Missing keys fall back to the section struct's `Default`.
@@ -64,9 +64,8 @@ corresponding TOML key. Values are auto-coerced:
 ### Examples
 
 ```bash
-DD40_NETWORK__RENDER_DISTANCE=16    # overrides [network] render_distance
+DD40_NETWORK__RENDER_DISTANCE=16      # overrides [network] render_distance
 DD40_CHUNK_STORAGE__SAVE_HISTORY=true
-DD40_TEXTURE_PACK__OVERRIDE_PATH=/path/to/textures
 DD40_CONFIG=/path/to/my-config.toml  # use a different config file entirely
 ```
 
@@ -154,7 +153,7 @@ fn on_settings_saved(disk: Res<ConfigDisk>, cfg: Res<MyModConfig>) {
 |---|---|---|---|---|
 | `dd40_network` | `NetworkConfig` | `"network"` | `[network]` | `DD40_NETWORK__` |
 | `dd40_chunk_storage` | `ChunkStorageConfig` | `"chunk_storage"` | `[chunk_storage]` | `DD40_CHUNK_STORAGE__` |
-| `dd40_texture_pack` | `TexturePackConfig` | `"texture_pack"` | `[texture_pack]` | `DD40_TEXTURE_PACK__` |
+| `dd40_texture_pack` | `TexturePackTomlConfig` | `"texture_pack"` | `[texture_pack]` | `DD40_TEXTURE_PACK__` |
 | `dd40_server` binary | `ServerConfig` | `"server"` | `[server]` | `DD40_SERVER__` |
 
 Use the crate name segment as the section name (replacing hyphens/double-underscores
