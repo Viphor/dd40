@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use dd40_character_core::plugin::CharacterCorePlugin;
+use dd40_config::RawConfig;
 use dd40_core::chunk::ChunkAuthorityPlugin;
 use dd40_core::plugin::CorePlugin;
 use lightyear::prelude::server::ServerPlugins;
@@ -13,6 +14,7 @@ use crate::{
         character::ServerCharacterPlugin,
         chunk_provider::{receive_chunk_requests, send_chunk_data},
         chunk_requests::{ChunkRequests, add_message_handlers},
+        config::NetworkConfig,
         connection::{DDServer, start},
         spawn::{PlayerLocations, WorldSpawnConfig},
     },
@@ -23,6 +25,7 @@ pub mod block_updates;
 pub mod character;
 pub mod chunk_provider;
 pub mod chunk_requests;
+pub mod config;
 pub mod connection;
 pub mod inventory;
 pub mod loose_items;
@@ -55,10 +58,18 @@ impl Plugin for ServerNetworkPlugin {
         let _server = app.world_mut().spawn(self.0.clone()).id();
         app.add_systems(Startup, start);
 
+        // Read render distance from config; fall back to the compiled-in default.
+        let render_distance = app
+            .world()
+            .get_resource::<RawConfig>()
+            .map(|r| r.section::<NetworkConfig>().render_distance)
+            .unwrap_or(NetworkConfig::default().render_distance);
+        info!(render_distance, "network render distance");
+
         // Initialise spawn-handshake resources.
         app.init_resource::<WorldSpawnConfig>()
             .init_resource::<PlayerLocations>()
-            .init_resource::<NetworkRenderDistance>();
+            .insert_resource(NetworkRenderDistance(render_distance));
 
         // Add communication systems
         app.register_type::<ChunkRequests>()

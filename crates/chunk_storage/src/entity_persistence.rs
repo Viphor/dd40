@@ -28,17 +28,10 @@ use crate::entity_sidecar::{
     EntitySidecarError, deserialize_entities, entity_sidecar_path, serialize_entities,
 };
 
-/// Environment variable controlling whether the sidecar systems are active.
-///
-/// Truthy values (`1` / `true` / `yes` / `on`, case-insensitive) enable
-/// persistence; anything else disables it.  Default when unset: `true`.
-pub const SAVE_ENTITIES_ENV: &str = "DD40_CHUNK_STORAGE__SAVE_ENTITIES";
-
 /// Configuration resource controlling the sidecar systems at runtime.
 ///
-/// Inserted by [`crate::plugin::DiskStoragePlugin`] from the
-/// [`SAVE_ENTITIES_ENV`] environment variable.  Tests and bootstrappers
-/// can override the value before plugin add to force a known state.
+/// Inserted by [`crate::plugin::DiskStoragePlugin`] from
+/// [`crate::plugin::ChunkStorageConfig`] (read via [`dd40_config::RawConfig`]).
 #[derive(Resource, Debug, Clone)]
 pub struct EntityPersistenceConfig {
     /// Whether load and save are both active.  Disabling skips disk
@@ -48,26 +41,6 @@ pub struct EntityPersistenceConfig {
     /// [`crate::plugin::DiskStoragePlugin`] to match the chunk
     /// directory so siblings share a folder.
     pub dir: PathBuf,
-}
-
-/// Parses the value of [`SAVE_ENTITIES_ENV`] the same way
-/// [`crate::plugin::SAVE_HISTORY_ENV`] is parsed.
-pub fn parse_save_entities_value(raw: &str) -> bool {
-    matches!(
-        raw.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
-}
-
-/// Reads [`SAVE_ENTITIES_ENV`] from the process environment.  When the
-/// variable is unset, persistence defaults to **enabled** — losing
-/// loose items on every server restart is more jarring than the cost
-/// of writing one file per loaded chunk on exit.
-pub fn read_save_entities_env() -> bool {
-    match std::env::var(SAVE_ENTITIES_ENV) {
-        Ok(raw) => parse_save_entities_value(&raw),
-        Err(_) => true,
-    }
 }
 
 /// Exclusive-world system that reads sidecars for any [`ChunkReady`]
@@ -273,20 +246,6 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::{Arc, Mutex};
-
-    #[test]
-    fn parse_truthy_values() {
-        for v in ["1", "true", "TRUE", "yes", "On", " on "] {
-            assert!(parse_save_entities_value(v), "expected truthy: {v:?}");
-        }
-    }
-
-    #[test]
-    fn parse_falsy_values() {
-        for v in ["0", "false", "no", "off", ""] {
-            assert!(!parse_save_entities_value(v), "expected falsy: {v:?}");
-        }
-    }
 
     static UNIQ: AtomicU32 = AtomicU32::new(0);
 

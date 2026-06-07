@@ -13,7 +13,12 @@ use lightyear::{
     },
 };
 
-use crate::shared::connection::{SHARED_SETTINGS, SharedSettings, parse_private_key_from_env};
+use dd40_config::RawConfig;
+
+use crate::{
+    server::config::ServerConfig,
+    shared::connection::{SHARED_SETTINGS, SharedSettings, parse_private_key_from_str},
+};
 
 #[derive(Component, Debug, Clone)]
 #[component(on_add = DDServer::on_add)]
@@ -36,17 +41,25 @@ impl DDServer {
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let entity = context.entity;
         world.commands().queue(move |world: &mut World| -> Result {
+            // Read config before borrowing the entity mutably.
+            let private_key_from_config = world
+                .get_resource::<RawConfig>()
+                .and_then(|r| {
+                    let key_str = r.section::<ServerConfig>().private_key;
+                    if key_str.is_empty() {
+                        None
+                    } else {
+                        parse_private_key_from_str(&key_str)
+                            .inspect_err(|e| warn!("invalid server.private_key in config: {e}"))
+                            .ok()
+                    }
+                });
+
             let mut entity_mut = world.entity_mut(entity);
             let settings = entity_mut.take::<DDServer>().unwrap();
             entity_mut.insert((Name::from("Server"),));
 
-            // Use private key from environment variable, if set. Otherwise from settings file.
-            let private_key = if let Some(key) = parse_private_key_from_env() {
-                info!("Using private key from LIGHTYEAR_PRIVATE_KEY env var");
-                key
-            } else {
-                settings.shared.private_key
-            };
+            let private_key = private_key_from_config.unwrap_or(settings.shared.private_key);
 
             entity_mut.insert(NetcodeServer::new(NetcodeConfig {
                 protocol_id: settings.shared.protocol_id,

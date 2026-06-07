@@ -20,42 +20,21 @@ use lightyear::prelude::{ControlledBy, MessageSender};
 
 use crate::protocol::{BlockChannel, ChunkRejection, ChunkUpdate};
 
-/// Default Chebyshev radius (in chunks) used when
-/// `DD40_NETWORK__RENDER_DISTANCE` is unset or unparseable.
+/// Default Chebyshev radius (in chunks) used when render distance is unset.
 pub const DEFAULT_NETWORK_RENDER_DISTANCE: i32 = 8;
 
 /// Render distance (Chebyshev radius in chunks) used to decide which
 /// connected clients receive a [`ChunkUpdate`] broadcast.
 ///
-/// Initialised once at startup from the `DD40_NETWORK__RENDER_DISTANCE`
-/// environment variable; falls back to
-/// [`DEFAULT_NETWORK_RENDER_DISTANCE`] when unset or unparseable.
+/// Inserted by [`crate::server::ServerNetworkPlugin`] from
+/// [`crate::server::config::NetworkConfig`] (read via
+/// [`dd40_config::RawConfig`]).
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct NetworkRenderDistance(pub i32);
 
 impl Default for NetworkRenderDistance {
     fn default() -> Self {
-        let raw = match std::env::var("DD40_NETWORK__RENDER_DISTANCE") {
-            Ok(v) => v,
-            Err(_) => return Self(DEFAULT_NETWORK_RENDER_DISTANCE),
-        };
-        match raw.trim().parse::<i32>() {
-            Ok(n) if n >= 0 => Self(n),
-            Ok(n) => {
-                warn!(
-                    "DD40_NETWORK__RENDER_DISTANCE={n} is negative; falling back to {}",
-                    DEFAULT_NETWORK_RENDER_DISTANCE
-                );
-                Self(DEFAULT_NETWORK_RENDER_DISTANCE)
-            }
-            Err(e) => {
-                warn!(
-                    "DD40_NETWORK__RENDER_DISTANCE={raw:?} is not an i32 ({e}); falling back to {}",
-                    DEFAULT_NETWORK_RENDER_DISTANCE
-                );
-                Self(DEFAULT_NETWORK_RENDER_DISTANCE)
-            }
-        }
+        Self(DEFAULT_NETWORK_RENDER_DISTANCE)
     }
 }
 

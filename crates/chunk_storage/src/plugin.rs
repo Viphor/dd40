@@ -1,49 +1,60 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use dd40_config::{ConfigSection, RawConfig};
 use dd40_core::block::BlockDataTypeRegistry;
 use dd40_core::plugin::CorePlugin;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     ChunkResponse, ChunkResponseReceiver, ChunkResponseSender,
     chunk_save_on_exit::save_chunks_on_exit,
     collect_chunk_responses, dispatch_chunk_requests,
-    entity_persistence::{
-        EntityPersistenceConfig, SAVE_ENTITIES_ENV, load_entities_for_ready_chunks,
-        read_save_entities_env, save_entities_on_exit,
-    },
+    entity_persistence::{EntityPersistenceConfig, load_entities_for_ready_chunks, save_entities_on_exit},
     provider::DiskChunkProvider,
 };
 
-/// Environment variable that selects the on-disk chunk format written by
-/// [`DiskStoragePlugin`].
+/// Config section for `dd40_chunk_storage`.
 ///
-/// Recognised truthy values (case-insensitive): `1`, `true`, `yes`, `on`.
-/// Any other value — or no value at all — is treated as `false`. When
-/// `true`, the writer persists each chunk's `confirmed_history` so the
-/// server can serve delta updates after a restart.
-pub const SAVE_HISTORY_ENV: &str = "DD40_CHUNK_STORAGE__SAVE_HISTORY";
-
-fn parse_save_history_value(raw: &str) -> bool {
-    matches!(
-        raw.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
+/// Read from the `[chunk_storage]` table in `config.toml` and overridable
+/// via `DD40_CHUNK_STORAGE__*` environment variables.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChunkStorageConfig {
+    /// Persist `confirmed_history` alongside block data. Required for
+    /// the server to serve delta updates after a restart.
+    /// Default: `false`.
+    pub save_history: bool,
+    /// Persist per-chunk entity sidecars (loose items, etc.).
+    /// Default: `true`.
+    pub save_entities: bool,
 }
 
-fn read_save_history_env() -> bool {
-    match std::env::var(SAVE_HISTORY_ENV) {
-        Ok(raw) => parse_save_history_value(&raw),
-        Err(_) => false,
+impl Default for ChunkStorageConfig {
+    fn default() -> Self {
+        Self {
+            save_history: false,
+            save_entities: true,
+        }
     }
+}
+
+impl ConfigSection for ChunkStorageConfig {
+    const SECTION: &'static str = "chunk_storage";
 }
 
 /// Bevy plugin that wires up file-based chunk storage.
 ///
-/// At plugin construction time the [`SAVE_HISTORY_ENV`] environment variable
-/// is read once and used to choose the on-disk format. Use
-/// [`DiskStoragePlugin::with_save_history`] to override the env var
-/// programmatically (e.g. for tests).
+/// Config is resolved in priority order (highest wins):
+/// 1. Values passed via [`DiskStoragePlugin::with_save_history`] /
+///    [`DiskStoragePlugin::with_save_entities`] (for tests / explicit overrides).
+/// 2. The `[chunk_storage]` section of `config.toml` as loaded by
+///    [`dd40_config::ConfigPlugin`] (including `DD40_CHUNK_STORAGE__*` env var
+///    overrides applied by that plugin).
+/// 3. Compiled-in defaults (`save_history = false`, `save_entities = true`).
+///
+/// [`dd40_config::ConfigPlugin`] must be added before this plugin for file /
+/// env-var config to take effect.
 ///
 /// # Example
 /// ```no_run
@@ -57,18 +68,16 @@ fn read_save_history_env() -> bool {
 /// ```
 pub struct DiskStoragePlugin {
     pub dir: PathBuf,
-    /// Whether the writer should persist chunk history. When `None`, the
-    /// value is read from [`SAVE_HISTORY_ENV`] at plugin build time.
+    /// Explicit override for `save_history`. When `None`, the value comes
+    /// from `RawConfig` (or the compiled-in default).
     pub save_history: Option<bool>,
-    /// Whether the per-chunk entity sidecar systems are active.  When
-    /// `None`, the value is read from [`SAVE_ENTITIES_ENV`] at plugin
-    /// build time (default `true` when unset).
+    /// Explicit override for `save_entities`. When `None`, the value comes
+    /// from `RawConfig` (or the compiled-in default).
     pub save_entities: Option<bool>,
 }
 
 impl DiskStoragePlugin {
-    /// Creates a plugin that writes chunks under `dir`. The save format is
-    /// chosen from [`SAVE_HISTORY_ENV`] at plugin build time.
+    /// Creates a plugin that writes chunks under `dir`.
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self {
             dir: dir.into(),
@@ -77,8 +86,8 @@ impl DiskStoragePlugin {
         }
     }
 
-    /// Creates a plugin with an explicit save-history setting that
-    /// overrides the environment variable.
+    /// Creates a plugin with an explicit `save_history` setting that
+    /// overrides config and env vars (useful in tests).
     pub fn with_save_history(dir: impl Into<PathBuf>, save_history: bool) -> Self {
         Self {
             dir: dir.into(),
@@ -87,8 +96,7 @@ impl DiskStoragePlugin {
         }
     }
 
-    /// Overrides the entity-sidecar toggle (normally driven by
-    /// [`SAVE_ENTITIES_ENV`]).
+    /// Overrides the entity-sidecar toggle (useful in tests).
     pub fn with_save_entities(mut self, save_entities: bool) -> Self {
         self.save_entities = Some(save_entities);
         self
@@ -99,17 +107,20 @@ impl Plugin for DiskStoragePlugin {
     fn build(&self, app: &mut App) {
         dd40_core::ensure_plugins!(app, CorePlugin);
 
-        let save_history = self.save_history.unwrap_or_else(read_save_history_env);
-        let save_entities = self.save_entities.unwrap_or_else(read_save_entities_env);
+        let cfg = app
+            .world()
+            .get_resource::<RawConfig>()
+            .map(|r| r.section::<ChunkStorageConfig>())
+            .unwrap_or_default();
+
+        let save_history = self.save_history.unwrap_or(cfg.save_history);
+        let save_entities = self.save_entities.unwrap_or(cfg.save_entities);
+
         info!(
-            "DiskStoragePlugin: dir = {}, save_history = {} (env {} = {:?}), save_entities = {} (env {} = {:?})",
-            self.dir.display(),
+            dir = %self.dir.display(),
             save_history,
-            SAVE_HISTORY_ENV,
-            std::env::var(SAVE_HISTORY_ENV).ok(),
             save_entities,
-            SAVE_ENTITIES_ENV,
-            std::env::var(SAVE_ENTITIES_ENV).ok(),
+            "DiskStoragePlugin initialised"
         );
 
         let (tx, rx) = crossbeam_channel::unbounded::<ChunkResponse>();
@@ -153,23 +164,4 @@ fn snapshot_registry_into_provider(
     mut provider: ResMut<DiskChunkProvider>,
 ) {
     provider.set_registry(registry.clone());
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_save_history_value;
-
-    #[test]
-    fn parse_truthy_values() {
-        for v in ["1", "true", "TRUE", " yes ", "on", "Yes", "On"] {
-            assert!(parse_save_history_value(v), "expected truthy: {v:?}");
-        }
-    }
-
-    #[test]
-    fn parse_falsy_values() {
-        for v in ["", "0", "false", "no", "off", "anything", "2"] {
-            assert!(!parse_save_history_value(v), "expected falsy: {v:?}");
-        }
-    }
 }

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use dd40_character_gui::plugin::CharacterGuiPlugin;
 use dd40_character_interaction::CharacterInteractionPlugin;
+use dd40_config::ConfigPlugin;
 use dd40_core::{common::log_plugin, plugin::CorePlugin};
 use dd40_debug_ui::DebugUiPlugin;
 use dd40_gui::plugin::GuiPlugin;
@@ -29,6 +30,7 @@ fn main() {
             })
             .set(log_plugin()),
     )
+    .add_plugins(ConfigPlugin)
     .add_plugins((
         CorePlugin,
         PhysicsPlugin,

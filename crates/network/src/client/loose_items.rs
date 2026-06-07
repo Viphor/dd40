@@ -7,15 +7,21 @@
 //! interpolated position into `Transform.translation` every frame.
 
 use bevy::prelude::*;
+
 use dd40_loose_item_core::LooseItem;
 use lightyear::prelude::Interpolated;
 
 use crate::protocol::LooseItemPosition;
 
 /// Ensures every interpolated loose-item entity has a [`Transform`] +
-/// [`GlobalTransform`] + [`Visibility`] so renderers can hang children
-/// off it.  Lightyear only replicates the components we register, so the
-/// transform stack is not present by default on the interpolated copy.
+/// [`GlobalTransform`] so renderers can hang children off it via the
+/// transform hierarchy.  Lightyear only replicates the components we
+/// register, so the transform stack is not present by default on the
+/// interpolated copy.
+///
+/// Visibility is intentionally omitted here — it belongs to the render
+/// layer, not to networking.  `dd40_loose_item_render` (or whatever
+/// renderer is active) is responsible for adding it.
 pub fn ensure_loose_item_transform(
     mut commands: Commands,
     new: Query<Entity, (With<LooseItem>, With<Interpolated>, Without<Transform>)>,
@@ -24,7 +30,6 @@ pub fn ensure_loose_item_transform(
         commands.entity(entity).insert((
             Transform::default(),
             GlobalTransform::default(),
-            Visibility::default(),
         ));
     }
 }
