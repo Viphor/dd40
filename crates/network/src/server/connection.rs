@@ -4,7 +4,7 @@ use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
-pub use lightyear::{link::RecvLinkConditioner, prelude::LinkConditionerConfig};
+use dd40_config::RawConfig;
 use lightyear::{
     netcode::NetcodeServer,
     prelude::{
@@ -13,60 +13,47 @@ use lightyear::{
     },
 };
 
-use dd40_config::RawConfig;
-
 use crate::{
     server::config::ServerConfig,
-    shared::connection::{SHARED_SETTINGS, SharedSettings, parse_private_key_from_str},
+    shared::connection::{SHARED_SETTINGS, parse_private_key_from_str},
 };
 
-#[derive(Component, Debug, Clone)]
+/// Marker component spawned by [`super::ServerNetworkPlugin`].
+///
+/// Its `on_add` hook reads [`ServerConfig`] (via [`RawConfig`]) and
+/// immediately replaces itself with the full set of lightyear server
+/// components needed to open a UDP socket on the configured port.
+#[derive(Component, Debug, Clone, Default)]
 #[component(on_add = DDServer::on_add)]
-pub struct DDServer {
-    /// TODO: Add support for conditioner
-    pub conditioner: Option<RecvLinkConditioner>,
-    pub port: u16,
-    pub shared: SharedSettings,
-}
+pub struct DDServer;
 
 impl DDServer {
-    pub fn new(port: u16) -> Self {
-        Self {
-            conditioner: None,
-            port,
-            shared: SHARED_SETTINGS,
-        }
-    }
-
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let entity = context.entity;
         world.commands().queue(move |world: &mut World| -> Result {
             // Read config before borrowing the entity mutably.
-            let private_key_from_config = world
+            let server_cfg = world
                 .get_resource::<RawConfig>()
-                .and_then(|r| {
-                    let key_str = r.section::<ServerConfig>().private_key;
-                    if key_str.is_empty() {
-                        None
-                    } else {
-                        parse_private_key_from_str(&key_str)
-                            .inspect_err(|e| warn!("invalid server.private_key in config: {e}"))
-                            .ok()
-                    }
-                });
+                .map(|r| r.section::<ServerConfig>())
+                .unwrap_or_default();
+
+            let private_key = if server_cfg.private_key.is_empty() {
+                SHARED_SETTINGS.private_key
+            } else {
+                parse_private_key_from_str(&server_cfg.private_key)
+                    .inspect_err(|e| warn!("invalid server.private_key in config: {e}"))
+                    .unwrap_or(SHARED_SETTINGS.private_key)
+            };
 
             let mut entity_mut = world.entity_mut(entity);
-            let settings = entity_mut.take::<DDServer>().unwrap();
-            entity_mut.insert((Name::from("Server"),));
-
-            let private_key = private_key_from_config.unwrap_or(settings.shared.private_key);
-
+            entity_mut.remove::<DDServer>();
+            entity_mut.insert(Name::from("Server"));
             entity_mut.insert(NetcodeServer::new(NetcodeConfig {
-                protocol_id: settings.shared.protocol_id,
+                protocol_id: SHARED_SETTINGS.protocol_id,
                 private_key,
                 ..Default::default()
             }));
-            let server_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), settings.port);
+            let server_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), server_cfg.port);
             entity_mut.insert((LocalAddr(server_addr), ServerUdpIo::default()));
 
             Ok(())

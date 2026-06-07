@@ -34,11 +34,13 @@
 //!
 //! ```rust,no_run
 //! use bevy::prelude::*;
-//! use dd40_network::*;
+//! use dd40_config::ConfigPlugin;
+//! use dd40_network::ServerNetworkPlugin;
 //!
 //! App::new()
 //!     .add_plugins(MinimalPlugins)
-//!     .add_plugins(ServerNetworkPlugin(DDServer::new(SERVER_PORT)))
+//!     .add_plugins(ConfigPlugin)          // must come first
+//!     .add_plugins(ServerNetworkPlugin)   // reads port/key from config
 //!     .run();
 //! ```
 //!
@@ -79,7 +81,7 @@ pub use protocol::{
     NetworkCharacter, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage, PlayerPosition,
     PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
 };
-pub use shared::connection::{CLIENT_PORT, SERVER_ADDR, SERVER_PORT};
+pub use shared::connection::SERVER_PORT;
 
 #[cfg(feature = "client")]
 pub use client::{

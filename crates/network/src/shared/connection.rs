@@ -1,24 +1,25 @@
-use core::net::{IpAddr, Ipv4Addr, SocketAddr};
 use lightyear::netcode::PRIVATE_KEY_BYTES;
 
+/// Default server port — used by [`crate::server::config::ServerConfig`] and
+/// [`crate::client::config::ClientConfig`] as their compile-time fallback.
 pub const SERVER_PORT: u16 = 6969;
-pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SERVER_PORT);
-/// 0 means that the OS will assign any available port
-pub const CLIENT_PORT: u16 = 0;
+
+/// Shared protocol/authentication settings used by both the client and server
+/// [`on_add`](bevy::ecs::lifecycle::HookContext) hooks.
+///
+/// These values must match between client and server for a connection to
+/// succeed.  Change them here to isolate your deployment from others running
+/// the same protocol version.
 pub const SHARED_SETTINGS: SharedSettings = SharedSettings {
     protocol_id: 0,
-    private_key: [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
-    ],
+    private_key: [0u8; 32],
 };
 
 #[derive(Copy, Clone, Debug)]
 pub struct SharedSettings {
-    /// An id to identify the protocol version
+    /// An id to identify the protocol version.
     pub protocol_id: u64,
-
-    /// a 32-byte array to authenticate via the Netcode.io protocol
+    /// 32-byte key used by the Netcode.io handshake.
     pub private_key: [u8; 32],
 }
 

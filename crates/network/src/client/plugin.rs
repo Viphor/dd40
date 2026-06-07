@@ -18,7 +18,6 @@ use crate::{
     },
     protocol::*,
     shared::{
-        connection::{CLIENT_PORT, SERVER_ADDR},
         constants::tick_duration,
     },
 };
@@ -58,7 +57,7 @@ impl Plugin for ClientNetworkPlugin {
 
         let _client = app
             .world_mut()
-            .spawn(DDClient::new(CLIENT_PORT, SERVER_ADDR))
+            .spawn(DDClient)
             .id();
 
         // Default timeout resource — can be overridden after plugin insertion.

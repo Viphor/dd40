@@ -1,12 +1,13 @@
-use core::net::{Ipv4Addr, SocketAddr};
+use core::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
+use dd40_config::RawConfig;
 use dd40_core::prelude::{LoadingTracker, RequestChunk};
 use lightyear::{
-    link::Link,
+    link::{Link, RecvLinkConditioner},
     netcode::NetcodeClient,
     prelude::{
         Authentication, Client, Connect, Connected, InputTimelineConfig, LocalAddr,
@@ -14,46 +15,56 @@ use lightyear::{
         client::{InputDelayConfig, NetcodeConfig},
     },
 };
-pub use lightyear::{link::RecvLinkConditioner, prelude::LinkConditionerConfig};
 
 use crate::{
-    client::loading::register_spawn_location_loading_item,
-    shared::connection::{SHARED_SETTINGS, SharedSettings},
+    client::{config::ClientConfig, loading::register_spawn_location_loading_item},
+    protocol::*,
+    shared::connection::SHARED_SETTINGS,
 };
-use crate::{client::loading::remove_connection_loading_item, protocol::*};
+use crate::client::loading::remove_connection_loading_item;
 
-#[derive(Component, Debug, Clone)]
+/// Marker component spawned by [`super::plugin::ClientNetworkPlugin`].
+///
+/// Its `on_add` hook reads [`ClientConfig`] (via [`RawConfig`]) and
+/// immediately replaces itself with the full set of lightyear client
+/// components needed to open a UDP connection to the configured server.
+#[derive(Component, Debug, Clone, Default)]
 #[component(on_add = DDClient::on_add)]
-pub struct DDClient {
-    pub client_id: u64,
-    pub client_port: u16,
-    pub server_addr: SocketAddr,
-    pub conditioner: Option<RecvLinkConditioner>,
-    pub shared: SharedSettings,
-}
+pub struct DDClient;
 
 impl DDClient {
-    pub fn new(client_port: u16, server_addr: SocketAddr) -> Self {
-        Self {
-            client_id: rand::random(),
-            client_port,
-            server_addr,
-            conditioner: None,
-            shared: SHARED_SETTINGS,
-        }
-    }
-
     fn on_add(mut world: DeferredWorld, context: HookContext) {
         let entity = context.entity;
         world.commands().queue(move |world: &mut World| -> Result {
+            // Read config before taking the mutable entity borrow.
+            let client_cfg = world
+                .get_resource::<RawConfig>()
+                .map(|r| r.section::<ClientConfig>())
+                .unwrap_or_default();
+
+            let server_addr = SocketAddr::new(
+                client_cfg
+                    .server_host
+                    .parse::<IpAddr>()
+                    .unwrap_or_else(|e| {
+                        warn!(
+                            "invalid client.server_host {:?}: {e} — falling back to 127.0.0.1",
+                            client_cfg.server_host
+                        );
+                        Ipv4Addr::LOCALHOST.into()
+                    }),
+                client_cfg.server_port,
+            );
+            let client_id: u64 = rand::random();
+            let client_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0);
+
             let mut entity_mut = world.entity_mut(entity);
-            let settings = entity_mut.take::<DDClient>().unwrap();
-            let client_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), settings.client_port);
+            entity_mut.remove::<DDClient>();
             entity_mut.insert((
                 Client::default(),
-                Link::new(settings.conditioner.clone()),
+                Link::new(None::<RecvLinkConditioner>),
                 LocalAddr(client_addr),
-                PeerAddr(settings.server_addr),
+                PeerAddr(server_addr),
                 ReplicationReceiver::default(),
                 PredictionManager::default(),
                 // At 30 Hz one tick ≈ 33 ms.  Allow up to 1 tick of input delay
@@ -69,10 +80,10 @@ impl DDClient {
             ));
 
             let auth = Authentication::Manual {
-                server_addr: settings.server_addr,
-                client_id: settings.client_id,
-                private_key: settings.shared.private_key,
-                protocol_id: settings.shared.protocol_id,
+                server_addr,
+                client_id,
+                private_key: SHARED_SETTINGS.private_key,
+                protocol_id: SHARED_SETTINGS.protocol_id,
             };
             let netcode_config = NetcodeConfig {
                 client_timeout_secs: 3,
@@ -80,7 +91,6 @@ impl DDClient {
                 ..default()
             };
             entity_mut.insert(NetcodeClient::new(auth, netcode_config)?);
-
             entity_mut.insert(UdpIo::default());
 
             Ok(())

@@ -34,12 +34,11 @@ pub mod user;
 
 /// Plugin that sets up server-side networking.
 ///
-/// This plugin handles:
-/// - Accepting client connections
-/// - Processing inputs from clients
-/// - Authoritative game simulation
-/// - Broadcasting state changes to clients
-pub struct ServerNetworkPlugin(pub DDServer);
+/// Configuration (port, private key, render distance) is read from
+/// [`dd40_config::RawConfig`] at build time, so [`dd40_config::ConfigPlugin`]
+/// must be added before this plugin.
+#[derive(Default)]
+pub struct ServerNetworkPlugin;
 
 impl Plugin for ServerNetworkPlugin {
     fn build(&self, app: &mut App) {
@@ -55,7 +54,7 @@ impl Plugin for ServerNetworkPlugin {
         // Add character replication plugin (spawn, input→controller, state sync)
         app.add_plugins(ServerCharacterPlugin);
 
-        let _server = app.world_mut().spawn(self.0.clone()).id();
+        let _server = app.world_mut().spawn(DDServer).id();
         app.add_systems(Startup, start);
 
         // Read render distance from config; fall back to the compiled-in default.
@@ -97,8 +96,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
         app.add_plugins(CorePlugin);
-        app.add_plugins(ServerNetworkPlugin(DDServer::new(6969)));
-        // Plugin should add successfully
+        app.add_plugins(ServerNetworkPlugin);
         assert!(app.is_plugin_added::<ServerNetworkPlugin>());
     }
 }

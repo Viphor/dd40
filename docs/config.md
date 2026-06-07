@@ -40,6 +40,10 @@ render_distance = 8
 save_history  = false
 save_entities = false
 
+[client]
+server_host = "127.0.0.1"
+server_port = 6969
+
 [texture_pack]
 search_paths = []   # extra pack-root directories, appended after programmatic paths
 ```
@@ -152,9 +156,10 @@ fn on_settings_saved(disk: Res<ConfigDisk>, cfg: Res<MyModConfig>) {
 | Crate | Config struct | `SECTION` | TOML key | Env var prefix |
 |---|---|---|---|---|
 | `dd40_network` | `NetworkConfig` | `"network"` | `[network]` | `DD40_NETWORK__` |
+| `dd40_network` | `ServerConfig` | `"server"` | `[server]` | `DD40_SERVER__` |
+| `dd40_network` | `ClientConfig` | `"client"` | `[client]` | `DD40_CLIENT__` |
 | `dd40_chunk_storage` | `ChunkStorageConfig` | `"chunk_storage"` | `[chunk_storage]` | `DD40_CHUNK_STORAGE__` |
 | `dd40_texture_pack` | `TexturePackTomlConfig` | `"texture_pack"` | `[texture_pack]` | `DD40_TEXTURE_PACK__` |
-| `dd40_server` binary | `ServerConfig` | `"server"` | `[server]` | `DD40_SERVER__` |
 
 Use the crate name segment as the section name (replacing hyphens/double-underscores
 with single underscores). This keeps env vars and TOML keys consistent and
