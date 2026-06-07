@@ -81,6 +81,7 @@ pub use protocol::{
     NetworkCharacter, PlayerInput, PlayerJoinedMessage, PlayerLeftMessage, PlayerPosition,
     PlayerRotation, PlayerSpawnLocation, PlayerSpeed, ProtocolPlugin,
 };
+pub use shared::config::NetworkConfig;
 pub use shared::connection::SERVER_PORT;
 
 #[cfg(feature = "client")]

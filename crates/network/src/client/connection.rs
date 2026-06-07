@@ -17,9 +17,9 @@ use lightyear::{
 };
 
 use crate::{
-    client::{config::ClientConfig, loading::register_spawn_location_loading_item},
+    client::loading::register_spawn_location_loading_item,
     protocol::*,
-    shared::connection::SHARED_SETTINGS,
+    shared::{config::NetworkConfig, connection::SHARED_SETTINGS},
 };
 use crate::client::loading::remove_connection_loading_item;
 
@@ -37,23 +37,22 @@ impl DDClient {
         let entity = context.entity;
         world.commands().queue(move |world: &mut World| -> Result {
             // Read config before taking the mutable entity borrow.
-            let client_cfg = world
+            let cfg = world
                 .get_resource::<RawConfig>()
-                .map(|r| r.section::<ClientConfig>())
+                .map(|r| r.section::<NetworkConfig>())
                 .unwrap_or_default();
 
             let server_addr = SocketAddr::new(
-                client_cfg
-                    .server_host
+                cfg.host
                     .parse::<IpAddr>()
                     .unwrap_or_else(|e| {
                         warn!(
-                            "invalid client.server_host {:?}: {e} — falling back to 127.0.0.1",
-                            client_cfg.server_host
+                            "invalid network.host {:?}: {e} — falling back to 127.0.0.1",
+                            cfg.host
                         );
                         Ipv4Addr::LOCALHOST.into()
                     }),
-                client_cfg.server_port,
+                cfg.port,
             );
             let client_id: u64 = rand::random();
             let client_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0);

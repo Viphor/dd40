@@ -5,6 +5,8 @@ use dd40_core::chunk::ChunkAuthorityPlugin;
 use dd40_core::plugin::CorePlugin;
 use lightyear::prelude::server::ServerPlugins;
 
+use crate::shared::config::NetworkConfig;
+
 use crate::{
     protocol::*,
     server::{
@@ -14,7 +16,6 @@ use crate::{
         character::ServerCharacterPlugin,
         chunk_provider::{receive_chunk_requests, send_chunk_data},
         chunk_requests::{ChunkRequests, add_message_handlers},
-        config::NetworkConfig,
         connection::{DDServer, start},
         spawn::{PlayerLocations, WorldSpawnConfig},
     },
@@ -25,7 +26,6 @@ pub mod block_updates;
 pub mod character;
 pub mod chunk_provider;
 pub mod chunk_requests;
-pub mod config;
 pub mod connection;
 pub mod inventory;
 pub mod loose_items;

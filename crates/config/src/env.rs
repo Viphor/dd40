@@ -10,7 +10,7 @@ use bevy::prelude::*;
 /// equivalent. Each alias is logged at `warn!` once when applied.
 const LEGACY_ALIASES: &[(&str, &str, &str)] = &[
     // ("ENV_VAR_NAME", "section", "key")
-    ("DD40_PRIVATE_KEY", "server", "private_key"),
+    ("DD40_PRIVATE_KEY", "network", "private_key"),
 ];
 
 /// Apply all `DD40_*` env var overrides onto `table` (mutates in place).

@@ -13,9 +13,9 @@ use lightyear::{
     },
 };
 
-use crate::{
-    server::config::ServerConfig,
-    shared::connection::{SHARED_SETTINGS, parse_private_key_from_str},
+use crate::shared::{
+    config::NetworkConfig,
+    connection::{SHARED_SETTINGS, parse_private_key_from_str},
 };
 
 /// Marker component spawned by [`super::ServerNetworkPlugin`].
@@ -32,16 +32,16 @@ impl DDServer {
         let entity = context.entity;
         world.commands().queue(move |world: &mut World| -> Result {
             // Read config before borrowing the entity mutably.
-            let server_cfg = world
+            let cfg = world
                 .get_resource::<RawConfig>()
-                .map(|r| r.section::<ServerConfig>())
+                .map(|r| r.section::<NetworkConfig>())
                 .unwrap_or_default();
 
-            let private_key = if server_cfg.private_key.is_empty() {
+            let private_key = if cfg.private_key.is_empty() {
                 SHARED_SETTINGS.private_key
             } else {
-                parse_private_key_from_str(&server_cfg.private_key)
-                    .inspect_err(|e| warn!("invalid server.private_key in config: {e}"))
+                parse_private_key_from_str(&cfg.private_key)
+                    .inspect_err(|e| warn!("invalid network.private_key in config: {e}"))
                     .unwrap_or(SHARED_SETTINGS.private_key)
             };
 
@@ -53,7 +53,7 @@ impl DDServer {
                 private_key,
                 ..Default::default()
             }));
-            let server_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), server_cfg.port);
+            let server_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), cfg.port);
             entity_mut.insert((LocalAddr(server_addr), ServerUdpIo::default()));
 
             Ok(())

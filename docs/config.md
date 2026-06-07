@@ -29,20 +29,15 @@ that the binary can create). This is where [`save_config_section`] writes.
 ## Example `config.toml`
 
 ```toml
-[server]
-port = 6969
-private_key = ""
-
 [network]
-render_distance = 8
+host            = "127.0.0.1"  # client: server address to connect to
+port            = 6969          # server: listen port; client: connect port
+private_key     = ""            # Netcode.io auth key (32 comma-separated bytes)
+render_distance = 8             # server: chunk broadcast radius in chunks
 
 [chunk_storage]
 save_history  = false
 save_entities = false
-
-[client]
-server_host = "127.0.0.1"
-server_port = 6969
 
 [texture_pack]
 search_paths = []   # extra pack-root directories, appended after programmatic paths
@@ -68,6 +63,8 @@ corresponding TOML key. Values are auto-coerced:
 ### Examples
 
 ```bash
+DD40_NETWORK__HOST=192.168.1.10       # overrides [network] host
+DD40_NETWORK__PORT=7000               # overrides [network] port
 DD40_NETWORK__RENDER_DISTANCE=16      # overrides [network] render_distance
 DD40_CHUNK_STORAGE__SAVE_HISTORY=true
 DD40_CONFIG=/path/to/my-config.toml  # use a different config file entirely
@@ -77,7 +74,7 @@ DD40_CONFIG=/path/to/my-config.toml  # use a different config file entirely
 
 | Old env var | Canonical replacement |
 |---|---|
-| `DD40_PRIVATE_KEY` | `DD40_SERVER__PRIVATE_KEY` |
+| `DD40_PRIVATE_KEY` | `DD40_NETWORK__PRIVATE_KEY` |
 
 Using a legacy alias logs a `WARN` and still works.
 
@@ -156,8 +153,6 @@ fn on_settings_saved(disk: Res<ConfigDisk>, cfg: Res<MyModConfig>) {
 | Crate | Config struct | `SECTION` | TOML key | Env var prefix |
 |---|---|---|---|---|
 | `dd40_network` | `NetworkConfig` | `"network"` | `[network]` | `DD40_NETWORK__` |
-| `dd40_network` | `ServerConfig` | `"server"` | `[server]` | `DD40_SERVER__` |
-| `dd40_network` | `ClientConfig` | `"client"` | `[client]` | `DD40_CLIENT__` |
 | `dd40_chunk_storage` | `ChunkStorageConfig` | `"chunk_storage"` | `[chunk_storage]` | `DD40_CHUNK_STORAGE__` |
 | `dd40_texture_pack` | `TexturePackTomlConfig` | `"texture_pack"` | `[texture_pack]` | `DD40_TEXTURE_PACK__` |
 
