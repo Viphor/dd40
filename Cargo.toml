@@ -33,6 +33,7 @@ members = [
     "crates/texture_pack",
     "crates/config",
     "crates/identity_core",
+    "crates/identity",
 ]
 resolver = "3"
 
@@ -88,3 +89,4 @@ dd40_texture_core = { path = "crates/texture_core" }
 dd40_texture_pack = { path = "crates/texture_pack" }
 dd40_config = { path = "crates/config" }
 dd40_identity_core = { path = "crates/identity_core" }
+dd40_identity      = { path = "crates/identity" }
