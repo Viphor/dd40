@@ -10,6 +10,7 @@ use dd40_integration_loose_item_pickup::LooseItemPickupPlugin;
 use dd40_inventory::{InventoryActiveItemPlugin, InventoryRulesPlugin};
 use dd40_loose_items::LooseItemsPlugin;
 use dd40_loot::LootPlugin;
+use dd40_identity::IdentityServerPlugin;
 use dd40_network::{ServerInventoryNetworkPlugin, ServerNetworkPlugin};
 use dd40_physics::PhysicsPlugin;
 use dd40_vanilla_palette::{VanillaBlocks, VanillaPalettePlugin};
@@ -89,6 +90,8 @@ fn main() {
             ServerInventoryNetworkPlugin,
             ServerNetworkPlugin,
         ))
+        // Identity plugin is separate to stay within Bevy's tuple plugin limit.
+        .add_plugins(IdentityServerPlugin::new("world_data/players"))
         .add_systems(Update, server_tick)
         .run();
 }

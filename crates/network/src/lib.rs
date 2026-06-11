@@ -94,7 +94,7 @@ pub use server::{
     ServerNetworkPlugin,
     connection::DDServer,
     inventory::ServerInventoryNetworkPlugin,
-    spawn::{PlayerLocations, WorldSpawnConfig},
+    spawn::WorldSpawnConfig,
 };
 
 /// Helper functions for coordinate conversions

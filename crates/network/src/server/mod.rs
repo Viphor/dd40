@@ -19,7 +19,7 @@ use crate::{
         chunk_provider::{receive_chunk_requests, send_chunk_data},
         chunk_requests::{ChunkRequests, add_message_handlers},
         connection::{DDServer, start},
-        spawn::{PlayerLocations, WorldSpawnConfig},
+        spawn::WorldSpawnConfig,
     },
     shared::constants::tick_duration,
 };
@@ -33,7 +33,6 @@ pub mod connection;
 pub mod inventory;
 pub mod loose_items;
 pub mod spawn;
-pub mod user;
 
 /// Plugin that sets up server-side networking.
 ///
@@ -76,7 +75,6 @@ impl Plugin for ServerNetworkPlugin {
 
         // Initialise spawn-handshake resources.
         app.init_resource::<WorldSpawnConfig>()
-            .init_resource::<PlayerLocations>()
             .insert_resource(NetworkRenderDistance(render_distance));
 
         // Add communication systems

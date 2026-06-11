@@ -9,6 +9,7 @@ use dd40_integration_character_physics::IntegrationCharacterPhysicsPlugin;
 use dd40_inventory::{InventoryActiveItemPlugin, InventoryPlugin};
 use dd40_inventory_gui::InventoryGuiPlugin;
 use dd40_loose_item_render::LooseItemRenderPlugin;
+use dd40_identity::IdentityClientPlugin;
 use dd40_network::{ClientInventoryNetworkPlugin, ClientNetworkPlugin};
 use dd40_physics::PhysicsPlugin;
 use dd40_player_input::PlayerInputPlugin;
@@ -39,6 +40,7 @@ fn main() {
         PlayerInputPlugin,
         CharacterInteractionPlugin,
         DebugUiPlugin,
+        IdentityClientPlugin,
         ClientNetworkPlugin,
         ClientInventoryNetworkPlugin,
         RendererPlugin,
