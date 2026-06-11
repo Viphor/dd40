@@ -5,27 +5,30 @@
 
 use bevy::prelude::*;
 use dd40_character_core::{builder::CharacterBuilder, controller::CharacterInput};
+use dd40_identity_core::{Authenticated, PlayerIdentity, PlayerSpawnPosition};
 use dd40_inventory_core::character_ext::CharacterInventoryExt;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
-use lightyear::prelude::{Connected, RemoteId, input::native::ActionState, server::ClientOf};
+use lightyear::prelude::{RemoteId, input::native::ActionState, server::ClientOf};
 
 use crate::character_ext::CharacterServerNetworkExt;
 use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
-use crate::server::spawn::{PlayerLocations, WorldSpawnConfig};
-use crate::server::user::get_user;
+use crate::server::spawn::WorldSpawnConfig;
 use crate::shared::character::apply_input_to_controller;
 
 // ============================================================================
 // OBSERVERS
 // ============================================================================
 
-/// Spawns a replicated character entity whenever a client finishes its
-/// lightyear handshake.
+/// Spawns a replicated character entity when a client has been authenticated.
 ///
-/// The spawn position is resolved from [`PlayerLocations`] (the player's last
-/// known position from a previous session) falling back to
-/// [`WorldSpawnConfig::default_spawn`] for first-time connections.
+/// Triggers on [`Authenticated`] (added by `dd40_identity` after JWT
+/// verification), so characters only spawn for players whose identity has been
+/// confirmed.
+///
+/// Spawn position comes from [`PlayerSpawnPosition`] on the connection entity
+/// (set by `dd40_identity` when it loads the player's save file). Falls back
+/// to [`WorldSpawnConfig::default_spawn`] for first-time connections.
 ///
 /// The entity is tagged for:
 /// - Full replication to all clients ([`Replicate`]).
@@ -36,39 +39,30 @@ use crate::shared::character::apply_input_to_controller;
 /// - Automatic despawn when the owning connection entity is removed
 ///   ([`ControlledBy`]).
 fn server_spawn_character(
-    trigger: On<Add, Connected>,
+    trigger: On<Add, Authenticated>,
     mut commands: Commands,
-    client_query: Query<&RemoteId, With<ClientOf>>,
+    client_query: Query<(&RemoteId, &PlayerIdentity, Option<&PlayerSpawnPosition>), With<ClientOf>>,
     spawn_config: Res<WorldSpawnConfig>,
-    player_locations: Res<PlayerLocations>,
 ) {
-    let Ok(remote) = client_query.get(trigger.entity) else {
+    let Ok((remote, identity, maybe_pos)) = client_query.get(trigger.entity) else {
         warn!(
-            "Connected entity {:?} has no RemoteId — skipping character spawn",
+            "Authenticated entity {:?} missing RemoteId/PlayerIdentity — skipping character spawn",
             trigger.entity
         );
         return;
     };
     let client_id = remote.0;
 
-    let Some(user) = get_user(client_id.to_bits()) else {
-        warn!(
-            "No user found for client {:?} — skipping character spawn",
-            client_id
-        );
-        return;
-    };
-
-    let spawn_pos = player_locations
-        .get(client_id)
+    let spawn_pos = maybe_pos
+        .map(|p| p.0)
         .unwrap_or(spawn_config.default_spawn);
 
     info!(
-        "Spawning network character for client {:?} at {:?}",
-        client_id, spawn_pos
+        "Spawning network character for {} ({}) at {:?}",
+        identity.display_name, identity.sub, spawn_pos
     );
 
-    CharacterBuilder::new(user.name)
+    CharacterBuilder::new(identity.display_name.clone())
         .transform(Transform::from_translation(spawn_pos))
         .with_physics()
         .with_controller()

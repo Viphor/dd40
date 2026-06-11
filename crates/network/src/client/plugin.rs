@@ -5,6 +5,7 @@ use lightyear::prelude::client::ClientPlugins;
 
 use crate::{
     client::{
+        auth::send_auth_token,
         character::ClientCharacterPlugin,
         chunk_provider::{
             apply_chunk_rejections, apply_chunk_updates, receive_chunk_data, send_chunk_requests,
@@ -17,9 +18,7 @@ use crate::{
         },
     },
     protocol::*,
-    shared::{
-        constants::tick_duration,
-    },
+    shared::constants::tick_duration,
 };
 
 /// Plugin that sets up client-side networking.
@@ -71,6 +70,9 @@ impl Plugin for ClientNetworkPlugin {
         // Clear the server-connection gate as soon as the lightyear handshake
         // completes and attach the required message components.
         app.add_observer(on_server_connected);
+
+        // Send the JWT to the server once (fires the frame the MessageSender is added).
+        app.add_systems(PreUpdate, send_auth_token);
 
         // Communication systems.
         app.add_systems(PreUpdate, send_chunk_requests);

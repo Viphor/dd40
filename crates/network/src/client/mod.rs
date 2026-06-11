@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod character;
 pub mod chunk_provider;
 pub mod connection;

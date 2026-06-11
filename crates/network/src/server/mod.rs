@@ -3,6 +3,7 @@ use dd40_character_core::plugin::CharacterCorePlugin;
 use dd40_config::RawConfig;
 use dd40_core::chunk::ChunkAuthorityPlugin;
 use dd40_core::plugin::CorePlugin;
+use dd40_identity_core::IdentityCorePlugin;
 use lightyear::prelude::server::ServerPlugins;
 
 use crate::shared::config::NetworkConfig;
@@ -10,6 +11,7 @@ use crate::shared::config::NetworkConfig;
 use crate::{
     protocol::*,
     server::{
+        auth_bridge::bridge_auth_tokens,
         block_updates::{
             NetworkRenderDistance, broadcast_chunk_rejections, broadcast_chunk_updates,
         },
@@ -22,6 +24,7 @@ use crate::{
     shared::constants::tick_duration,
 };
 
+pub mod auth_bridge;
 pub mod block_updates;
 pub mod character;
 pub mod chunk_provider;
@@ -42,7 +45,13 @@ pub struct ServerNetworkPlugin;
 
 impl Plugin for ServerNetworkPlugin {
     fn build(&self, app: &mut App) {
-        dd40_core::ensure_plugins!(app, CorePlugin, CharacterCorePlugin, ChunkAuthorityPlugin);
+        dd40_core::ensure_plugins!(
+            app,
+            CorePlugin,
+            CharacterCorePlugin,
+            ChunkAuthorityPlugin,
+            IdentityCorePlugin
+        );
 
         app.add_plugins(ServerPlugins {
             tick_duration: tick_duration(),
@@ -73,6 +82,7 @@ impl Plugin for ServerNetworkPlugin {
         // Add communication systems
         app.register_type::<ChunkRequests>()
             .add_observer(add_message_handlers)
+            .add_systems(Update, bridge_auth_tokens)
             .add_systems(Update, receive_chunk_requests)
             .add_systems(Update, send_chunk_data)
             .add_systems(Update, broadcast_chunk_updates)

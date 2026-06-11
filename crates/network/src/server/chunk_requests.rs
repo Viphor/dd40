@@ -2,13 +2,14 @@ use std::time::Duration;
 
 use bevy::{platform::collections::HashSet, prelude::*};
 use dd40_core::prelude::*;
+use dd40_identity_core::AwaitingAuth;
 use lightyear::prelude::{
     LinkOf, MessageReceiver, MessageSender, ReplicationSender, SendUpdatesMode,
 };
 
 use crate::protocol::{
-    ChunkRejection, ChunkSnapshot, ChunkUpdate, NetSlotInteraction, PlayerSpawnLocation,
-    RequestSpawn,
+    AuthToken, ChunkRejection, ChunkSnapshot, ChunkUpdate, NetSlotInteraction,
+    PlayerSpawnLocation, RequestSpawn,
 };
 
 /// Tracks which chunk positions have already been requested for a given client
@@ -43,9 +44,11 @@ pub(crate) fn add_message_handlers(trigger: On<Add, LinkOf>, mut commands: Comma
         MessageSender::<ChunkUpdate>::default(),
         MessageSender::<ChunkRejection>::default(),
         MessageSender::<PlayerSpawnLocation>::default(),
+        MessageReceiver::<AuthToken>::default(),
         MessageReceiver::<RequestSpawn>::default(),
         MessageReceiver::<RequestChunk>::default(),
         MessageReceiver::<NetSlotInteraction>::default(),
+        AwaitingAuth::default(),
         ChunkRequests::default(),
         Name::new("Client"),
     ));

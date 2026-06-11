@@ -100,6 +100,21 @@ impl bevy::ecs::entity::MapEntities for PlayerInput {
 // MESSAGES
 // ============================================================================
 
+/// JWT authentication token sent by the client immediately after connecting.
+///
+/// The server verifies this token via the configured OIDC JWKS endpoint.
+/// Clients that do not send a valid token within `auth.auth_timeout_secs`
+/// are disconnected.
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+pub struct AuthToken {
+    /// Raw JWT string read from the file at `auth.token_file`.
+    pub token: String,
+}
+
+impl bevy::ecs::entity::MapEntities for AuthToken {
+    fn map_entities<M: bevy::ecs::entity::EntityMapper>(&mut self, _mapper: &mut M) {}
+}
+
 /// Request a spawn of the player with the given client id. The server responds with a [`PlayerSpawnLocation`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestSpawn(pub u64);
@@ -446,6 +461,9 @@ impl Plugin for ProtocolPlugin {
 
         // Register messages with directions
         // Client -> Server
+        app.register_message::<AuthToken>()
+            .add_direction(NetworkDirection::ClientToServer);
+
         app.register_message::<RequestChunk>()
             .add_direction(NetworkDirection::ClientToServer);
 
