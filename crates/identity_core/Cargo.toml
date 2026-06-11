@@ -1,0 +1,15 @@
+[package]
+name = "dd40_identity_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+bevy       = { workspace = true, default-features = false, features = ["bevy_log"] }
+dd40_config = { workspace = true }
+dd40_core   = { workspace = true }
+serde      = { version = "1.0", features = ["derive"] }
+toml       = "0.8"
+
+[lints]
+workspace = true

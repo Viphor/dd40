@@ -2859,6 +2859,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_identity_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dd40_config",
+ "dd40_core",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "dd40_input_core"
 version = "0.1.0"
 dependencies = [
