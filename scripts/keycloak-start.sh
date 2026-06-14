@@ -44,8 +44,8 @@ wait_for_keycloak() {
     local tries=0
     until curl -sf "http://localhost:${PORT}/health/ready" >/dev/null 2>&1; do
         tries=$((tries + 1))
-        if [ "$tries" -ge 60 ]; then
-            err "Keycloak did not become ready after 60 seconds"
+        if [ "$tries" -ge 120 ]; then
+            err "Keycloak did not become ready after 120 seconds"
             exit 1
         fi
         sleep 1
@@ -54,14 +54,17 @@ wait_for_keycloak() {
 }
 
 admin_token() {
-    curl -sf \
+    local response
+    response=$(curl -sf \
         -d "client_id=admin-cli" \
         -d "username=${ADMIN_USER}" \
         -d "password=${ADMIN_PASS}" \
         -d "grant_type=password" \
-        "http://localhost:${PORT}/realms/master/protocol/openid-connect/token" \
-        | grep -o '"access_token":"[^"]*"' \
-        | cut -d'"' -f4
+        "http://localhost:${PORT}/realms/master/protocol/openid-connect/token")
+    # awk instead of grep|cut: avoids set -e triggering on a non-matching grep.
+    echo "$response" | awk -F'"' '
+        { for (i=1; i<=NF; i++) { if ($i == "access_token") { print $(i+2); exit } } }
+    '
 }
 
 kcadm() {
