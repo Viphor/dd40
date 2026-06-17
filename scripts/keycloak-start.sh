@@ -42,10 +42,10 @@ log "Using container runtime: ${RUNTIME}"
 wait_for_keycloak() {
     log "Waiting for Keycloak to become ready..."
     local tries=0
-    until curl -sf "http://localhost:${PORT}/health/ready" >/dev/null 2>&1; do
+    until curl -sf "http://localhost:${PORT}/realms/master" >/dev/null 2>&1; do
         tries=$((tries + 1))
-        if [ "$tries" -ge 120 ]; then
-            err "Keycloak did not become ready after 120 seconds"
+        if [ "$tries" -ge 60 ]; then
+            err "Keycloak did not become ready after 60 seconds"
             exit 1
         fi
         sleep 1
@@ -102,7 +102,7 @@ log "Starting Keycloak on port ${PORT} ..."
     -p "${PORT}:8080" \
     -e KC_BOOTSTRAP_ADMIN_USERNAME="${ADMIN_USER}" \
     -e KC_BOOTSTRAP_ADMIN_PASSWORD="${ADMIN_PASS}" \
-    "${IMAGE}" start-dev
+    "${IMAGE}" start-dev --health-enabled=true
 
 wait_for_keycloak
 
@@ -132,6 +132,8 @@ kcadm "$TOKEN" -X POST \
     "http://localhost:${PORT}/admin/realms/${REALM}/users" \
     -d "{
         \"username\":\"${TEST_USER}\",
+        \"email\":\"${TEST_USER}@example.com\",
+        \"emailVerified\":true,
         \"enabled\":true,
         \"firstName\":\"Test\",
         \"lastName\":\"User\",
