@@ -87,9 +87,11 @@ pub mod env;
 pub mod load;
 pub mod plugin;
 pub mod raw;
+pub mod register;
 pub mod section;
 
 pub use disk::{ConfigDisk, ConfigSaveError, save_config_section};
 pub use plugin::ConfigPlugin;
 pub use raw::RawConfig;
+pub use register::RegisterConfig;
 pub use section::ConfigSection;
