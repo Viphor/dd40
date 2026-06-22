@@ -24,6 +24,8 @@ target
 # Serena
 .serena
 
+.headroom
+
 # Server runtime data (chunks + entity sidecars).
 /crates/server/world_data/
 /world_data/

@@ -8,8 +8,9 @@ use dd40_identity_core::{
     PlayerIdentity, PlayerSaveState, PlayerSpawnPosition,
 };
 use dd40_physics_core::prelude::PhysicsPosition;
-use lightyear::prelude::Disconnect;
 use lightyear::prelude::server::ClientOf;
+use lightyear_connection::client::Disconnecting;
+use lightyear_connection::client_of::SkipNetcode;
 
 use crate::access_list;
 use crate::jwt::{self, JwksCache};
@@ -115,7 +116,10 @@ fn verify_auth_tokens(
 
                 if !access_list::is_allowed(&sub, &allow_set, &deny_set) {
                     warn!(sub = %sub, "connection denied by access list");
-                    commands.trigger(Disconnect { entity });
+                    commands
+                        .entity(entity)
+                        .remove::<AwaitingAuth>()
+                        .insert((Disconnecting, SkipNetcode));
                     continue;
                 }
 
@@ -128,7 +132,10 @@ fn verify_auth_tokens(
             }
             Err(e) => {
                 warn!(error = %e, "JWT verification failed — disconnecting client");
-                commands.trigger(Disconnect { entity });
+                commands
+                    .entity(entity)
+                    .remove::<AwaitingAuth>()
+                    .insert((Disconnecting, SkipNetcode));
             }
         }
     }
@@ -136,7 +143,10 @@ fn verify_auth_tokens(
 
 fn timeout_unauthenticated(
     mut commands: Commands,
-    waiting: Query<(Entity, &AwaitingAuth)>,
+    // Only handle entities that have completed the netcode handshake (ClientOf).
+    // Pre-handshake LinkOf-only entities are timed out by the netcode layer itself
+    // (client_timeout_secs = 3 s) before our auth timeout can fire — no action needed.
+    waiting: Query<(Entity, &AwaitingAuth), With<ClientOf>>,
     config: Res<AuthConfig>,
 ) {
     let timeout = std::time::Duration::from_secs(config.auth_timeout_secs);
@@ -146,9 +156,19 @@ fn timeout_unauthenticated(
             warn!(
                 entity = ?entity,
                 timeout_secs = config.auth_timeout_secs,
-                "auth timeout — disconnecting unauthenticated client"
+                "auth timeout — dropping unauthenticated client"
             );
-            commands.trigger(Disconnect { entity });
+            // SkipNetcode removes the entity from both the netcode send and receive
+            // queries so the server stops sending keepalives immediately.  The client
+            // detects the missing keepalives after client_timeout_secs (~3 s) and
+            // enters ConnectionTimedOut, which stops its own keepalive traffic.  The
+            // netcode server's update_state then sees the silent link and fires
+            // on_disconnect, which lets lightyear despawn the entity cleanly — no
+            // manual despawn that would race with lightyear's connection-cache cleanup.
+            commands
+                .entity(entity)
+                .remove::<AwaitingAuth>()
+                .insert((Disconnecting, SkipNetcode));
         }
     }
 }

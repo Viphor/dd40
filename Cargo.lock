@@ -2871,6 +2871,8 @@ dependencies = [
  "dd40_physics_core",
  "jsonwebtoken",
  "lightyear",
+ "lightyear_connection",
+ "lightyear_link",
  "serde",
  "serde_json",
  "tempfile",

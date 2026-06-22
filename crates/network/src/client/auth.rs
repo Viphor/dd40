@@ -15,10 +15,7 @@ pub(crate) fn send_auth_token(
     config: Option<Res<AuthConfig>>,
 ) {
     for mut sender in &mut senders {
-        let token_file = config
-            .as_ref()
-            .map(|c| c.token_file.as_str())
-            .unwrap_or("");
+        let token_file = config.as_ref().map(|c| c.token_file.as_str()).unwrap_or("");
 
         let token = if token_file.is_empty() {
             warn!("auth.token_file is not configured — sending empty auth token");
@@ -31,6 +28,7 @@ pub(crate) fn send_auth_token(
                     if trimmed.is_empty() {
                         warn!(path = %token_file, "auth token file is empty");
                     }
+                    info!(path = %token_file, "read auth token from file");
                     trimmed
                 }
                 Err(e) => {

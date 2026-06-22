@@ -6,17 +6,15 @@ use lightyear::prelude::MessageReceiver;
 use crate::protocol::AuthToken;
 
 /// Drains incoming [`AuthToken`] lightyear messages from connection entities
-/// and re-emits them as local [`AuthTokenReceived`] Bevy messages.
-///
-/// This is the transport bridge: it decouples `dd40_identity` (which does JWT
-/// verification) from the lightyear transport layer so neither crate needs to
-/// depend on the other.
+/// and re-emits them as local [`AuthTokenReceived`] Bevy messages for
+/// `dd40_identity` to verify.
 pub(crate) fn bridge_auth_tokens(
     mut connections: Query<(Entity, &mut MessageReceiver<AuthToken>), With<AwaitingAuth>>,
     mut writer: MessageWriter<AuthTokenReceived>,
 ) {
     for (entity, mut receiver) in &mut connections {
         for msg in receiver.receive() {
+            info!(?entity, "auth bridge: forwarding auth token to verifier");
             writer.write(AuthTokenReceived {
                 connection_entity: entity,
                 token: msg.token.clone(),

@@ -120,7 +120,6 @@ pub fn on_server_connected(
     let entity = trigger.entity;
 
     commands.entity(entity).insert((
-        MessageSender::<AuthToken>::default(),
         MessageSender::<RequestSpawn>::default(),
         MessageSender::<RequestChunk>::default(),
         MessageSender::<NetSlotInteraction>::default(),
