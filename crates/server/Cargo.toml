@@ -22,9 +22,10 @@ dd40_character_interaction = { workspace = true }
 dd40_loot = { workspace = true }
 dd40_loose_items = { workspace = true }
 dd40_integration_loose_item_pickup = { workspace = true }
-dd40_inventory = { workspace = true }
-dd40_config = { workspace = true }
-dd40_identity = { workspace = true }
+dd40_inventory      = { workspace = true }
+dd40_inventory_core = { workspace = true, features = ["player_storage"] }
+dd40_config         = { workspace = true }
+dd40_identity       = { workspace = true }
 
 [lints]
 workspace = true

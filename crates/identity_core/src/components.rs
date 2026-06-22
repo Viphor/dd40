@@ -39,12 +39,3 @@ impl Default for AwaitingAuth {
         }
     }
 }
-
-/// World-space spawn position loaded from a player's save file.
-///
-/// Set by `IdentityServerPlugin` on the connection entity after loading
-/// [`PlayerSaveState`][crate::PlayerSaveState]. The server character-spawn
-/// system reads this to place the character; if absent, the server falls
-/// back to `WorldSpawnConfig::default_spawn`.
-#[derive(Component, Clone, Debug)]
-pub struct PlayerSpawnPosition(pub Vec3);

@@ -17,7 +17,8 @@ dd40_config = { workspace = true }
 dd40_physics_core = { workspace = true }
 dd40_character_core = { workspace = true }
 dd40_inventory_core = { workspace = true }
-dd40_identity_core = { workspace = true }
+dd40_identity_core  = { workspace = true }
+dd40_player_storage = { workspace = true }
 dd40_input_core = { workspace = true }
 dd40_loose_item_core = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }

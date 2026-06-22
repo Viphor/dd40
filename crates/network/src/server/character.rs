@@ -1,15 +1,18 @@
-//! Server-side character replication systems.
+//! Server-side character lifecycle systems.
 //!
 //! `ServerCharacterPlugin` is added automatically by `NetworkCharacterPlugin`
 //! when the `server` feature is active.
 
 use bevy::prelude::*;
 use dd40_character_core::{builder::CharacterBuilder, controller::CharacterInput};
-use dd40_identity_core::{Authenticated, PlayerIdentity, PlayerSpawnPosition};
+use dd40_identity_core::{Authenticated, PlayerIdentity};
 use dd40_inventory_core::character_ext::CharacterInventoryExt;
 use dd40_physics_core::character_ext::CharacterPhysicsExt;
 use dd40_physics_core::prelude::{PhysicsPosition, PhysicsSet};
-use lightyear::prelude::{RemoteId, input::native::ActionState, server::ClientOf};
+use dd40_player_storage::{
+    load_player_state, save_player_state, PlayersDir, PlayerSaveState, PlayerStateRegistry,
+};
+use lightyear::prelude::{RemoteId, input::native::ActionState};
 
 use crate::character_ext::CharacterServerNetworkExt;
 use crate::protocol::{NetworkCharacter, PlayerInput, PlayerPosition, PlayerRotation};
@@ -20,55 +23,128 @@ use crate::shared::character::apply_input_to_controller;
 // OBSERVERS
 // ============================================================================
 
-/// Spawns a replicated character entity when a client has been authenticated.
+/// Loads the player's saved state, spawns their character at the saved
+/// position, and applies any persisted component blobs (inventory, etc.)
+/// via the [`PlayerStateRegistry`].
 ///
 /// Triggers on [`Authenticated`] (added by `dd40_identity` after JWT
-/// verification), so characters only spawn for players whose identity has been
-/// confirmed.
-///
-/// Spawn position comes from [`PlayerSpawnPosition`] on the connection entity
-/// (set by `dd40_identity` when it loads the player's save file). Falls back
-/// to [`WorldSpawnConfig::default_spawn`] for first-time connections.
-///
-/// The entity is tagged for:
-/// - Full replication to all clients ([`Replicate`]).
-/// - Client-side prediction on the controlling client only
-///   ([`PredictionTarget`]).
-/// - Snapshot interpolation on all other clients
-///   ([`InterpolationTarget`]).
-/// - Automatic despawn when the owning connection entity is removed
-///   ([`ControlledBy`]).
-fn server_spawn_character(
+/// verification).
+fn on_player_authenticated(
     trigger: On<Add, Authenticated>,
     mut commands: Commands,
-    client_query: Query<(&RemoteId, &PlayerIdentity, Option<&PlayerSpawnPosition>), With<ClientOf>>,
+    client_query: Query<(&RemoteId, &PlayerIdentity), With<lightyear::prelude::server::ClientOf>>,
+    players_dir: Res<PlayersDir>,
+    registry: Res<PlayerStateRegistry>,
     spawn_config: Res<WorldSpawnConfig>,
 ) {
-    let Ok((remote, identity, maybe_pos)) = client_query.get(trigger.entity) else {
+    let connection_entity = trigger.entity;
+    let Ok((remote, identity)) = client_query.get(connection_entity) else {
         warn!(
             "Authenticated entity {:?} missing RemoteId/PlayerIdentity — skipping character spawn",
-            trigger.entity
+            connection_entity
         );
         return;
     };
     let client_id = remote.0;
 
-    let spawn_pos = maybe_pos
-        .map(|p| p.0)
-        .unwrap_or(spawn_config.default_spawn);
+    let state = load_player_state(&players_dir.0, &identity.sub).unwrap_or_default();
+
+    let saved_pos: Vec3 = state.last_position.into();
+    let spawn_pos = if saved_pos == Vec3::ZERO {
+        spawn_config.default_spawn
+    } else {
+        saved_pos
+    };
 
     info!(
-        "Spawning network character for {} ({}) at {:?}",
-        identity.display_name, identity.sub, spawn_pos
+        sub = %identity.sub,
+        name = %identity.display_name,
+        pos = ?spawn_pos,
+        "spawning character for authenticated player"
     );
 
-    CharacterBuilder::new(identity.display_name.clone())
+    let char_entity = CharacterBuilder::new(identity.display_name.clone())
         .transform(Transform::from_translation(spawn_pos))
         .with_physics()
         .with_controller()
         .with_inventory(36)
-        .with_server_replication(client_id, spawn_pos, trigger.entity)
-        .spawn(&mut commands);
+        .with_server_replication(client_id, spawn_pos, connection_entity)
+        .spawn(&mut commands)
+        .id();
+
+    // Apply each saved blob through its contributor.
+    for (kind, versioned_data) in &state.blobs {
+        if versioned_data.len() < 2 {
+            warn!(kind = %kind, "saved blob too short to contain version prefix; skipping");
+            continue;
+        }
+        let version = u16::from_le_bytes([versioned_data[0], versioned_data[1]]);
+        if let Some(contributor) = registry.find(kind) {
+            contributor.load(char_entity, version, &versioned_data[2..], &mut commands);
+        } else {
+            warn!(kind = %kind, "no contributor registered for saved blob kind; skipping");
+        }
+    }
+}
+
+/// Saves the player's position and all contributor blobs to disk when their
+/// character entity is despawned.
+///
+/// Triggers on `Remove<ControlledBy>` filtered to [`NetworkCharacter`]
+/// entities so it fires while the character entity is still fully populated —
+/// lightyear despawns character entities *before* finishing the connection
+/// entity teardown, meaning `Remove<Authenticated>` fires too late.
+fn on_character_despawned(
+    trigger: On<Remove, lightyear::prelude::ControlledBy>,
+    // EntityRef gives synchronous read-only access to all components while
+    // they are still present (Remove observers fire before the component
+    // is actually removed).
+    entity_query: Query<EntityRef, With<NetworkCharacter>>,
+    identity_query: Query<&PlayerIdentity>,
+    players_dir: Res<PlayersDir>,
+    registry: Res<PlayerStateRegistry>,
+) {
+    let char_entity = trigger.entity;
+
+    let Ok(entity_ref) = entity_query.get(char_entity) else {
+        return;
+    };
+
+    let Some(controlled_by) = entity_ref.get::<lightyear::prelude::ControlledBy>() else {
+        return;
+    };
+
+    let Ok(identity) = identity_query.get(controlled_by.owner) else {
+        return;
+    };
+
+    let pos = entity_ref
+        .get::<PhysicsPosition>()
+        .map(|p| p.0)
+        .unwrap_or(Vec3::ZERO);
+
+    let blobs: Vec<(String, Vec<u8>)> = registry
+        .contributors()
+        .iter()
+        .map(|c| {
+            let payload = c.save(&entity_ref);
+            let mut versioned = Vec::with_capacity(2 + payload.len());
+            versioned.extend_from_slice(&c.current_version().to_le_bytes());
+            versioned.extend_from_slice(&payload);
+            (c.kind().to_string(), versioned)
+        })
+        .collect();
+
+    let state = PlayerSaveState {
+        last_position: pos.into(),
+        blobs,
+    };
+
+    if let Err(e) = save_player_state(&players_dir.0, &identity.sub, &state) {
+        warn!(sub = %identity.sub, error = %e, "failed to save player state on disconnect");
+    } else {
+        debug!(sub = %identity.sub, pos = ?pos, "player state saved");
+    }
 }
 
 // ============================================================================
@@ -77,12 +153,6 @@ fn server_spawn_character(
 
 /// Translates the client's buffered [`PlayerInput`] into [`CharacterInput`]
 /// intent each fixed tick.
-///
-/// Excludes [`Predicted`] entities so this only runs on the authoritative
-/// server copies (which are `Without<Predicted>` by definition on the server,
-/// but the guard is kept explicit for host-server compatibility).
-///
-/// [`Predicted`]: lightyear::prelude::Predicted
 fn server_apply_inputs(
     mut query: Query<(&ActionState<PlayerInput>, &mut CharacterInput), With<NetworkCharacter>>,
 ) {
@@ -92,14 +162,7 @@ fn server_apply_inputs(
 }
 
 /// Syncs authoritative physics state back to the replicated network components
-/// after each physics tick so lightyear can replicate the changes to clients.
-///
-/// - [`Transform::translation`] → [`PlayerPosition`]
-/// - [`CharacterInput::pitch`] / [`CharacterInput::yaw`] → [`PlayerRotation`]
-///
-/// Rotation is driven by the client's camera input and arrives via
-/// [`CharacterInput`] after [`server_apply_inputs`] writes it from
-/// [`ActionState<PlayerInput>`].
+/// after each physics tick.
 fn server_sync_state(
     mut query: Query<
         (
@@ -130,7 +193,8 @@ pub struct ServerCharacterPlugin;
 
 impl Plugin for ServerCharacterPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(server_spawn_character);
+        app.add_observer(on_player_authenticated);
+        app.add_observer(on_character_despawned);
 
         app.add_systems(
             FixedUpdate,

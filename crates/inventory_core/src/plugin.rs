@@ -32,6 +32,9 @@ use crate::slot_interaction::SlotInteraction;
 ///   chunk cell data can carry it over the wire and on disk.
 /// - Registers the [`DropItems`], [`SlotInteraction`], and
 ///   [`SetActiveSlot`] messages.
+/// - When the `player_storage` feature is enabled, registers
+///   `InventoryContributor` into [`PlayerStateRegistry`] so inventory is
+///   persisted across sessions.
 ///
 /// [`InventoryChanged`][crate::component::InventoryChanged] and
 /// [`BlockInventoryChanged`][crate::block::BlockInventoryChanged] are
@@ -49,6 +52,17 @@ impl Plugin for InventoryCorePlugin {
         app.add_message::<DropItems>();
         app.add_message::<SlotInteraction>();
         app.add_message::<SetActiveSlot>();
+
+        #[cfg(feature = "player_storage")]
+        {
+            use dd40_core::ensure_plugins;
+            use dd40_player_storage::{PlayerStoragePlugin, PlayerStateRegistry};
+
+            ensure_plugins!(app, PlayerStoragePlugin);
+            app.world_mut()
+                .resource_mut::<PlayerStateRegistry>()
+                .register(crate::player_storage::InventoryContributor);
+        }
     }
 }
 

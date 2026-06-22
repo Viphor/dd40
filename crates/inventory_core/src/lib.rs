@@ -74,3 +74,6 @@ pub mod plugin;
 pub mod prelude;
 pub mod set_active_slot;
 pub mod slot_interaction;
+
+#[cfg(feature = "player_storage")]
+pub(crate) mod player_storage;

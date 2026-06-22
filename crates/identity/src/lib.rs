@@ -1,14 +1,13 @@
 //! OIDC-based player identity for dd40.
 //!
 //! Provides two plugins:
-//! - [`IdentityServerPlugin`]: JWT verification, access-list gating,
-//!   and per-player save-state I/O. Add to `dd40_server`.
+//! - [`IdentityServerPlugin`]: JWT verification and access-list gating.
+//!   Also inserts `PlayersDir` for `dd40_network`. Add to `dd40_server`.
 //! - [`IdentityClientPlugin`]: No-op anchor for future client-side auth
 //!   logic. Add to `dd40_client`.
 
 pub mod access_list;
 pub mod jwt;
-pub mod player_state;
 
 mod server;
 

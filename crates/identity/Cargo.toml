@@ -5,19 +5,18 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-bevy             = { workspace = true, default-features = false, features = ["bevy_log"] }
-dd40_config      = { workspace = true }
-dd40_core        = { workspace = true }
-dd40_identity_core = { workspace = true }
-dd40_physics_core = { workspace = true }
-lightyear        = { version = "0.26", features = ["udp", "netcode", "std", "server"] }
+bevy                 = { workspace = true, default-features = false, features = ["bevy_log"] }
+dd40_config          = { workspace = true }
+dd40_core            = { workspace = true }
+dd40_identity_core   = { workspace = true }
+dd40_player_storage  = { workspace = true }
+lightyear            = { version = "0.26", features = ["udp", "netcode", "std", "server"] }
 lightyear_connection = { version = "0.26.4", features = ["server"] }
-lightyear_link      = { version = "0.26.4" }
-jsonwebtoken     = "9"
-serde            = { version = "1.0", features = ["derive"] }
-serde_json       = "1"
-ureq             = { version = "2", features = ["json"] }
-bincode          = "1"
+lightyear_link       = { version = "0.26.4" }
+jsonwebtoken         = "9"
+serde                = { version = "1.0", features = ["derive"] }
+serde_json           = "1"
+ureq                 = { version = "2", features = ["json"] }
 
 [dev-dependencies]
 jsonwebtoken = "9"

@@ -4,11 +4,16 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
+[features]
+player_storage = ["dep:dd40_player_storage", "dep:bincode"]
+
 [dependencies]
-dd40_core = { workspace = true }
-dd40_item_core = { workspace = true }
-bevy = { workspace = true, default-features = false }
-serde = { version = "1.0", features = ["derive"] }
+dd40_core           = { workspace = true }
+dd40_item_core      = { workspace = true }
+dd40_player_storage = { workspace = true, optional = true }
+bevy                = { workspace = true, default-features = false }
+serde               = { version = "1.0", features = ["derive"] }
+bincode             = { version = "1", optional = true }
 
 [lints]
 workspace = true

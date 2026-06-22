@@ -2864,11 +2864,10 @@ name = "dd40_identity"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bincode 1.3.3",
  "dd40_config",
  "dd40_core",
  "dd40_identity_core",
- "dd40_physics_core",
+ "dd40_player_storage",
  "jsonwebtoken",
  "lightyear",
  "lightyear_connection",
@@ -2941,8 +2940,10 @@ name = "dd40_inventory_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bincode 1.3.3",
  "dd40_core",
  "dd40_item_core",
+ "dd40_player_storage",
  "serde",
 ]
 
@@ -3043,6 +3044,7 @@ dependencies = [
  "dd40_inventory_core",
  "dd40_loose_item_core",
  "dd40_physics_core",
+ "dd40_player_storage",
  "lightyear",
  "rand 0.8.5",
  "serde",
@@ -3082,6 +3084,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd40_player_storage"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bincode 1.3.3",
+ "serde",
+ "tempfile",
+]
+
+[[package]]
 name = "dd40_renderer"
 version = "0.1.0"
 dependencies = [
@@ -3112,6 +3124,7 @@ dependencies = [
  "dd40_integration_character_physics",
  "dd40_integration_loose_item_pickup",
  "dd40_inventory",
+ "dd40_inventory_core",
  "dd40_loose_items",
  "dd40_loot",
  "dd40_network",
